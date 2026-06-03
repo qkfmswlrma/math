@@ -295,8 +295,7 @@ function App() {
         <div className="mr-brand" onClick={() => setTab("home")} role="button">
           <span className="mr-logo">∑</span>
           <div>
-            <div className="mr-brand-name">수학방</div>
-            <div className="mr-brand-sub">채팅방 보조 · 칼럼 · 시험</div>
+            <div className="mr-brand-name">수학질문방</div>
           </div>
         </div>
 
@@ -376,7 +375,6 @@ function Account({ auth, onChangePassword, onLogout }) {
   const [done, setDone] = useState(false);
 
   const changePw = async () => {
-    if (auth.isAdmin) return;
     if (!curPw || !newPw) return alert("현재 비밀번호와 새 비밀번호를 입력하세요.");
     const { error } = await onChangePassword(curPw, newPw);
     if (error) return alert(error);
@@ -400,40 +398,34 @@ function Account({ auth, onChangePassword, onLogout }) {
 
       <section className="mr-card">
         <div className="mr-card-tag">비밀번호 변경</div>
-        {auth.isAdmin ? (
-          <p className="mr-muted" style={{ fontSize: "14px", lineHeight: 1.6 }}>
-            관리자 계정은 비밀번호가 고정되어 있어요.
-          </p>
-        ) : (
-          <>
-            <input
-              className="mr-input"
-              type="password"
-              placeholder="현재 비밀번호"
-              value={curPw}
-              onChange={(e) => {
-                setCurPw(e.target.value);
-                setDone(false);
-              }}
-            />
-            <input
-              className="mr-input"
-              type="password"
-              placeholder="새 비밀번호"
-              value={newPw}
-              onChange={(e) => {
-                setNewPw(e.target.value);
-                setDone(false);
-              }}
-            />
-            <div className="mr-row-between" style={{ marginTop: "14px" }}>
-              <span className="mr-ok-msg">{done ? "비밀번호가 변경됐어요" : ""}</span>
-              <button className="mr-btn" onClick={changePw}>
-                변경하기
-              </button>
-            </div>
-          </>
-        )}
+        <>
+          <input
+            className="mr-input"
+            type="password"
+            placeholder="현재 비밀번호"
+            value={curPw}
+            onChange={(e) => {
+              setCurPw(e.target.value);
+              setDone(false);
+            }}
+          />
+          <input
+            className="mr-input"
+            type="password"
+            placeholder="새 비밀번호"
+            value={newPw}
+            onChange={(e) => {
+              setNewPw(e.target.value);
+              setDone(false);
+            }}
+          />
+          <div className="mr-row-between" style={{ marginTop: "14px" }}>
+            <span className="mr-ok-msg">{done ? "비밀번호가 변경됐어요" : ""}</span>
+            <button className="mr-btn" onClick={changePw}>
+              변경하기
+            </button>
+          </div>
+        </>
       </section>
 
       <button className="mr-logout-full" onClick={onLogout}>
@@ -775,7 +767,7 @@ function Home({ role, student, loggedIn, noticeCount, examCount, onGo }) {
       key: "notices",
       icon: "✍️",
       title: "칼럼",
-      desc: "수학 이야기와 공부 팁을 읽고 써요",
+      desc: "수학 이야기와 공부 팁",
       meta: `${noticeCount}개의 글`,
       tone: "blue",
     },
@@ -783,7 +775,7 @@ function Home({ role, student, loggedIn, noticeCount, examCount, onGo }) {
       key: "exams",
       icon: "🧮",
       title: "시험",
-      desc: "사진 문제 · 객관식/주관식 자동 채점",
+      desc: "수학질문방 레벨테스트",
       meta: `${examCount}개의 시험`,
       tone: "green",
     },
@@ -814,9 +806,9 @@ function Home({ role, student, loggedIn, noticeCount, examCount, onGo }) {
       <section className="mr-hero">
         <div className="mr-hero-greet">{greet}</div>
         <h1 className="mr-hero-title">
-          오늘도 수학방에서
+          수학질문방에 오신 것을
           <br />
-          함께 풀어볼까요
+          환영합니다!
         </h1>
       </section>
 
