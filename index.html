@@ -112,6 +112,7 @@ function App() {
   const [notices, setNotices] = useState([]);
   const [exams, setExams] = useState([]);
   const [subs, setSubs] = useState([]);
+  const [auditLog, setAuditLog] = useState([]);
 
   const role = auth && auth.isAdmin ? "admin" : "student";
   const student = auth ? auth.username : "";
@@ -137,16 +138,18 @@ function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const [c, e, s, p] = await Promise.all([
+      const [c, e, s, p, l] = await Promise.all([
         sb.from("columns").select("*").order("created_at", { ascending: false }),
         sb.from("exams").select("*").order("created_at", { ascending: false }),
         sb.from("submissions").select("*").order("submitted_at", { ascending: false }),
         sb.from("profiles").select("*").order("created_at", { ascending: false }),
+        sb.from("audit_log").select("*").order("created_at", { ascending: false }).limit(300),
       ]);
       setNotices((c.data || []).map(mapColumn));
       setExams((e.data || []).map(mapExam));
       setSubs((s.data || []).map(mapSub));
       setUsers((p.data || []).map(mapProfile));
+      setAuditLog(l.data || []);
     } catch (err) {
       console.warn("데이터 불러오기 실패:", err);
     }
@@ -248,22 +251,39 @@ function App() {
   };
 
   /* ---- 데이터 ---- */
+  const logAction = async (action, target) => {
+    try {
+      await sb.from("audit_log").insert({
+        actor: auth ? auth.username : "?",
+        actor_id: auth ? auth.id : null,
+        action,
+        target: target || "",
+      });
+    } catch (e) {
+      console.warn("로그 기록 실패:", e);
+    }
+  };
   const onAddColumn = async (post) => {
     const id = await currentId();
     await sb.from("columns").insert({ title: post.title, body: post.body, author: post.author, author_id: id });
+    await logAction("칼럼 작성", post.title);
     await refresh();
   };
   const onDeleteColumn = async (id) => {
+    const n = notices.find((x) => x.id === id);
     await sb.from("columns").delete().eq("id", id);
+    await logAction("칼럼 삭제", n ? n.title : id);
     await refresh();
   };
   const onAddExam = async (exam) => {
     const id = await currentId();
     await sb.from("exams").insert({ title: exam.title, questions: exam.questions, author_id: id });
+    await logAction("시험 출제", exam.title);
     await refresh();
   };
   const onGradeSub = async (sub) => {
     await sb.from("submissions").update({ manual_scores: sub.manualScores || {}, graded: true }).eq("id", sub.id);
+    await logAction("채점 수정", sub.student);
     await refresh();
   };
   const onAddSub = async (sub) => {
@@ -276,10 +296,12 @@ function App() {
   };
   const onToggleAdmin = async (username, next) => {
     await sb.from("profiles").update({ is_admin: next }).eq("username", username);
+    await logAction(next ? "관리자 지정" : "관리자 해제", username);
     await refresh();
   };
   const onDeleteUser = async (username) => {
     await sb.from("profiles").delete().eq("username", username);
+    await logAction("회원 삭제", username);
     await refresh();
   };
 
@@ -325,7 +347,7 @@ function App() {
           loggedIn ? <MyRecords student={student} exams={exams} subs={subs} /> : homeView
         ) : tab === "admin" ? (
           role === "admin" ? (
-            <Admin auth={auth} users={users} notices={notices} exams={exams} subs={subs} onToggleAdmin={onToggleAdmin} onDeleteUser={onDeleteUser} />
+            <Admin auth={auth} users={users} notices={notices} exams={exams} subs={subs} auditLog={auditLog} onToggleAdmin={onToggleAdmin} onDeleteUser={onDeleteUser} />
           ) : (
             homeView
           )
@@ -398,34 +420,32 @@ function Account({ auth, onChangePassword, onLogout }) {
 
       <section className="mr-card">
         <div className="mr-card-tag">비밀번호 변경</div>
-        <>
-          <input
-            className="mr-input"
-            type="password"
-            placeholder="현재 비밀번호"
-            value={curPw}
-            onChange={(e) => {
-              setCurPw(e.target.value);
-              setDone(false);
-            }}
-          />
-          <input
-            className="mr-input"
-            type="password"
-            placeholder="새 비밀번호"
-            value={newPw}
-            onChange={(e) => {
-              setNewPw(e.target.value);
-              setDone(false);
-            }}
-          />
-          <div className="mr-row-between" style={{ marginTop: "14px" }}>
-            <span className="mr-ok-msg">{done ? "비밀번호가 변경됐어요" : ""}</span>
-            <button className="mr-btn" onClick={changePw}>
-              변경하기
-            </button>
-          </div>
-        </>
+        <input
+          className="mr-input"
+          type="password"
+          placeholder="현재 비밀번호"
+          value={curPw}
+          onChange={(e) => {
+            setCurPw(e.target.value);
+            setDone(false);
+          }}
+        />
+        <input
+          className="mr-input"
+          type="password"
+          placeholder="새 비밀번호"
+          value={newPw}
+          onChange={(e) => {
+            setNewPw(e.target.value);
+            setDone(false);
+          }}
+        />
+        <div className="mr-row-between" style={{ marginTop: "14px" }}>
+          <span className="mr-ok-msg">{done ? "비밀번호가 변경됐어요" : ""}</span>
+          <button className="mr-btn" onClick={changePw}>
+            변경하기
+          </button>
+        </div>
       </section>
 
       <button className="mr-logout-full" onClick={onLogout}>
@@ -477,7 +497,7 @@ function MyRecords({ student, exams, subs }) {
 }
 
 /* ===================== 관리자 페이지 ===================== */
-function Admin({ auth, users, notices, exams, subs, onToggleAdmin, onDeleteUser }) {
+function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onDeleteUser }) {
   const [subtab, setSubtab] = useState("dash"); // dash | members
   const [selUser, setSelUser] = useState(null); // username
   const [q, setQ] = useState("");
@@ -598,6 +618,9 @@ function Admin({ auth, users, notices, exams, subs, onToggleAdmin, onDeleteUser 
         <button className={subtab === "members" ? "on" : ""} onClick={() => setSubtab("members")}>
           회원 {users.length}
         </button>
+        <button className={subtab === "log" ? "on" : ""} onClick={() => setSubtab("log")}>
+          활동 기록
+        </button>
       </div>
 
       {subtab === "dash" ? (
@@ -639,7 +662,7 @@ function Admin({ auth, users, notices, exams, subs, onToggleAdmin, onDeleteUser 
             )}
           </section>
         </>
-      ) : (
+      ) : subtab === "members" ? (
         <>
           <input
             className="mr-input"
@@ -675,6 +698,26 @@ function Admin({ auth, users, notices, exams, subs, onToggleAdmin, onDeleteUser 
             </div>
           )}
         </>
+      ) : (
+        <section className="mr-card">
+          <div className="mr-card-tag">활동 기록</div>
+          {(!auditLog || auditLog.length === 0) ? (
+            <p className="mr-muted" style={{ fontSize: "14px" }}>아직 기록이 없어요.</p>
+          ) : (
+            <div className="mr-log-list">
+              {auditLog.map((g) => (
+                <div className="mr-log-row" key={g.id}>
+                  <div className="mr-log-main">
+                    <span className="mr-log-actor">{g.actor || "?"}</span>
+                    <span className="mr-log-action">{g.action}</span>
+                    {g.target ? <span className="mr-log-target">{g.target}</span> : null}
+                  </div>
+                  <div className="mr-log-time">{g.created_at ? fmtDate(Date.parse(g.created_at)) : ""}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       )}
     </div>
   );
@@ -775,7 +818,7 @@ function Home({ role, student, loggedIn, noticeCount, examCount, onGo }) {
       key: "exams",
       icon: "🧮",
       title: "시험",
-      desc: "오늘의 문제와 레벨테스트",
+      desc: "수학질문방 레벨테스트",
       meta: `${examCount}개의 시험`,
       tone: "green",
     },
@@ -1670,6 +1713,14 @@ const CSS = `
 .mr-exam-sum-row:last-child{border-bottom:0}
 .mr-exam-sum-title{font-size:14.5px; font-weight:700; color:var(--t1)}
 .mr-exam-sum-meta{font-size:12.5px; color:var(--t3); font-weight:600; margin-top:3px}
+.mr-log-list{display:flex; flex-direction:column}
+.mr-log-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 0; border-bottom:1px solid var(--line-soft)}
+.mr-log-row:last-child{border-bottom:0}
+.mr-log-main{display:flex; align-items:center; gap:7px; flex-wrap:wrap; min-width:0}
+.mr-log-actor{font-size:13.5px; font-weight:800; color:var(--t1)}
+.mr-log-action{font-size:13px; font-weight:700; color:var(--blue); background:var(--blue-bg); padding:3px 9px; border-radius:20px}
+.mr-log-target{font-size:13px; color:var(--t2); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:160px}
+.mr-log-time{font-size:12px; color:var(--t3); font-weight:600; white-space:nowrap; flex:none}
 
 /* 모달 */
 .mr-modal-overlay{
