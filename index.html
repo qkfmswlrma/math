@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>수학방</title>
+<title>수학질문방</title>
 <style>
   html,body,#root{margin:0;padding:0;height:100%;background:#F2F4F6}
   .mr-splash{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:'Pretendard',-apple-system,sans-serif;color:#4E5968}
@@ -21,7 +21,7 @@
 <div id="root">
   <div class="mr-splash">
     <div class="lg">∑</div>
-    <div class="tx">수학방 불러오는 중…</div>
+    <div class="tx">수학질문방 불러오는 중…</div>
     <div class="sp"></div>
   </div>
 </div>
@@ -29,7 +29,7 @@
 const { useState, useEffect, useCallback } = React;
 
 /* ============================================================
-   수학방 — 칼럼 + 시험(객관식 자동채점 / 주관식 수동채점) 프로토타입
+   수학질문방 — 칼럼 + 시험(객관식 자동채점 / 주관식 수동채점) 프로토타입
    - 상단 토글로 [관리자] / [참여자] 화면을 둘 다 체험
    - 데이터는 공유 저장소에 보관되어 새로고침/다른 기기에서도 유지
    ============================================================ */
