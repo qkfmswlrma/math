@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>수학질문방</title>
+<title>수학방</title>
 <style>
   html,body,#root{margin:0;padding:0;height:100%;background:#F2F4F6}
   .mr-splash{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:'Pretendard',-apple-system,sans-serif;color:#4E5968}
@@ -21,7 +21,7 @@
 <div id="root">
   <div class="mr-splash">
     <div class="lg">∑</div>
-    <div class="tx">수학질문방 불러오는 중…</div>
+    <div class="tx">수학방 불러오는 중…</div>
     <div class="sp"></div>
   </div>
 </div>
@@ -29,19 +29,17 @@
 const { useState, useEffect, useCallback } = React;
 
 /* ============================================================
-   수학질문방 — 칼럼 + 시험(객관식 자동채점 / 주관식 수동채점) 프로토타입
+   수학방 — 칼럼 + 시험(객관식 자동채점 / 주관식 수동채점) 프로토타입
    - 상단 토글로 [관리자] / [참여자] 화면을 둘 다 체험
    - 데이터는 공유 저장소에 보관되어 새로고침/다른 기기에서도 유지
    ============================================================ */
 
 /* ====== Supabase 설정 — 아래 두 값을 본인 프로젝트 값으로 바꾸세요 ====== */
-const SUPABASE_URL = "https://fhdwwqlvosbjonrenpqz.supabase.co"; // 예: https://abcd1234.supabase.co
+const SUPABASE_URL = "https://fhdwwqlvosbjonrenpqz.supabase.co"; 
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZoZHd3cWx2b3Niam9ucmVucHF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMTk4NzYsImV4cCI6MjA5NTg5NTg3Nn0.JgUEKxDRioqKvhSaOPxJMH9tuo0wdFv0-kkc0s5mJ8U";
-const EMAIL_DOMAIN = "mathroom.app"; // 아이디를 이메일로 바꿀 때 쓰는 가짜 도메인 (그대로 두세요)
+const EMAIL_DOMAIN = "mathroom.app"; 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const emailOf = (id) => `${String(id).trim().toLowerCase()}@${EMAIL_DOMAIN}`;
-// Supabase 최소 6자 제한 우회: 입력 비번 뒤에 고정 문자열을 붙여 항상 6자 이상으로 만듦
-// (가입·로그인·변경에서 동일하게 적용되므로 사용자는 짧은 비번을 그대로 쓰는 것처럼 느낌)
 const padPw = (pw) => String(pw) + "__mr__";
 
 /* DB(snake_case) → 앱(camelCase) 변환 */
@@ -75,13 +73,11 @@ const fmtDate = (ts) => {
 function maxScore(exam) {
   return exam.questions.reduce((s, q) => s + (Number(q.points) || 0), 0);
 }
-// 채점: 출제자가 정한 정답 문자열과 정확히 일치할 때만 정답 (앞뒤 공백만 무시)
 function isShortCorrect(q, ans) {
   const key = String(q.accept ?? "").trim();
   if (key === "") return false;
   return String(ans ?? "").trim() === key;
 }
-// 한 문항의 점수 (객관식·주관식 모두 자동 채점, 관리자 수동 보정이 있으면 우선)
 function questionScore(q, sub) {
   const a = sub.answers[q.id];
   const ov = sub.manualScores?.[q.id];
@@ -91,7 +87,6 @@ function questionScore(q, sub) {
   if (q.type === "mc") return a === q.answer ? Number(q.points) || 0 : 0;
   return isShortCorrect(q, a) ? Number(q.points) || 0 : 0;
 }
-// 보정 무시한 순수 자동 채점 합계
 function autoScore(exam, answers) {
   return exam.questions.reduce((s, q) => {
     if (q.type === "mc") return s + (answers[q.id] === q.answer ? Number(q.points) || 0 : 0);
@@ -105,8 +100,8 @@ function totalScore(exam, sub) {
 /* ============================================================ */
 function App() {
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("home"); // home | notices | exams | account | admin | records
-  const [auth, setAuth] = useState(null); // null | { id, username, kakaoId, isAdmin }
+  const [tab, setTab] = useState("home"); 
+  const [auth, setAuth] = useState(null); 
   const [authOpen, setAuthOpen] = useState(false);
   const [users, setUsers] = useState([]);
   const [notices, setNotices] = useState([]);
@@ -123,7 +118,6 @@ function App() {
     let res = await sb.from("profiles").select("*").eq("id", userId).maybeSingle();
     let data = res.data;
     if (!data) {
-      // 프로필이 없으면(트리거 미작동 등) 즉석에서 생성
       const u = await sb.auth.getUser();
       const usr = u.data && u.data.user;
       const meta = (usr && usr.user_metadata) || {};
@@ -157,7 +151,6 @@ function App() {
 
   useEffect(() => {
     let active = true;
-    // 어떤 경우에도 화면이 멈추지 않도록 안전 타임아웃
     const safety = setTimeout(() => active && setLoading(false), 5000);
     (async () => {
       try {
@@ -169,12 +162,10 @@ function App() {
       } catch (err) {
         console.warn("세션 확인 실패:", err);
       }
-      if (active) setLoading(false); // 데이터를 기다리지 않고 화면 먼저 표시
+      if (active) setLoading(false); 
       clearTimeout(safety);
-      refresh(); // 데이터는 백그라운드로 불러옴
+      refresh(); 
     })();
-    // 주의: onAuthStateChange 콜백 안에서 supabase 함수를 직접 await 하면 데드락이 남.
-    // setTimeout 으로 락 밖으로 빼서 처리한다.
     const { data: listener } = sb.auth.onAuthStateChange((_evt, session) => {
       setTimeout(async () => {
         if (session && session.user) {
@@ -275,6 +266,11 @@ function App() {
     await logAction("칼럼 삭제", n ? n.title : id);
     await refresh();
   };
+  const onEditColumn = async (id, title, body) => {
+    await sb.from("columns").update({ title, body }).eq("id", id);
+    await logAction("칼럼 수정", title);
+    await refresh();
+  };
   const onAddExam = async (exam) => {
     const id = await currentId();
     await sb.from("exams").insert({ title: exam.title, questions: exam.questions, author_id: id });
@@ -354,7 +350,7 @@ function App() {
         ) : tab === "account" ? (
           loggedIn ? <Account auth={auth} onChangePassword={onChangePassword} onLogout={onLogout} /> : homeView
         ) : tab === "notices" ? (
-          <Notices role={role} student={student} notices={notices} onAdd={onAddColumn} onDelete={onDeleteColumn} />
+          <Notices role={role} student={student} notices={notices} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} />
         ) : (
           <Exams
             role={role}
@@ -377,7 +373,6 @@ function App() {
   );
 }
 
-/* 사람 모양 아이콘 (이모지 X, 벡터) — 추후 사진으로 교체 가능 */
 function PersonIcon() {
   return (
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
@@ -498,8 +493,8 @@ function MyRecords({ student, exams, subs }) {
 
 /* ===================== 관리자 페이지 ===================== */
 function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onDeleteUser }) {
-  const [subtab, setSubtab] = useState("dash"); // dash | members
-  const [selUser, setSelUser] = useState(null); // username
+  const [subtab, setSubtab] = useState("dash"); 
+  const [selUser, setSelUser] = useState(null); 
   const [q, setQ] = useState("");
 
   const stats = [
@@ -530,7 +525,6 @@ function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onD
 
   const scoreTone = (ratio) => (ratio >= 0.8 ? "good" : ratio >= 0.5 ? "mid" : "low");
 
-  /* ---- 회원 상세: 시험 결과 ---- */
   if (selUser) {
     const u = users.find((x) => x.username === selUser);
     const theirs = subs
@@ -604,7 +598,6 @@ function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onD
     );
   }
 
-  /* ---- 메인: 대시보드 / 회원 ---- */
   return (
     <div className="mr-col">
       <div className="mr-list-top">
@@ -725,7 +718,7 @@ function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onD
 
 /* ===================== 로그인 / 회원가입 ===================== */
 function AuthModal({ onClose, onLogin, onSignup }) {
-  const [mode, setMode] = useState("login"); // login | signup
+  const [mode, setMode] = useState("login"); 
   const [id, setId] = useState("");
   const [pw, setPw] = useState("");
   const [kakao, setKakao] = useState("");
@@ -878,8 +871,8 @@ function Home({ role, student, loggedIn, noticeCount, examCount, onGo }) {
 }
 
 /* ===================== 칼럼 ===================== */
-function Notices({ role, student, notices, onAdd, onDelete }) {
-  const [view, setView] = useState("list"); // list | write | read
+function Notices({ role, student, notices, onAdd, onDelete, onEdit }) {
+  const [view, setView] = useState("list"); // list | write | read | edit
   const [openId, setOpenId] = useState(null);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -892,10 +885,18 @@ function Notices({ role, student, notices, onAdd, onDelete }) {
     setBody("");
     setView("list");
   };
+  
   const remove = async (id) => {
+    if (!confirm("이 칼럼을 삭제할까요?")) return;
     await onDelete(id);
     setOpenId(null);
     setView("list");
+  };
+
+  const saveEdit = async () => {
+    if (!title.trim()) return alert("제목을 입력하세요.");
+    await onEdit(openId, title.trim(), body.trim());
+    setView("read");
   };
 
   // 글쓰기
@@ -929,6 +930,37 @@ function Notices({ role, student, notices, onAdd, onDelete }) {
       </div>
     );
 
+  // 글 수정하기
+  if (view === "edit")
+    return (
+      <div className="mr-col">
+        <button className="mr-btn-text" onClick={() => setView("read")}>
+          ← 칼럼 보기
+        </button>
+        <section className="mr-card mr-writer">
+          <div className="mr-card-tag">칼럼 수정하기</div>
+          <input
+            className="mr-input mr-title-input"
+            placeholder="제목"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <textarea
+            className="mr-textarea"
+            placeholder="내용을 입력하세요."
+            rows={10}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+          />
+          <div className="mr-row-end">
+            <button className="mr-btn" onClick={saveEdit}>
+              수정 완료
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+
   // 글 보기
   if (view === "read") {
     const n = notices.find((x) => x.id === openId);
@@ -949,9 +981,14 @@ function Notices({ role, student, notices, onAdd, onDelete }) {
             <div className="mr-post-divider" />
             {n.body ? <p className="mr-notice-body">{n.body}</p> : <p className="mr-muted">내용이 없어요.</p>}
             {role === "admin" && (
-              <button className="mr-link-del" onClick={() => remove(n.id)}>
-                삭제
-              </button>
+              <div className="mr-detail-actions" style={{ marginTop: "20px", justifyContent: "flex-end" }}>
+                <button className="mr-mini-btn" onClick={() => { setTitle(n.title); setBody(n.body); setView("edit"); }}>
+                  수정
+                </button>
+                <button className="mr-mini-btn danger" onClick={() => remove(n.id)}>
+                  삭제
+                </button>
+              </div>
             )}
           </article>
         )}
@@ -1010,7 +1047,7 @@ function Exams(props) {
 
 /* ---------- 관리자: 시험 목록 / 출제 / 채점 ---------- */
 function ExamsAdmin({ exams, onAddExam, subs, onGradeSub }) {
-  const [mode, setMode] = useState("list"); // list | create | grade
+  const [mode, setMode] = useState("list"); 
   const [activeExam, setActiveExam] = useState(null);
 
   const openGrade = (exam) => {
@@ -1280,7 +1317,7 @@ function SubmissionRow({ exam, sub, open, onToggle, onSaveGrade }) {
       .filter((q) => q.type === "short")
       .forEach((q) => {
         const raw = manual[q.id];
-        if (raw === undefined || raw === null || raw === "") return; // 비우면 자동 채점 사용
+        if (raw === undefined || raw === null || raw === "") return; 
         cleaned[q.id] = Math.max(0, Math.min(Number(q.points) || 0, Number(raw) || 0));
       });
     onSaveGrade({ ...sub, manualScores: cleaned, graded: true });
@@ -1346,7 +1383,6 @@ function SubmissionRow({ exam, sub, open, onToggle, onSaveGrade }) {
                 </div>
               );
             }
-            // 주관식 — 자동 채점 + 필요시 보정
             const scorrect = isShortCorrect(q, a);
             const overridden = manual[q.id] !== undefined && manual[q.id] !== null && manual[q.id] !== "";
             return (
@@ -1474,7 +1510,7 @@ function TakeExam({ exam, student, onCancel, onSubmit }) {
       student: student.trim(),
       answers,
       manualScores: {},
-      graded: true, // 객관식·주관식 모두 자동 채점
+      graded: true, 
       submittedAt: Date.now(),
     };
     onSubmit(sub);
@@ -1544,7 +1580,6 @@ function Empty({ text }) {
   return <div className="mr-empty">{text}</div>;
 }
 
-/* 문제 사진 업로드 (업로드 시 최대 1000px로 축소해 저장) */
 function QuestionImage({ value, onChange }) {
   const onFile = (e) => {
     const file = e.target.files && e.target.files[0];
@@ -1596,7 +1631,7 @@ function QuestionImage({ value, onChange }) {
 }
 
 /* ============================================================
-   스타일 — Toss 스타일: 회색 배경 · 흰 라운드 카드 · Pretendard · 클린 블루
+   스타일 — Toss 스타일
    ============================================================ */
 const CSS = `
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
@@ -1955,7 +1990,6 @@ const CSS = `
   font-size:12px; color:var(--t3); line-height:1.6; font-weight:500;
 }
 `;
-
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(<App />);
