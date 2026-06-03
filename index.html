@@ -1,1 +1,1921 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>수학방</title>
+<style>
+  html,body,#root{margin:0;padding:0;height:100%;background:#F2F4F6}
+  .mr-splash{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:'Pretendard',-apple-system,sans-serif;color:#4E5968}
+  .mr-splash .lg{width:52px;height:52px;border-radius:15px;background:#3182F6;color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800}
+  .mr-splash .tx{font-weight:700;font-size:15px;letter-spacing:-0.3px}
+  .mr-splash .sp{width:22px;height:22px;border:3px solid #E5E8EB;border-top-color:#3182F6;border-radius:50%;animation:mrsp .7s linear infinite}
+  @keyframes mrsp{to{transform:rotate(360deg)}}
+</style>
+<script defer crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script defer crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script defer src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+<div id="root">
+  <div class="mr-splash">
+    <div class="lg">∑</div>
+    <div class="tx">수학방 불러오는 중…</div>
+    <div class="sp"></div>
+  </div>
+</div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useCallback } = React;
 
+/* ============================================================
+   수학방 — 칼럼 + 시험(객관식 자동채점 / 주관식 수동채점) 프로토타입
+   - 상단 토글로 [관리자] / [참여자] 화면을 둘 다 체험
+   - 데이터는 공유 저장소에 보관되어 새로고침/다른 기기에서도 유지
+   ============================================================ */
+
+/* ====== Supabase 설정 — 아래 두 값을 본인 프로젝트 값으로 바꾸세요 ====== */
+const SUPABASE_URL = "https://fhdwwqlvosbjonrenpqz.supabase.co"; // 예: https://abcd1234.supabase.co
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZoZHd3cWx2b3Niam9ucmVucHF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMTk4NzYsImV4cCI6MjA5NTg5NTg3Nn0.JgUEKxDRioqKvhSaOPxJMH9tuo0wdFv0-kkc0s5mJ8U";
+const EMAIL_DOMAIN = "mathroom.app"; // 아이디를 이메일로 바꿀 때 쓰는 가짜 도메인 (그대로 두세요)
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const emailOf = (id) => `${String(id).trim().toLowerCase()}@${EMAIL_DOMAIN}`;
+// Supabase 최소 6자 제한 우회: 입력 비번 뒤에 고정 문자열을 붙여 항상 6자 이상으로 만듦
+// (가입·로그인·변경에서 동일하게 적용되므로 사용자는 짧은 비번을 그대로 쓰는 것처럼 느낌)
+const padPw = (pw) => String(pw) + "__mr__";
+
+/* DB(snake_case) → 앱(camelCase) 변환 */
+const mapColumn = (r) => ({
+  id: r.id, title: r.title, body: r.body || "", author: r.author || "",
+  createdAt: r.created_at ? Date.parse(r.created_at) : 0,
+});
+const mapExam = (r) => ({
+  id: r.id, title: r.title, questions: r.questions || [],
+  createdAt: r.created_at ? Date.parse(r.created_at) : 0,
+});
+const mapSub = (r) => ({
+  id: r.id, examId: r.exam_id, student: r.student, answers: r.answers || {},
+  manualScores: r.manual_scores || {}, graded: !!r.graded,
+  submittedAt: r.submitted_at ? Date.parse(r.submitted_at) : 0,
+});
+const mapProfile = (r) => ({
+  username: r.username, kakaoId: r.kakao_id || "", isAdmin: !!r.is_admin,
+  createdAt: r.created_at ? Date.parse(r.created_at) : 0,
+});
+
+const uid = () => Math.random().toString(36).slice(2, 10);
+const fmtDate = (ts) => {
+  const d = new Date(ts);
+  return `${d.getMonth() + 1}.${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(
+    d.getMinutes()
+  ).padStart(2, "0")}`;
+};
+
+/* ---------- 점수 계산 ---------- */
+function maxScore(exam) {
+  return exam.questions.reduce((s, q) => s + (Number(q.points) || 0), 0);
+}
+// 채점: 출제자가 정한 정답 문자열과 정확히 일치할 때만 정답 (앞뒤 공백만 무시)
+function isShortCorrect(q, ans) {
+  const key = String(q.accept ?? "").trim();
+  if (key === "") return false;
+  return String(ans ?? "").trim() === key;
+}
+// 한 문항의 점수 (객관식·주관식 모두 자동 채점, 관리자 수동 보정이 있으면 우선)
+function questionScore(q, sub) {
+  const a = sub.answers[q.id];
+  const ov = sub.manualScores?.[q.id];
+  if (ov !== undefined && ov !== null && ov !== "") {
+    return Math.max(0, Math.min(Number(q.points) || 0, Number(ov) || 0));
+  }
+  if (q.type === "mc") return a === q.answer ? Number(q.points) || 0 : 0;
+  return isShortCorrect(q, a) ? Number(q.points) || 0 : 0;
+}
+// 보정 무시한 순수 자동 채점 합계
+function autoScore(exam, answers) {
+  return exam.questions.reduce((s, q) => {
+    if (q.type === "mc") return s + (answers[q.id] === q.answer ? Number(q.points) || 0 : 0);
+    return s + (isShortCorrect(q, answers[q.id]) ? Number(q.points) || 0 : 0);
+  }, 0);
+}
+function totalScore(exam, sub) {
+  return exam.questions.reduce((s, q) => s + questionScore(q, sub), 0);
+}
+
+/* ============================================================ */
+function App() {
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState("home"); // home | notices | exams | account | admin | records
+  const [auth, setAuth] = useState(null); // null | { id, username, kakaoId, isAdmin }
+  const [authOpen, setAuthOpen] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [notices, setNotices] = useState([]);
+  const [exams, setExams] = useState([]);
+  const [subs, setSubs] = useState([]);
+
+  const role = auth && auth.isAdmin ? "admin" : "student";
+  const student = auth ? auth.username : "";
+  const loggedIn = !!auth;
+  const requireLogin = () => setAuthOpen(true);
+
+  const loadProfile = async (userId) => {
+    let res = await sb.from("profiles").select("*").eq("id", userId).maybeSingle();
+    let data = res.data;
+    if (!data) {
+      // 프로필이 없으면(트리거 미작동 등) 즉석에서 생성
+      const u = await sb.auth.getUser();
+      const usr = u.data && u.data.user;
+      const meta = (usr && usr.user_metadata) || {};
+      const email = (usr && usr.email) || "";
+      const uname = meta.username || email.split("@")[0] || "user";
+      await sb.from("profiles").insert({ id: userId, username: uname, kakao_id: meta.kakao_id || "", is_admin: false });
+      res = await sb.from("profiles").select("*").eq("id", userId).maybeSingle();
+      data = res.data;
+    }
+    return data ? { ...mapProfile(data), id: data.id } : null;
+  };
+
+  const refresh = useCallback(async () => {
+    try {
+      const [c, e, s, p] = await Promise.all([
+        sb.from("columns").select("*").order("created_at", { ascending: false }),
+        sb.from("exams").select("*").order("created_at", { ascending: false }),
+        sb.from("submissions").select("*").order("submitted_at", { ascending: false }),
+        sb.from("profiles").select("*").order("created_at", { ascending: false }),
+      ]);
+      setNotices((c.data || []).map(mapColumn));
+      setExams((e.data || []).map(mapExam));
+      setSubs((s.data || []).map(mapSub));
+      setUsers((p.data || []).map(mapProfile));
+    } catch (err) {
+      console.warn("데이터 불러오기 실패:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    // 어떤 경우에도 화면이 멈추지 않도록 안전 타임아웃
+    const safety = setTimeout(() => active && setLoading(false), 5000);
+    (async () => {
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        if (active && session && session.user) {
+          const p = await loadProfile(session.user.id);
+          if (active) setAuth(p);
+        }
+      } catch (err) {
+        console.warn("세션 확인 실패:", err);
+      }
+      if (active) setLoading(false); // 데이터를 기다리지 않고 화면 먼저 표시
+      clearTimeout(safety);
+      refresh(); // 데이터는 백그라운드로 불러옴
+    })();
+    // 주의: onAuthStateChange 콜백 안에서 supabase 함수를 직접 await 하면 데드락이 남.
+    // setTimeout 으로 락 밖으로 빼서 처리한다.
+    const { data: listener } = sb.auth.onAuthStateChange((_evt, session) => {
+      setTimeout(async () => {
+        if (session && session.user) {
+          const p = await loadProfile(session.user.id);
+          if (p) setAuth(p);
+        } else {
+          setAuth(null);
+        }
+        refresh();
+      }, 0);
+    });
+    return () => {
+      active = false;
+      clearTimeout(safety);
+      listener.subscription.unsubscribe();
+    };
+  }, [refresh]);
+
+  const currentId = async () => {
+    const { data } = await sb.auth.getUser();
+    return data && data.user ? data.user.id : null;
+  };
+
+  /* ---- 인증 ---- */
+  const onLogin = async (id, pw) => {
+    try {
+      const { data, error } = await sb.auth.signInWithPassword({ email: emailOf(id), password: padPw(pw) });
+      if (error || !data || !data.user) return { error: "아이디 또는 비밀번호가 올바르지 않아요." };
+      setAuth({ id: data.user.id, username: id.trim(), kakaoId: "", isAdmin: false });
+      setAuthOpen(false);
+      loadProfile(data.user.id).then((p) => { if (p) setAuth(p); }).catch(() => {});
+      return {};
+    } catch (e) {
+      console.warn("login error:", e);
+      return { error: "로그인 중 오류가 났어요. 잠시 후 다시 시도해 주세요." };
+    }
+  };
+  const onSignup = async (id, pw, kakao) => {
+    const uname = id.trim();
+    if (!uname) return { error: "아이디를 입력하세요." };
+    try {
+      const { data, error } = await sb.auth.signUp({
+        email: emailOf(uname),
+        password: padPw(pw),
+        options: { data: { username: uname, kakao_id: (kakao || "").trim() } },
+      });
+      if (error) {
+        const dup = /registered|already|exists|duplicate/i.test(error.message || "");
+        return { error: dup ? "이미 사용 중인 아이디예요." : error.message };
+      }
+      if (!data || !data.session || !data.user) {
+        return { error: "가입은 됐어요. 로그인이 안 되면 Supabase에서 'Confirm email'을 꺼주세요." };
+      }
+      setAuth({ id: data.user.id, username: uname, kakaoId: (kakao || "").trim(), isAdmin: false });
+      setAuthOpen(false);
+      loadProfile(data.user.id).then((p) => { if (p) setAuth(p); }).catch(() => {});
+      return {};
+    } catch (e) {
+      console.warn("signup error:", e);
+      return { error: "가입 중 오류가 났어요. 잠시 후 다시 시도해 주세요." };
+    }
+  };
+  const onLogout = async () => {
+    await sb.auth.signOut();
+    setTab("home");
+  };
+  const onChangePassword = async (curPw, newPw) => {
+    if (!auth) return { error: "로그인이 필요해요." };
+    const check = await sb.auth.signInWithPassword({ email: emailOf(auth.username), password: padPw(curPw) });
+    if (check.error) return { error: "현재 비밀번호가 올바르지 않아요." };
+    const { error } = await sb.auth.updateUser({ password: padPw(newPw) });
+    if (error) return { error: error.message };
+    return {};
+  };
+
+  /* ---- 데이터 ---- */
+  const onAddColumn = async (post) => {
+    const id = await currentId();
+    await sb.from("columns").insert({ title: post.title, body: post.body, author: post.author, author_id: id });
+    await refresh();
+  };
+  const onDeleteColumn = async (id) => {
+    await sb.from("columns").delete().eq("id", id);
+    await refresh();
+  };
+  const onAddExam = async (exam) => {
+    const id = await currentId();
+    await sb.from("exams").insert({ title: exam.title, questions: exam.questions, author_id: id });
+    await refresh();
+  };
+  const onGradeSub = async (sub) => {
+    await sb.from("submissions").update({ manual_scores: sub.manualScores || {}, graded: true }).eq("id", sub.id);
+    await refresh();
+  };
+  const onAddSub = async (sub) => {
+    const id = await currentId();
+    await sb.from("submissions").insert({
+      exam_id: sub.examId, student: sub.student, student_id: id,
+      answers: sub.answers, manual_scores: sub.manualScores || {}, graded: sub.graded,
+    });
+    await refresh();
+  };
+  const onToggleAdmin = async (username, next) => {
+    await sb.from("profiles").update({ is_admin: next }).eq("username", username);
+    await refresh();
+  };
+  const onDeleteUser = async (username) => {
+    await sb.from("profiles").delete().eq("username", username);
+    await refresh();
+  };
+
+  const homeView = (
+    <Home role={role} student={student} loggedIn={loggedIn} noticeCount={notices.length} examCount={exams.length} onGo={setTab} />
+  );
+
+  return (
+    <div className="mr-root">
+      <style>{CSS}</style>
+
+      <header className="mr-header">
+        <div className="mr-brand" onClick={() => setTab("home")} role="button">
+          <span className="mr-logo">∑</span>
+          <div>
+            <div className="mr-brand-name">수학방</div>
+            <div className="mr-brand-sub">채팅방 보조 · 칼럼 · 시험</div>
+          </div>
+        </div>
+
+        <div className="mr-rolebox">
+          {loggedIn ? (
+            <button
+              className={"mr-account-btn" + (tab === "account" ? " active" : "")}
+              onClick={() => setTab("account")}
+              aria-label="회원정보"
+            >
+              <PersonIcon />
+            </button>
+          ) : (
+            <button className="mr-login-btn" onClick={() => setAuthOpen(true)}>
+              로그인
+            </button>
+          )}
+        </div>
+      </header>
+
+      <main className="mr-main">
+        {loading ? (
+          <div className="mr-loading">불러오는 중…</div>
+        ) : tab === "home" ? (
+          homeView
+        ) : tab === "records" ? (
+          loggedIn ? <MyRecords student={student} exams={exams} subs={subs} /> : homeView
+        ) : tab === "admin" ? (
+          role === "admin" ? (
+            <Admin auth={auth} users={users} notices={notices} exams={exams} subs={subs} onToggleAdmin={onToggleAdmin} onDeleteUser={onDeleteUser} />
+          ) : (
+            homeView
+          )
+        ) : tab === "account" ? (
+          loggedIn ? <Account auth={auth} onChangePassword={onChangePassword} onLogout={onLogout} /> : homeView
+        ) : tab === "notices" ? (
+          <Notices role={role} student={student} notices={notices} onAdd={onAddColumn} onDelete={onDeleteColumn} />
+        ) : (
+          <Exams
+            role={role}
+            student={student}
+            loggedIn={loggedIn}
+            requireLogin={requireLogin}
+            exams={exams}
+            subs={subs}
+            onAddExam={onAddExam}
+            onGradeSub={onGradeSub}
+            onAddSub={onAddSub}
+          />
+        )}
+      </main>
+
+      <footer className="mr-foot">© suhakjilmoon</footer>
+
+      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onLogin={onLogin} onSignup={onSignup} />}
+    </div>
+  );
+}
+
+/* 사람 모양 아이콘 (이모지 X, 벡터) — 추후 사진으로 교체 가능 */
+function PersonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
+      <circle cx="12" cy="8" r="4" fill="currentColor" />
+      <path
+        d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+/* ===================== 회원정보 ===================== */
+function Account({ auth, onChangePassword, onLogout }) {
+  const [curPw, setCurPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [done, setDone] = useState(false);
+
+  const changePw = async () => {
+    if (auth.isAdmin) return;
+    if (!curPw || !newPw) return alert("현재 비밀번호와 새 비밀번호를 입력하세요.");
+    const { error } = await onChangePassword(curPw, newPw);
+    if (error) return alert(error);
+    setCurPw("");
+    setNewPw("");
+    setDone(true);
+  };
+
+  return (
+    <div className="mr-col">
+      <section className="mr-card mr-account-card">
+        <div className="mr-account-avatar">
+          <PersonIcon />
+        </div>
+        <div className="mr-account-name">{auth.username}</div>
+        <div className="mr-account-role">
+          {auth.isAdmin ? "관리자" : "일반 회원"}
+          {!auth.isAdmin && auth.kakaoId ? ` · 카톡방 ${auth.kakaoId}` : ""}
+        </div>
+      </section>
+
+      <section className="mr-card">
+        <div className="mr-card-tag">비밀번호 변경</div>
+        {auth.isAdmin ? (
+          <p className="mr-muted" style={{ fontSize: "14px", lineHeight: 1.6 }}>
+            관리자 계정은 비밀번호가 고정되어 있어요.
+          </p>
+        ) : (
+          <>
+            <input
+              className="mr-input"
+              type="password"
+              placeholder="현재 비밀번호"
+              value={curPw}
+              onChange={(e) => {
+                setCurPw(e.target.value);
+                setDone(false);
+              }}
+            />
+            <input
+              className="mr-input"
+              type="password"
+              placeholder="새 비밀번호"
+              value={newPw}
+              onChange={(e) => {
+                setNewPw(e.target.value);
+                setDone(false);
+              }}
+            />
+            <div className="mr-row-between" style={{ marginTop: "14px" }}>
+              <span className="mr-ok-msg">{done ? "비밀번호가 변경됐어요" : ""}</span>
+              <button className="mr-btn" onClick={changePw}>
+                변경하기
+              </button>
+            </div>
+          </>
+        )}
+      </section>
+
+      <button className="mr-logout-full" onClick={onLogout}>
+        로그아웃
+      </button>
+    </div>
+  );
+}
+
+/* ===================== 내 시험 기록 ===================== */
+function MyRecords({ student, exams, subs }) {
+  const mine = subs
+    .filter((s) => s.student === student)
+    .map((s) => ({ sub: s, exam: exams.find((e) => e.id === s.examId) }))
+    .filter((r) => r.exam)
+    .sort((a, b) => (b.sub.submittedAt || 0) - (a.sub.submittedAt || 0));
+
+  return (
+    <div className="mr-col">
+      <div className="mr-list-top">
+        <span className="mr-list-title">내 시험 기록</span>
+      </div>
+      {mine.length === 0 ? (
+        <Empty text="아직 응시한 시험이 없어요." />
+      ) : (
+        <div className="mr-postlist">
+          {mine.map(({ sub, exam }, i) => {
+            const score = totalScore(exam, sub);
+            const max = maxScore(exam);
+            const ratio = max ? score / max : 0;
+            const tone = ratio >= 0.8 ? "good" : ratio >= 0.5 ? "mid" : "low";
+            return (
+              <div className="mr-record" key={sub.id} style={{ animationDelay: `${i * 30}ms` }}>
+                <div className="mr-record-info">
+                  <div className="mr-record-title">{exam.title}</div>
+                  <div className="mr-record-meta">{fmtDate(sub.submittedAt)}</div>
+                </div>
+                <div className={"mr-record-score " + tone}>
+                  {score}
+                  <span className="mr-record-max"> / {max}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ===================== 관리자 페이지 ===================== */
+function Admin({ auth, users, notices, exams, subs, onToggleAdmin, onDeleteUser }) {
+  const [subtab, setSubtab] = useState("dash"); // dash | members
+  const [selUser, setSelUser] = useState(null); // username
+  const [q, setQ] = useState("");
+
+  const stats = [
+    { label: "회원", value: users.length },
+    { label: "칼럼", value: notices.length },
+    { label: "시험", value: exams.length },
+    { label: "제출", value: subs.length },
+  ];
+
+  const toggleAdmin = async (username) => {
+    const u = users.find((x) => x.username === username);
+    await onToggleAdmin(username, !(u && u.isAdmin));
+  };
+  const removeUser = async (username) => {
+    if (!confirm(`'${username}' 회원을 삭제할까요?`)) return;
+    await onDeleteUser(username);
+    if (selUser === username) setSelUser(null);
+  };
+
+  const sorted = [...users].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const kw = q.trim().toLowerCase();
+  const filtered = kw
+    ? sorted.filter(
+        (u) =>
+          u.username.toLowerCase().includes(kw) || (u.kakaoId || "").toLowerCase().includes(kw)
+      )
+    : sorted;
+
+  const scoreTone = (ratio) => (ratio >= 0.8 ? "good" : ratio >= 0.5 ? "mid" : "low");
+
+  /* ---- 회원 상세: 시험 결과 ---- */
+  if (selUser) {
+    const u = users.find((x) => x.username === selUser);
+    const theirs = subs
+      .filter((s) => s.student === selUser)
+      .map((s) => ({ sub: s, exam: exams.find((e) => e.id === s.examId) }))
+      .filter((r) => r.exam)
+      .sort((a, b) => (b.sub.submittedAt || 0) - (a.sub.submittedAt || 0));
+
+    return (
+      <div className="mr-col">
+        <button className="mr-btn-text" onClick={() => setSelUser(null)}>
+          ← 회원 목록
+        </button>
+        {!u ? (
+          <Empty text="회원을 찾을 수 없어요." />
+        ) : (
+          <>
+            <section className="mr-card mr-account-card">
+              <div className="mr-account-avatar">
+                <PersonIcon />
+              </div>
+              <div className="mr-account-name">
+                {u.username}
+                {u.isAdmin && <span className="mr-user-badge">관리자</span>}
+              </div>
+              <div className="mr-account-role">
+                {u.kakaoId ? `카톡방 ${u.kakaoId}` : "카톡방 미입력"}
+                {u.createdAt ? ` · 가입 ${fmtDate(u.createdAt)}` : ""}
+              </div>
+              <div className="mr-detail-actions">
+                <button className="mr-mini-btn" onClick={() => toggleAdmin(u.username)}>
+                  {u.isAdmin ? "관리자 해제" : "관리자 지정"}
+                </button>
+                <button className="mr-mini-btn danger" onClick={() => removeUser(u.username)}>
+                  회원 삭제
+                </button>
+              </div>
+            </section>
+
+            <section className="mr-card">
+              <div className="mr-card-tag">시험 결과 ({theirs.length}건)</div>
+              {theirs.length === 0 ? (
+                <p className="mr-muted" style={{ fontSize: "14px" }}>
+                  아직 응시한 시험이 없어요.
+                </p>
+              ) : (
+                <div className="mr-member-list">
+                  {theirs.map(({ sub, exam }) => {
+                    const score = totalScore(exam, sub);
+                    const max = maxScore(exam);
+                    const tone = scoreTone(max ? score / max : 0);
+                    return (
+                      <div className="mr-record" key={sub.id}>
+                        <div className="mr-record-info">
+                          <div className="mr-record-title">{exam.title}</div>
+                          <div className="mr-record-meta">{fmtDate(sub.submittedAt)}</div>
+                        </div>
+                        <div className={"mr-record-score " + tone}>
+                          {score}
+                          <span className="mr-record-max"> / {max}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  /* ---- 메인: 대시보드 / 회원 ---- */
+  return (
+    <div className="mr-col">
+      <div className="mr-list-top">
+        <span className="mr-list-title">관리자 페이지</span>
+      </div>
+
+      <div className="mr-subtabs">
+        <button className={subtab === "dash" ? "on" : ""} onClick={() => setSubtab("dash")}>
+          대시보드
+        </button>
+        <button className={subtab === "members" ? "on" : ""} onClick={() => setSubtab("members")}>
+          회원 {users.length}
+        </button>
+      </div>
+
+      {subtab === "dash" ? (
+        <>
+          <section className="mr-card">
+            <div className="mr-stat-grid">
+              {stats.map((s) => (
+                <div className="mr-stat" key={s.label}>
+                  <div className="mr-stat-num">{s.value}</div>
+                  <div className="mr-stat-label">{s.label}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="mr-card">
+            <div className="mr-card-tag">시험별 제출 현황</div>
+            {exams.length === 0 ? (
+              <p className="mr-muted" style={{ fontSize: "14px" }}>
+                출제된 시험이 없어요.
+              </p>
+            ) : (
+              <div className="mr-exam-summary">
+                {exams.map((ex) => {
+                  const es = subs.filter((s) => s.examId === ex.id);
+                  const avg = es.length
+                    ? Math.round(es.reduce((sum, s) => sum + totalScore(ex, s), 0) / es.length)
+                    : 0;
+                  return (
+                    <div className="mr-exam-sum-row" key={ex.id}>
+                      <div className="mr-exam-sum-title">{ex.title}</div>
+                      <div className="mr-exam-sum-meta">
+                        제출 {es.length}건{es.length > 0 ? ` · 평균 ${avg}/${maxScore(ex)}점` : ""}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </>
+      ) : (
+        <>
+          <input
+            className="mr-input"
+            placeholder="아이디 · 카톡방 아이디 검색"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            style={{ marginTop: 0 }}
+          />
+          {filtered.length === 0 ? (
+            <Empty text={users.length === 0 ? "아직 가입한 회원이 없어요." : "검색 결과가 없어요."} />
+          ) : (
+            <div className="mr-postlist">
+              {filtered.map((u) => (
+                <button
+                  className="mr-member-row"
+                  key={u.username}
+                  onClick={() => setSelUser(u.username)}
+                >
+                  <span className="mr-avatar sm">{u.username[0]}</span>
+                  <span className="mr-member-info">
+                    <span className="mr-member-name">
+                      {u.username}
+                      {u.isAdmin && <span className="mr-user-badge">관리자</span>}
+                    </span>
+                    <span className="mr-member-meta">
+                      {u.kakaoId ? `카톡방 ${u.kakaoId}` : "카톡방 미입력"}
+                      {u.createdAt ? ` · ${fmtDate(u.createdAt)}` : ""}
+                    </span>
+                  </span>
+                  <span className="mr-sector-arrow">→</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ===================== 로그인 / 회원가입 ===================== */
+function AuthModal({ onClose, onLogin, onSignup }) {
+  const [mode, setMode] = useState("login"); // login | signup
+  const [id, setId] = useState("");
+  const [pw, setPw] = useState("");
+  const [kakao, setKakao] = useState("");
+
+  const doLogin = async () => {
+    const { error } = await onLogin(id, pw);
+    if (error) alert(error);
+  };
+
+  const doSignup = async () => {
+    const { error } = await onSignup(id, pw, kakao);
+    if (error) alert(error);
+  };
+
+  return (
+    <div className="mr-modal-overlay" onClick={onClose}>
+      <div className="mr-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="mr-modal-head">
+          <span className="mr-modal-title">{mode === "login" ? "로그인" : "회원가입"}</span>
+          <button className="mr-modal-x" onClick={onClose}>
+            ×
+          </button>
+        </div>
+
+        <input
+          className="mr-input"
+          placeholder="아이디"
+          value={id}
+          onChange={(e) => setId(e.target.value)}
+        />
+        <input
+          className="mr-input"
+          type="password"
+          placeholder="비밀번호"
+          value={pw}
+          onChange={(e) => setPw(e.target.value)}
+        />
+        {mode === "signup" && (
+          <input
+            className="mr-input"
+            placeholder="카톡방 아이디 (선택)"
+            value={kakao}
+            onChange={(e) => setKakao(e.target.value)}
+          />
+        )}
+
+        <button
+          className="mr-btn mr-modal-submit"
+          onClick={mode === "login" ? doLogin : doSignup}
+        >
+          {mode === "login" ? "로그인" : "가입하고 시작하기"}
+        </button>
+
+        <div className="mr-modal-switch">
+          {mode === "login" ? (
+            <>
+              아직 회원이 아니신가요?{" "}
+              <button onClick={() => setMode("signup")}>회원가입</button>
+            </>
+          ) : (
+            <>
+              이미 계정이 있나요?{" "}
+              <button onClick={() => setMode("login")}>로그인</button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ===================== 홈 ===================== */
+function Home({ role, student, loggedIn, noticeCount, examCount, onGo }) {
+  const greet = !loggedIn
+    ? "로그인하고 함께 시작해요"
+    : role === "admin"
+    ? "관리자 모드예요"
+    : `${student}님, 환영해요`;
+
+  const sectors = [
+    {
+      key: "notices",
+      icon: "✍️",
+      title: "칼럼",
+      desc: "수학 이야기와 공부 팁을 읽고 써요",
+      meta: `${noticeCount}개의 글`,
+      tone: "blue",
+    },
+    {
+      key: "exams",
+      icon: "🧮",
+      title: "시험",
+      desc: "사진 문제 · 객관식/주관식 자동 채점",
+      meta: `${examCount}개의 시험`,
+      tone: "green",
+    },
+  ];
+  if (loggedIn) {
+    sectors.push({
+      key: "records",
+      icon: "📊",
+      title: "내 시험 기록",
+      desc: "내가 응시한 시험과 점수",
+      meta: "내 점수 모아보기",
+      tone: "blue",
+    });
+  }
+  if (role === "admin") {
+    sectors.push({
+      key: "admin",
+      icon: "🛠️",
+      title: "관리자 페이지",
+      desc: "회원 · 시험 제출 관리",
+      meta: "관리자 전용",
+      tone: "gray",
+    });
+  }
+
+  return (
+    <div className="mr-col">
+      <section className="mr-hero">
+        <div className="mr-hero-greet">{greet}</div>
+        <h1 className="mr-hero-title">
+          오늘도 수학방에서
+          <br />
+          함께 풀어볼까요
+        </h1>
+      </section>
+
+      <div className="mr-sectors">
+        {sectors.map((s, i) => (
+          <button
+            key={s.key}
+            className="mr-sector"
+            style={{ animationDelay: `${i * 60}ms` }}
+            onClick={() => onGo(s.key)}
+          >
+            <span className={"mr-sector-icon " + s.tone}>{s.icon}</span>
+            <span className="mr-sector-text">
+              <span className="mr-sector-title">{s.title}</span>
+              <span className="mr-sector-desc">{s.desc}</span>
+              <span className="mr-sector-meta">{s.meta}</span>
+            </span>
+            <span className="mr-sector-arrow">→</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ===================== 칼럼 ===================== */
+function Notices({ role, student, notices, onAdd, onDelete }) {
+  const [view, setView] = useState("list"); // list | write | read
+  const [openId, setOpenId] = useState(null);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+
+  const post = async () => {
+    if (!title.trim()) return alert("제목을 입력하세요.");
+    const author = role === "admin" ? "관리자" : student.trim() || "익명";
+    await onAdd({ title: title.trim(), body: body.trim(), author });
+    setTitle("");
+    setBody("");
+    setView("list");
+  };
+  const remove = async (id) => {
+    await onDelete(id);
+    setOpenId(null);
+    setView("list");
+  };
+
+  // 글쓰기
+  if (view === "write")
+    return (
+      <div className="mr-col">
+        <button className="mr-btn-text" onClick={() => setView("list")}>
+          ← 칼럼 목록
+        </button>
+        <section className="mr-card mr-writer">
+          <div className="mr-card-tag">새 칼럼 쓰기</div>
+          <input
+            className="mr-input mr-title-input"
+            placeholder="제목"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <textarea
+            className="mr-textarea"
+            placeholder="이야기를 자유롭게 풀어보세요. 풀이 접근법, 개념 정리, 공부 팁 무엇이든 좋아요."
+            rows={10}
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+          />
+          <div className="mr-row-end">
+            <button className="mr-btn" onClick={post}>
+              발행하기
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+
+  // 글 보기
+  if (view === "read") {
+    const n = notices.find((x) => x.id === openId);
+    return (
+      <div className="mr-col">
+        <button className="mr-btn-text" onClick={() => setView("list")}>
+          ← 칼럼 목록
+        </button>
+        {!n ? (
+          <Empty text="글을 찾을 수 없어요." />
+        ) : (
+          <article className="mr-card mr-notice mr-post">
+            <h1 className="mr-post-title">{n.title}</h1>
+            <div className="mr-post-byline">
+              <span className="mr-avatar sm">{(n.author || "익")[0]}</span>
+              {n.author || "익명"} · {fmtDate(n.createdAt)}
+            </div>
+            <div className="mr-post-divider" />
+            {n.body ? <p className="mr-notice-body">{n.body}</p> : <p className="mr-muted">내용이 없어요.</p>}
+            {role === "admin" && (
+              <button className="mr-link-del" onClick={() => remove(n.id)}>
+                삭제
+              </button>
+            )}
+          </article>
+        )}
+      </div>
+    );
+  }
+
+  // 목록
+  return (
+    <div className="mr-col">
+      <div className="mr-list-top">
+        <span className="mr-list-title">칼럼</span>
+        {role === "admin" && (
+          <button
+            className="mr-btn"
+            onClick={() => {
+              setTitle("");
+              setBody("");
+              setView("write");
+            }}
+          >
+            글쓰기
+          </button>
+        )}
+      </div>
+      {notices.length === 0 ? (
+        <Empty text="아직 발행된 칼럼이 없어요." />
+      ) : (
+        <div className="mr-postlist">
+          {notices.map((n, i) => (
+            <button
+              key={n.id}
+              className="mr-post-row"
+              style={{ animationDelay: `${i * 30}ms` }}
+              onClick={() => {
+                setOpenId(n.id);
+                setView("read");
+              }}
+            >
+              <span className="mr-post-row-title">{n.title}</span>
+              <span className="mr-post-row-meta">
+                {n.author || "익명"} · {fmtDate(n.createdAt)}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ===================== 시험 ===================== */
+function Exams(props) {
+  return props.role === "admin" ? <ExamsAdmin {...props} /> : <ExamsStudent {...props} />;
+}
+
+/* ---------- 관리자: 시험 목록 / 출제 / 채점 ---------- */
+function ExamsAdmin({ exams, onAddExam, subs, onGradeSub }) {
+  const [mode, setMode] = useState("list"); // list | create | grade
+  const [activeExam, setActiveExam] = useState(null);
+
+  const openGrade = (exam) => {
+    setActiveExam(exam);
+    setMode("grade");
+  };
+
+  if (mode === "create")
+    return (
+      <ExamEditor
+        onCancel={() => setMode("list")}
+        onSave={async (exam) => {
+          await onAddExam(exam);
+          setMode("list");
+        }}
+      />
+    );
+
+  if (mode === "grade" && activeExam)
+    return (
+      <GradePanel
+        exam={activeExam}
+        subs={subs.filter((s) => s.examId === activeExam.id)}
+        onBack={() => setMode("list")}
+        onSaveGrade={async (updated) => {
+          await onGradeSub(updated);
+        }}
+      />
+    );
+
+  return (
+    <div className="mr-col">
+      <div className="mr-row-end">
+        <button className="mr-btn" onClick={() => setMode("create")}>
+          + 새 시험 출제
+        </button>
+      </div>
+      {exams.length === 0 ? (
+        <Empty text="아직 출제된 시험이 없어요." />
+      ) : (
+        exams.map((ex, i) => {
+          const exSubs = subs.filter((s) => s.examId === ex.id);
+          const pending = exSubs.filter((s) => !s.graded).length;
+          return (
+            <article className="mr-card" key={ex.id} style={{ animationDelay: `${i * 40}ms` }}>
+              <div className="mr-notice-head">
+                <h3>{ex.title}</h3>
+                <span className="mr-date">{fmtDate(ex.createdAt)}</span>
+              </div>
+              <div className="mr-exam-meta">
+                <span>문항 {ex.questions.length}개</span>
+                <span>·</span>
+                <span>만점 {maxScore(ex)}점</span>
+                <span>·</span>
+                <span>제출 {exSubs.length}건</span>
+                {pending > 0 && <span className="mr-badge-red">채점 대기 {pending}</span>}
+              </div>
+              <div className="mr-row-end">
+                <button className="mr-btn-ghost" onClick={() => openGrade(ex)}>
+                  제출/채점 보기
+                </button>
+              </div>
+            </article>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+/* ---------- 시험 출제 에디터 ---------- */
+function ExamEditor({ onCancel, onSave }) {
+  const [title, setTitle] = useState("");
+  const [questions, setQuestions] = useState([blankQ()]);
+
+  function blankQ() {
+    return { id: uid(), type: "mc", text: "", image: "", points: 10, options: ["", ""], answer: 0, accept: "" };
+  }
+  const update = (id, patch) => setQuestions((qs) => qs.map((q) => (q.id === id ? { ...q, ...patch } : q)));
+  const addQ = () => setQuestions((qs) => [...qs, blankQ()]);
+  const delQ = (id) => setQuestions((qs) => (qs.length > 1 ? qs.filter((q) => q.id !== id) : qs));
+
+  const setOption = (qid, idx, val) =>
+    setQuestions((qs) =>
+      qs.map((q) => (q.id === qid ? { ...q, options: q.options.map((o, i) => (i === idx ? val : o)) } : q))
+    );
+  const addOption = (qid) =>
+    setQuestions((qs) => qs.map((q) => (q.id === qid ? { ...q, options: [...q.options, ""] } : q)));
+  const delOption = (qid, idx) =>
+    setQuestions((qs) =>
+      qs.map((q) => {
+        if (q.id !== qid || q.options.length <= 2) return q;
+        const options = q.options.filter((_, i) => i !== idx);
+        let answer = q.answer;
+        if (answer >= options.length) answer = options.length - 1;
+        return { ...q, options, answer };
+      })
+    );
+
+  const save = () => {
+    if (!title.trim()) return alert("시험 제목을 입력하세요.");
+    for (const q of questions) {
+      if (!q.image) return alert("모든 문항에 문제 사진을 올려주세요.");
+      if (q.type === "mc" && q.options.some((o) => !o.trim()))
+        return alert("객관식 보기를 모두 입력하세요.");
+      if (q.type === "short" && !String(q.accept || "").trim())
+        return alert("주관식 문항의 정답을 입력하세요. (자동 채점에 사용됩니다)");
+    }
+    onSave({
+      id: uid(),
+      title: title.trim(),
+      createdAt: Date.now(),
+      questions: questions.map((q) => ({ ...q, points: Number(q.points) || 0 })),
+    });
+  };
+
+  return (
+    <div className="mr-col">
+      <section className="mr-card mr-writer">
+        <div className="mr-card-tag">시험 출제</div>
+        <input
+          className="mr-input"
+          placeholder="시험 제목"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+      </section>
+
+      {questions.map((q, qi) => (
+        <section className="mr-card mr-qedit" key={q.id}>
+          <div className="mr-qedit-head">
+            <span className="mr-qnum">Q{qi + 1}</span>
+            <div className="mr-seg">
+              <button className={q.type === "mc" ? "on" : ""} onClick={() => update(q.id, { type: "mc" })}>
+                객관식
+              </button>
+              <button
+                className={q.type === "short" ? "on" : ""}
+                onClick={() => update(q.id, { type: "short" })}
+              >
+                주관식
+              </button>
+            </div>
+            <label className="mr-points">
+              배점
+              <input
+                type="number"
+                min={0}
+                value={q.points}
+                onChange={(e) => update(q.id, { points: e.target.value })}
+              />
+            </label>
+            <button className="mr-link-del" onClick={() => delQ(q.id)}>
+              삭제
+            </button>
+          </div>
+
+          <QuestionImage value={q.image} onChange={(img) => update(q.id, { image: img })} />
+          <input
+            className="mr-input"
+            placeholder="문제 보충 설명 (선택)"
+            value={q.text}
+            onChange={(e) => update(q.id, { text: e.target.value })}
+          />
+
+          {q.type === "mc" ? (
+            <div className="mr-options">
+              {q.options.map((opt, oi) => (
+                <div className="mr-opt-row" key={oi}>
+                  <input
+                    type="radio"
+                    name={`ans-${q.id}`}
+                    checked={q.answer === oi}
+                    onChange={() => update(q.id, { answer: oi })}
+                    title="정답으로 지정"
+                  />
+                  <span className="mr-opt-label">{String.fromCharCode(9311 + oi + 1)}</span>
+                  <input
+                    className="mr-input mr-opt-input"
+                    placeholder={`보기 ${oi + 1}`}
+                    value={opt}
+                    onChange={(e) => setOption(q.id, oi, e.target.value)}
+                  />
+                  {q.options.length > 2 && (
+                    <button className="mr-x" onClick={() => delOption(q.id, oi)}>
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button className="mr-add-opt" onClick={() => addOption(q.id)}>
+                + 보기 추가
+              </button>
+              <div className="mr-hint">왼쪽 ○ 를 눌러 정답을 지정하세요.</div>
+            </div>
+          ) : (
+            <div className="mr-short-answer">
+              <input
+                className="mr-input"
+                placeholder="정답"
+                value={q.accept || ""}
+                onChange={(e) => update(q.id, { accept: e.target.value })}
+              />
+            </div>
+          )}
+        </section>
+      ))}
+
+      <div className="mr-row-between">
+        <button className="mr-btn-ghost" onClick={addQ}>
+          + 문항 추가
+        </button>
+        <div className="mr-gap">
+          <button className="mr-btn-text" onClick={onCancel}>
+            취소
+          </button>
+          <button className="mr-btn" onClick={save}>
+            시험 저장
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- 관리자: 채점 패널 ---------- */
+function GradePanel({ exam, subs, onBack, onSaveGrade }) {
+  const [openId, setOpenId] = useState(null);
+
+  return (
+    <div className="mr-col">
+      <button className="mr-btn-text" onClick={onBack}>
+        ← 시험 목록
+      </button>
+      <section className="mr-card">
+        <div className="mr-notice-head">
+          <h3>{exam.title}</h3>
+          <span className="mr-date">만점 {maxScore(exam)}점</span>
+        </div>
+      </section>
+
+      {subs.length === 0 ? (
+        <Empty text="아직 제출된 답안이 없어요." />
+      ) : (
+        subs.map((s) => (
+          <SubmissionRow
+            key={s.id}
+            exam={exam}
+            sub={s}
+            open={openId === s.id}
+            onToggle={() => setOpenId(openId === s.id ? null : s.id)}
+            onSaveGrade={onSaveGrade}
+          />
+        ))
+      )}
+    </div>
+  );
+}
+
+function SubmissionRow({ exam, sub, open, onToggle, onSaveGrade }) {
+  const [manual, setManual] = useState(sub.manualScores || {});
+  useEffect(() => setManual(sub.manualScores || {}), [sub]);
+
+  const save = () => {
+    const cleaned = {};
+    exam.questions
+      .filter((q) => q.type === "short")
+      .forEach((q) => {
+        const raw = manual[q.id];
+        if (raw === undefined || raw === null || raw === "") return; // 비우면 자동 채점 사용
+        cleaned[q.id] = Math.max(0, Math.min(Number(q.points) || 0, Number(raw) || 0));
+      });
+    onSaveGrade({ ...sub, manualScores: cleaned, graded: true });
+  };
+
+  const auto = autoScore(exam, sub.answers);
+  const total = totalScore(exam, { ...sub, manualScores: manual });
+
+  return (
+    <article className="mr-card mr-sub">
+      <div className="mr-sub-head" onClick={onToggle}>
+        <div className="mr-sub-name">
+          <span className="mr-avatar">{(sub.student || "?")[0]}</span>
+          <div>
+            <div className="mr-strong">{sub.student || "익명"}</div>
+            <div className="mr-date">{fmtDate(sub.submittedAt)}</div>
+          </div>
+        </div>
+        <div className="mr-sub-score">
+          {sub.graded ? (
+            <span className="mr-score-done">
+              {totalScore(exam, sub)} / {maxScore(exam)}
+            </span>
+          ) : (
+            <span className="mr-badge-red">채점 대기</span>
+          )}
+          <span className="mr-chevron">{open ? "▲" : "▼"}</span>
+        </div>
+      </div>
+
+      {open && (
+        <div className="mr-sub-body">
+          {exam.questions.map((q, qi) => {
+            const a = sub.answers[q.id];
+            if (q.type === "mc") {
+              const correct = a === q.answer;
+              return (
+                <div className="mr-grade-q" key={q.id}>
+                  <div className="mr-grade-qtext">
+                    <span className="mr-qnum-sm">Q{qi + 1}</span>
+                    {q.text}
+                  </div>
+                  {q.image && <img className="mr-q-img sm" src={q.image} alt="문제" />}
+                  <div className="mr-mc-review">
+                    {q.options.map((opt, oi) => (
+                      <div
+                        key={oi}
+                        className={
+                          "mr-mc-opt" +
+                          (oi === q.answer ? " is-answer" : "") +
+                          (oi === a && oi !== q.answer ? " is-wrong" : "")
+                        }
+                      >
+                        {String.fromCharCode(9311 + oi + 1)} {opt}
+                        {oi === q.answer && <span className="mr-tag-correct">정답</span>}
+                        {oi === a && <span className="mr-tag-chosen">선택</span>}
+                      </div>
+                    ))}
+                  </div>
+                  <div className={"mr-auto-mark " + (correct ? "ok" : "no")}>
+                    {correct ? `정답 +${q.points}점` : `오답 0점`} (자동)
+                  </div>
+                </div>
+              );
+            }
+            // 주관식 — 자동 채점 + 필요시 보정
+            const scorrect = isShortCorrect(q, a);
+            const overridden = manual[q.id] !== undefined && manual[q.id] !== null && manual[q.id] !== "";
+            return (
+              <div className="mr-grade-q" key={q.id}>
+                <div className="mr-grade-qtext">
+                  <span className="mr-qnum-sm">Q{qi + 1}</span>
+                  {q.text}
+                </div>
+                {q.image && <img className="mr-q-img sm" src={q.image} alt="문제" />}
+                <div className="mr-answer-box">
+                  <span className="mr-ans-label">학생 답안</span>
+                  {a ? a : <em className="mr-muted">미응답</em>}
+                </div>
+                <div className="mr-accept">
+                  정답: <strong>{q.accept || "(미설정)"}</strong>
+                </div>
+                <div className={"mr-auto-mark " + (scorrect ? "ok" : "no")}>
+                  {scorrect ? `정답 +${q.points}점` : `오답 0점`} (자동)
+                </div>
+                <label className="mr-manual">
+                  점수 보정
+                  <input
+                    type="number"
+                    min={0}
+                    max={q.points}
+                    placeholder={String(scorrect ? q.points : 0)}
+                    value={manual[q.id] ?? ""}
+                    onChange={(e) => setManual({ ...manual, [q.id]: e.target.value })}
+                  />
+                  <span className="mr-muted">/ {q.points}점</span>
+                  {overridden && (
+                    <button className="mr-reset" onClick={() => setManual({ ...manual, [q.id]: "" })}>
+                      자동으로
+                    </button>
+                  )}
+                </label>
+              </div>
+            );
+          })}
+          <div className="mr-row-between mr-grade-foot">
+            <span className="mr-muted">
+              자동 채점 {auto}점{total !== auto ? ` → 보정 후 ${total}점` : ""} ·{" "}
+              <strong className="mr-ink">최종 {total}점</strong> / {maxScore(exam)}점
+            </span>
+            <button className="mr-btn" onClick={save}>
+              보정 저장
+            </button>
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}
+
+/* ---------- 참여자: 시험 목록 / 응시 / 결과 ---------- */
+function ExamsStudent({ student, loggedIn, requireLogin, exams, subs, onAddSub }) {
+  const [taking, setTaking] = useState(null);
+
+  if (taking)
+    return (
+      <TakeExam
+        exam={taking}
+        student={student}
+        onCancel={() => setTaking(null)}
+        onSubmit={async (sub) => {
+          await onAddSub(sub);
+          setTaking(null);
+        }}
+      />
+    );
+
+  return (
+    <div className="mr-col">
+      {exams.length === 0 ? (
+        <Empty text="아직 응시할 시험이 없어요." />
+      ) : (
+        exams.map((ex, i) => {
+          const mine = subs.find((s) => s.examId === ex.id && s.student === student && student);
+          return (
+            <article className="mr-card" key={ex.id} style={{ animationDelay: `${i * 40}ms` }}>
+              <div className="mr-notice-head">
+                <h3>{ex.title}</h3>
+                <span className="mr-date">{fmtDate(ex.createdAt)}</span>
+              </div>
+              <div className="mr-exam-meta">
+                <span>문항 {ex.questions.length}개</span>
+                <span>·</span>
+                <span>만점 {maxScore(ex)}점</span>
+              </div>
+              <div className="mr-row-end">
+                {mine ? (
+                  mine.graded ? (
+                    <span className="mr-result-pill">
+                      내 점수 {totalScore(ex, mine)} / {maxScore(ex)}
+                    </span>
+                  ) : (
+                    <span className="mr-badge-red">채점 중…</span>
+                  )
+                ) : (
+                  <button
+                    className="mr-btn"
+                    onClick={() => (loggedIn ? setTaking(ex) : requireLogin())}
+                  >
+                    응시하기
+                  </button>
+                )}
+              </div>
+            </article>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+function TakeExam({ exam, student, onCancel, onSubmit }) {
+  const [answers, setAnswers] = useState({});
+  const set = (qid, val) => setAnswers((a) => ({ ...a, [qid]: val }));
+
+  const submit = () => {
+    if (!student.trim()) return alert("로그인이 필요해요.");
+    const sub = {
+      id: uid(),
+      examId: exam.id,
+      student: student.trim(),
+      answers,
+      manualScores: {},
+      graded: true, // 객관식·주관식 모두 자동 채점
+      submittedAt: Date.now(),
+    };
+    onSubmit(sub);
+  };
+
+  return (
+    <div className="mr-col">
+      <button className="mr-btn-text" onClick={onCancel}>
+        ← 시험 목록
+      </button>
+      <section className="mr-card">
+        <div className="mr-notice-head">
+          <h3>{exam.title}</h3>
+          <span className="mr-date">만점 {maxScore(exam)}점</span>
+        </div>
+      </section>
+
+      {exam.questions.map((q, qi) => (
+        <section className="mr-card mr-take-q" key={q.id}>
+          <div className="mr-grade-qtext">
+            <span className="mr-qnum">Q{qi + 1}</span>
+            <span className="mr-pts-tag">{q.points}점</span>
+          </div>
+          {q.image && <img className="mr-q-img" src={q.image} alt={"문제 " + (qi + 1)} />}
+          {q.text && <div className="mr-q-cap">{q.text}</div>}
+          {q.type === "mc" ? (
+            <div className="mr-take-options">
+              {q.options.map((opt, oi) => (
+                <label
+                  key={oi}
+                  className={"mr-take-opt" + (answers[q.id] === oi ? " sel" : "")}
+                >
+                  <input
+                    type="radio"
+                    name={`take-${q.id}`}
+                    checked={answers[q.id] === oi}
+                    onChange={() => set(q.id, oi)}
+                  />
+                  <span className="mr-opt-label">{String.fromCharCode(9311 + oi + 1)}</span>
+                  {opt}
+                </label>
+              ))}
+            </div>
+          ) : (
+            <textarea
+              className="mr-textarea"
+              rows={3}
+              placeholder="답안을 작성하세요"
+              value={answers[q.id] || ""}
+              onChange={(e) => set(q.id, e.target.value)}
+            />
+          )}
+        </section>
+      ))}
+
+      <div className="mr-row-end">
+        <button className="mr-btn" onClick={submit}>
+          제출하기
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- 공통 ---------- */
+function Empty({ text }) {
+  return <div className="mr-empty">{text}</div>;
+}
+
+/* 문제 사진 업로드 (업로드 시 최대 1000px로 축소해 저장) */
+function QuestionImage({ value, onChange }) {
+  const onFile = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 1000;
+        let { width, height } = img;
+        if (width > max || height > max) {
+          const s = Math.min(max / width, max / height);
+          width = Math.round(width * s);
+          height = Math.round(height * s);
+        }
+        const c = document.createElement("canvas");
+        c.width = width;
+        c.height = height;
+        c.getContext("2d").drawImage(img, 0, 0, width, height);
+        onChange(c.toDataURL("image/jpeg", 0.82));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  if (value)
+    return (
+      <div className="mr-img-preview">
+        <img src={value} alt="문제 미리보기" />
+        <label className="mr-img-change">
+          <input type="file" accept="image/*" onChange={onFile} hidden />
+          사진 변경
+        </label>
+        <button className="mr-img-del" onClick={() => onChange("")}>
+          삭제
+        </button>
+      </div>
+    );
+
+  return (
+    <label className="mr-img-drop">
+      <input type="file" accept="image/*" onChange={onFile} hidden />
+      <span className="mr-img-icon">📷</span>
+      <span className="mr-img-main">문제 사진 올리기</span>
+      <span className="mr-img-sub">탭해서 사진 선택 · 손글씨/인쇄 문제 모두 가능</span>
+    </label>
+  );
+}
+
+/* ============================================================
+   스타일 — Toss 스타일: 회색 배경 · 흰 라운드 카드 · Pretendard · 클린 블루
+   ============================================================ */
+const CSS = `
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+
+.mr-root *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+.mr-root{
+  --bg:#F2F4F6; --card:#FFFFFF; --t1:#191F28; --t2:#4E5968; --t3:#8B95A1;
+  --blue:#3182F6; --blue-d:#1B64DA; --blue-bg:#E8F3FF;
+  --line:#E5E8EB; --line-soft:#F2F4F6; --green:#00B262; --green-bg:#E7F8F0;
+  --red:#F04452; --red-bg:#FDECEE;
+  min-height:100vh; width:100%; background:var(--bg); color:var(--t1);
+  font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;
+  -webkit-font-smoothing:antialiased; padding-bottom:64px; letter-spacing:-0.2px;
+}
+
+/* header */
+.mr-header{
+  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;
+  padding:16px 20px; background:var(--card); border-bottom:1px solid var(--line-soft);
+  position:sticky; top:0; z-index:10;
+}
+.mr-brand{display:flex; align-items:center; gap:11px; cursor:pointer}
+.mr-logo{
+  font-size:22px; font-weight:800; color:#fff; width:42px; height:42px;
+  display:grid; place-items:center; background:var(--blue); border-radius:13px;
+}
+.mr-brand-name{font-size:19px; font-weight:800; letter-spacing:-0.4px}
+.mr-brand-sub{font-size:12px; color:var(--t3); margin-top:1px}
+.mr-rolebox{display:flex; align-items:center; gap:8px}
+.mr-name-input{
+  border:none; background:var(--bg); border-radius:10px; padding:9px 12px; font-size:14px;
+  font-family:inherit; width:106px; color:var(--t1);
+}
+.mr-name-input::placeholder{color:var(--t3)}
+.mr-name-input:focus{outline:2px solid var(--blue); outline-offset:-1px; background:#fff}
+.mr-toggle{display:flex; background:var(--bg); border-radius:11px; padding:3px; gap:2px}
+.mr-toggle button{
+  border:0; background:transparent; padding:7px 15px; font-size:13.5px; cursor:pointer;
+  font-family:inherit; color:var(--t3); font-weight:700; border-radius:8px; transition:all .18s;
+}
+.mr-toggle button.on{background:#fff; color:var(--t1); box-shadow:0 1px 3px rgba(0,0,0,.08)}
+
+/* 로그인 / 로그아웃 헤더 */
+.mr-login-btn{
+  border:0; background:var(--blue); color:#fff; font-family:inherit; font-weight:700;
+  font-size:14px; padding:9px 18px; border-radius:11px; cursor:pointer; transition:background .15s;
+}
+.mr-login-btn:hover{background:var(--blue-d)}
+.mr-account-btn{
+  width:42px; height:42px; border-radius:50%; border:0; background:var(--bg); color:var(--t2);
+  display:grid; place-items:center; cursor:pointer; transition:all .15s; overflow:hidden; padding:0;
+}
+.mr-account-btn:hover{background:var(--blue-bg); color:var(--blue)}
+.mr-account-btn.active{background:var(--blue); color:#fff}
+.mr-account-btn img{width:100%; height:100%; object-fit:cover}
+
+/* 회원정보 */
+.mr-account-card{display:flex; flex-direction:column; align-items:center; text-align:center; gap:10px; padding:28px 20px}
+.mr-account-avatar{
+  width:72px; height:72px; border-radius:50%; background:var(--blue-bg); color:var(--blue);
+  display:grid; place-items:center; overflow:hidden;
+}
+.mr-account-avatar svg{width:40px; height:40px}
+.mr-account-avatar img{width:100%; height:100%; object-fit:cover}
+.mr-account-name{font-size:20px; font-weight:800; letter-spacing:-0.4px}
+.mr-account-role{font-size:13.5px; color:var(--t2); font-weight:600}
+.mr-ok-msg{font-size:13px; color:var(--green); font-weight:700}
+.mr-logout-full{
+  width:100%; border:0; background:var(--card); color:var(--red); font-family:inherit;
+  font-weight:700; font-size:15px; padding:16px; border-radius:16px; cursor:pointer;
+  box-shadow:0 1px 2px rgba(0,0,0,.03); transition:background .15s;
+}
+.mr-logout-full:hover{background:var(--red-bg)}
+
+/* 관리자 페이지 */
+.mr-subtabs{display:flex; gap:6px; background:var(--bg); border-radius:13px; padding:4px}
+.mr-subtabs button{flex:1; border:0; background:transparent; padding:10px; font-family:inherit; font-weight:700; font-size:14px; color:var(--t3); border-radius:10px; cursor:pointer; transition:all .15s}
+.mr-subtabs button.on{background:#fff; color:var(--t1); box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.mr-member-row{
+  display:flex; align-items:center; gap:11px; width:100%; text-align:left; background:transparent;
+  border:0; border-bottom:1px solid var(--line-soft); padding:14px 18px; cursor:pointer;
+  font-family:inherit; transition:background .12s;
+}
+.mr-member-row:last-child{border-bottom:0}
+.mr-member-row:hover{background:var(--bg)}
+.mr-member-row .mr-member-info{display:flex; flex-direction:column; gap:3px; flex:1; min-width:0}
+.mr-detail-actions{display:flex; gap:8px; margin-top:14px}
+.mr-record{display:flex; align-items:center; gap:12px; padding:15px 18px; border-bottom:1px solid var(--line-soft); animation:rise .35s cubic-bezier(.2,.7,.3,1) both}
+.mr-record:last-child{border-bottom:0}
+.mr-record-info{flex:1; min-width:0}
+.mr-record-title{font-size:15px; font-weight:700; color:var(--t1); letter-spacing:-0.3px}
+.mr-record-meta{font-size:12.5px; color:var(--t3); font-weight:600; margin-top:3px}
+.mr-record-score{font-size:19px; font-weight:800; letter-spacing:-0.5px; flex:none}
+.mr-record-score.good{color:var(--green)}
+.mr-record-score.mid{color:var(--blue)}
+.mr-record-score.low{color:var(--red)}
+.mr-record-max{font-size:13px; font-weight:700; color:var(--t3)}
+.mr-stat-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:8px}
+.mr-stat{background:var(--bg); border-radius:14px; padding:14px 8px; text-align:center}
+.mr-stat-num{font-size:22px; font-weight:800; color:var(--blue); letter-spacing:-0.5px}
+.mr-stat-label{font-size:12px; font-weight:700; color:var(--t2); margin-top:2px}
+.mr-member-list{display:flex; flex-direction:column}
+.mr-member{display:flex; align-items:center; gap:11px; padding:13px 0; border-bottom:1px solid var(--line-soft)}
+.mr-member:last-child{border-bottom:0}
+.mr-member-info{flex:1; min-width:0}
+.mr-member-name{display:flex; align-items:center; gap:6px; font-size:14.5px; font-weight:700; color:var(--t1)}
+.mr-member-meta{font-size:12px; color:var(--t3); font-weight:600; margin-top:2px}
+.mr-member-actions{display:flex; gap:6px; flex:none}
+.mr-mini-btn{border:0; background:var(--bg); color:var(--t2); font-family:inherit; font-weight:700; font-size:12px; padding:7px 10px; border-radius:9px; cursor:pointer; white-space:nowrap}
+.mr-mini-btn:hover{background:var(--blue-bg); color:var(--blue)}
+.mr-mini-btn.danger:hover{background:var(--red-bg); color:var(--red)}
+.mr-exam-summary{display:flex; flex-direction:column}
+.mr-exam-sum-row{padding:12px 0; border-bottom:1px solid var(--line-soft)}
+.mr-exam-sum-row:last-child{border-bottom:0}
+.mr-exam-sum-title{font-size:14.5px; font-weight:700; color:var(--t1)}
+.mr-exam-sum-meta{font-size:12.5px; color:var(--t3); font-weight:600; margin-top:3px}
+
+/* 모달 */
+.mr-modal-overlay{
+  position:fixed; inset:0; z-index:50; background:rgba(25,31,40,.45);
+  display:flex; align-items:center; justify-content:center; padding:20px;
+  animation:fade .2s ease both;
+}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.mr-modal{
+  width:100%; max-width:360px; background:var(--card); border-radius:24px; padding:24px;
+  display:flex; flex-direction:column; gap:10px;
+  box-shadow:0 20px 50px rgba(0,0,0,.25); animation:rise .25s cubic-bezier(.2,.7,.3,1) both;
+}
+.mr-modal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:6px}
+.mr-modal-title{font-size:20px; font-weight:800; letter-spacing:-0.5px}
+.mr-modal-x{border:0; background:none; font-size:26px; line-height:1; color:var(--t3); cursor:pointer; padding:0 2px}
+.mr-modal .mr-input{margin-top:0}
+.mr-modal-submit{margin-top:6px; width:100%; padding:14px}
+.mr-modal-switch{text-align:center; font-size:13px; color:var(--t3); margin-top:4px}
+.mr-modal-switch button{border:0; background:none; color:var(--blue); font-weight:700; font-family:inherit; font-size:13px; cursor:pointer; padding:0}
+
+/* tabs */
+.mr-tabs{
+  display:flex; align-items:center; gap:4px; padding:0 20px;
+  background:var(--card); border-bottom:1px solid var(--line-soft);
+}
+.mr-tabs button{
+  border:0; background:transparent; padding:15px 4px; margin-right:18px; cursor:pointer;
+  font-family:inherit; font-size:15.5px; font-weight:700; color:var(--t3);
+  border-bottom:2.5px solid transparent; margin-bottom:-1px; transition:color .15s;
+}
+.mr-tabs button.active{color:var(--t1); border-bottom-color:var(--blue)}
+.mr-tab-spacer{flex:1}
+.mr-mode-pill{font-size:11.5px; font-weight:700; color:var(--blue); background:var(--blue-bg); padding:5px 11px; border-radius:20px}
+
+/* layout */
+.mr-main{max-width:680px; margin:0 auto; padding:20px 18px}
+.mr-col{display:flex; flex-direction:column; gap:12px}
+
+/* home */
+.mr-hero{padding:14px 4px 6px}
+.mr-hero-greet{font-size:14px; font-weight:700; color:var(--blue); margin-bottom:8px}
+.mr-hero-title{font-size:26px; font-weight:800; line-height:1.35; letter-spacing:-0.6px; color:var(--t1)}
+.mr-sectors{display:flex; flex-direction:column; gap:12px; margin-top:6px}
+.mr-sector{
+  display:flex; align-items:center; gap:15px; width:100%; text-align:left;
+  background:var(--card); border:0; border-radius:20px; padding:20px;
+  box-shadow:0 1px 2px rgba(0,0,0,.03); cursor:pointer; font-family:inherit;
+  transition:transform .1s, box-shadow .15s; animation:rise .4s cubic-bezier(.2,.7,.3,1) both;
+}
+.mr-sector:hover{box-shadow:0 6px 18px rgba(0,0,0,.07)}
+.mr-sector:active{transform:scale(.99)}
+.mr-sector.soon{cursor:default; opacity:.7}
+.mr-sector.soon:hover{box-shadow:0 1px 2px rgba(0,0,0,.03)}
+.mr-sector-icon{
+  width:54px; height:54px; border-radius:16px; display:grid; place-items:center;
+  font-size:26px; flex:none;
+}
+.mr-sector-icon.blue{background:var(--blue-bg)}
+.mr-sector-icon.green{background:var(--green-bg)}
+.mr-sector-icon.gray{background:var(--bg)}
+.mr-sector-text{display:flex; flex-direction:column; gap:3px; flex:1; min-width:0}
+.mr-sector-title{font-size:18px; font-weight:800; color:var(--t1); letter-spacing:-0.4px}
+.mr-sector-desc{font-size:13.5px; color:var(--t2); line-height:1.4}
+.mr-sector-meta{font-size:12.5px; color:var(--t3); font-weight:600; margin-top:2px}
+.mr-sector-arrow{font-size:20px; color:var(--t3); flex:none; font-weight:700}
+.mr-soon-tag{font-size:12px; font-weight:700; color:var(--t3); background:var(--bg); padding:6px 11px; border-radius:20px; flex:none}
+.mr-loading,.mr-empty{text-align:center; color:var(--t3); padding:56px 0; font-size:15px; font-weight:600}
+.mr-empty{background:var(--card); border-radius:20px}
+
+/* cards */
+.mr-card{
+  background:var(--card); border-radius:20px; padding:20px;
+  box-shadow:0 1px 2px rgba(0,0,0,.03);
+  animation:rise .4s cubic-bezier(.2,.7,.3,1) both;
+}
+@keyframes rise{from{opacity:0; transform:translateY(8px)}to{opacity:1; transform:none}}
+.mr-card-tag{display:block; font-size:17px; font-weight:800; color:var(--t1); margin-bottom:14px; letter-spacing:-0.4px}
+.mr-notice-head{display:flex; align-items:baseline; justify-content:space-between; gap:10px}
+.mr-notice-head h3{font-size:17px; font-weight:800; letter-spacing:-0.4px; line-height:1.4}
+.mr-date{font-size:12.5px; color:var(--t3); white-space:nowrap; font-weight:600}
+.mr-notice-body{margin-top:8px; color:var(--t2); line-height:1.65; white-space:pre-wrap; font-size:14.5px}
+.mr-link-del{margin-top:12px; border:0; background:none; color:var(--t3); cursor:pointer; font-size:13px; font-family:inherit; font-weight:700}
+.mr-link-del:hover{color:var(--red)}
+.mr-exam-meta{display:flex; gap:7px; align-items:center; flex-wrap:wrap; margin-top:9px; font-size:13.5px; color:var(--t2); font-weight:600}
+.mr-exam-meta span:nth-child(even){color:var(--line)}
+
+/* inputs */
+.mr-input,.mr-textarea{
+  width:100%; border:none; background:var(--bg); border-radius:12px; padding:13px 14px;
+  font-family:inherit; font-size:15px; color:var(--t1); margin-top:10px; transition:background .15s;
+}
+.mr-input::placeholder,.mr-textarea::placeholder{color:var(--t3)}
+.mr-input:focus,.mr-textarea:focus{outline:none; background:#fff; box-shadow:inset 0 0 0 2px var(--blue)}
+.mr-textarea{resize:vertical; line-height:1.6}
+.mr-writer .mr-input:first-of-type{margin-top:0}
+
+/* buttons */
+.mr-btn{
+  border:0; background:var(--blue); color:#fff; padding:12px 20px; border-radius:13px;
+  font-family:inherit; font-weight:700; font-size:15px; cursor:pointer; transition:background .15s,transform .08s;
+}
+.mr-btn:hover{background:var(--blue-d)}
+.mr-btn:active{transform:scale(.98)}
+.mr-btn-ghost{
+  border:0; background:var(--blue-bg); color:var(--blue); padding:11px 18px; border-radius:13px;
+  font-family:inherit; font-weight:700; font-size:14.5px; cursor:pointer; transition:background .15s;
+}
+.mr-btn-ghost:hover{background:#DBEAFE}
+.mr-btn-text{border:0; background:none; color:var(--t2); cursor:pointer; font-family:inherit; font-size:14.5px; font-weight:700; align-self:flex-start; padding:4px 0}
+.mr-row-end{display:flex; justify-content:flex-end; margin-top:14px}
+.mr-row-between{display:flex; justify-content:space-between; align-items:center; gap:10px}
+.mr-gap{display:flex; gap:8px; align-items:center}
+
+/* exam editor */
+.mr-qedit-head{display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin-bottom:4px}
+.mr-qnum{font-weight:800; color:var(--blue); font-size:16px}
+.mr-qnum-sm{font-weight:800; color:var(--blue); margin-right:5px}
+.mr-seg{display:flex; background:var(--bg); border-radius:9px; padding:3px; gap:2px}
+.mr-seg button{border:0; background:transparent; padding:6px 13px; font-size:13px; cursor:pointer; font-family:inherit; color:var(--t3); font-weight:700; border-radius:7px; transition:all .15s}
+.mr-seg button.on{background:#fff; color:var(--t1); box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.mr-points{display:flex; align-items:center; gap:6px; font-size:13px; color:var(--t3); font-weight:600; margin-left:auto}
+.mr-points input{width:60px; border:none; background:var(--bg); border-radius:8px; padding:7px 9px; font-family:inherit; font-weight:700; color:var(--t1)}
+.mr-points input:focus{outline:2px solid var(--blue); outline-offset:-1px}
+.mr-options{margin-top:12px; display:flex; flex-direction:column; gap:8px}
+.mr-opt-row{display:flex; align-items:center; gap:9px}
+.mr-opt-row input[type=radio]{width:18px; height:18px; accent-color:var(--blue); flex:none}
+.mr-opt-label{font-size:15px; color:var(--t3); width:18px; text-align:center; flex:none}
+.mr-opt-input{margin-top:0; flex:1; padding:10px 12px}
+.mr-x{border:0; background:var(--bg); color:var(--t3); width:30px; height:30px; border-radius:9px; cursor:pointer; font-size:17px; flex:none}
+.mr-x:hover{background:var(--red-bg); color:var(--red)}
+.mr-add-opt{align-self:flex-start; border:0; background:var(--bg); color:var(--t2); padding:8px 14px; border-radius:9px; cursor:pointer; font-family:inherit; font-size:13.5px; font-weight:700}
+.mr-add-opt:hover{background:var(--blue-bg); color:var(--blue)}
+.mr-hint{font-size:12.5px; color:var(--t3); margin-top:9px; line-height:1.5}
+
+/* submissions / grading */
+.mr-sub{padding:0; overflow:hidden}
+.mr-sub-head{display:flex; align-items:center; justify-content:space-between; padding:16px 20px; cursor:pointer}
+.mr-sub-name{display:flex; align-items:center; gap:11px}
+.mr-avatar{width:38px; height:38px; border-radius:50%; background:var(--blue-bg); color:var(--blue); display:grid; place-items:center; font-weight:800; flex:none}
+.mr-strong{font-weight:700; font-size:14.5px}
+.mr-sub-score{display:flex; align-items:center; gap:10px}
+.mr-score-done{font-weight:800; color:var(--green); font-size:15px}
+.mr-chevron{font-size:9px; color:var(--t3)}
+.mr-badge-red{background:var(--red-bg); color:var(--red); font-size:12px; font-weight:700; padding:5px 10px; border-radius:20px; white-space:nowrap}
+.mr-sub-body{border-top:1px solid var(--line-soft); padding:6px 20px 18px}
+.mr-grade-q{padding:14px 0; border-bottom:1px solid var(--line-soft)}
+.mr-grade-q:last-of-type{border-bottom:0}
+.mr-grade-qtext{font-size:15px; line-height:1.55; font-weight:600}
+
+/* 칼럼 읽기 */
+.mr-title-input{font-size:18px; font-weight:800}
+
+/* 칼럼 게시판 */
+.mr-list-top{display:flex; align-items:center; justify-content:space-between; padding:6px 2px 4px}
+.mr-list-title{font-size:22px; font-weight:800; letter-spacing:-0.5px; color:var(--t1)}
+.mr-postlist{background:var(--card); border-radius:20px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.03)}
+.mr-post-row{
+  display:flex; flex-direction:column; gap:5px; width:100%; text-align:left; background:transparent;
+  border:0; border-bottom:1px solid var(--line-soft); padding:17px 18px; cursor:pointer;
+  font-family:inherit; transition:background .12s; animation:rise .35s cubic-bezier(.2,.7,.3,1) both;
+}
+.mr-post-row:last-child{border-bottom:0}
+.mr-post-row:hover{background:var(--bg)}
+.mr-post-row:active{background:var(--bg)}
+.mr-post-row-title{font-size:15.5px; font-weight:700; color:var(--t1); letter-spacing:-0.3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mr-post-row-meta{font-size:12.5px; color:var(--t3); font-weight:600}
+
+/* 칼럼 상세 */
+.mr-post-title{font-size:23px; font-weight:800; line-height:1.4; letter-spacing:-0.5px}
+.mr-post-byline{display:flex; align-items:center; gap:8px; margin-top:13px; font-size:13px; color:var(--t2); font-weight:600}
+.mr-avatar.sm{width:26px; height:26px; font-size:12px}
+.mr-post-divider{height:1px; background:var(--line-soft); margin:16px 0}
+.mr-notice .mr-notice-head h3{font-size:20px; line-height:1.4}
+.mr-notice-body{font-size:15.5px; line-height:1.85; color:#333D4B; margin-top:12px}
+
+/* 문제 사진 업로드 */
+.mr-img-drop{
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+  margin-top:12px; padding:26px 16px; background:var(--bg); border:2px dashed #D1D6DB;
+  border-radius:14px; cursor:pointer; text-align:center; transition:all .15s;
+}
+.mr-img-drop:hover{border-color:var(--blue); background:var(--blue-bg)}
+.mr-img-icon{font-size:26px}
+.mr-img-main{font-size:14.5px; font-weight:700; color:var(--t1)}
+.mr-img-sub{font-size:12px; color:var(--t3)}
+.mr-img-preview{margin-top:12px; display:flex; flex-direction:row; flex-wrap:wrap; align-items:center; gap:8px}
+.mr-img-preview > img{width:100%; border-radius:14px; display:block}
+.mr-img-change,.mr-img-del{
+  display:inline-block; font-size:13px; font-weight:700; padding:7px 13px; border-radius:9px;
+  cursor:pointer; border:0; font-family:inherit;
+}
+.mr-img-change{background:var(--blue-bg); color:var(--blue)}
+.mr-img-del{background:var(--bg); color:var(--t3)}
+.mr-img-del:hover{background:var(--red-bg); color:var(--red)}
+
+/* 출제된 문제 사진 표시 */
+.mr-q-img{width:100%; border-radius:13px; margin-top:10px; display:block; background:var(--bg)}
+.mr-q-img.sm{margin-top:8px}
+.mr-q-cap{margin-top:8px; font-size:14px; color:var(--t2); line-height:1.55}
+.mr-short-answer{margin-top:12px}
+.mr-ans-label{display:block; font-size:11.5px; font-weight:700; color:var(--t3); margin-bottom:4px}
+.mr-accept{margin-top:8px; font-size:13.5px; color:var(--t2)}
+.mr-accept strong{color:var(--green); font-weight:700}
+.mr-reset{border:0; background:var(--bg); color:var(--t3); font-size:12px; font-weight:700; padding:5px 10px; border-radius:8px; cursor:pointer; font-family:inherit}
+.mr-reset:hover{background:var(--blue-bg); color:var(--blue)}
+.mr-mc-review{margin-top:10px; display:flex; flex-direction:column; gap:6px}
+.mr-mc-opt{font-size:13.5px; padding:9px 12px; border-radius:10px; background:var(--bg); display:flex; align-items:center; gap:8px; color:var(--t2)}
+.mr-mc-opt.is-answer{background:var(--green-bg); color:var(--green); font-weight:700}
+.mr-mc-opt.is-wrong{background:var(--red-bg); color:var(--red); font-weight:700}
+.mr-tag-correct{font-size:11px; background:var(--green); color:#fff; padding:2px 7px; border-radius:5px; margin-left:auto; font-weight:700}
+.mr-tag-chosen{font-size:11px; border:1px solid currentColor; padding:2px 7px; border-radius:5px; font-weight:700}
+.mr-auto-mark{margin-top:8px; font-size:12.5px; font-weight:700}
+.mr-auto-mark.ok{color:var(--green)} .mr-auto-mark.no{color:var(--red)}
+.mr-answer-box{margin-top:10px; background:var(--bg); border-radius:12px; padding:12px 14px; line-height:1.6; white-space:pre-wrap; font-size:14.5px; color:var(--t1)}
+.mr-manual{display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13.5px; color:var(--t3); font-weight:600}
+.mr-manual input{width:66px; border:none; background:var(--blue-bg); border-radius:9px; padding:8px 10px; font-family:inherit; color:var(--blue); font-weight:800; text-align:center}
+.mr-manual input:focus{outline:2px solid var(--blue); outline-offset:-1px}
+.mr-muted{color:var(--t3)} .mr-ink{color:var(--t1)}
+.mr-grade-foot{margin-top:16px; font-size:13.5px; color:var(--t2); font-weight:600}
+
+/* take exam */
+.mr-pts-tag{font-size:12px; color:var(--t3); margin-left:8px; background:var(--bg); padding:3px 9px; border-radius:20px; font-weight:700}
+.mr-take-options{margin-top:14px; display:flex; flex-direction:column; gap:9px}
+.mr-take-opt{display:flex; align-items:center; gap:10px; padding:14px; background:var(--bg); border-radius:13px; cursor:pointer; font-size:14.5px; font-weight:600; transition:all .15s; border:2px solid transparent}
+.mr-take-opt.sel{background:var(--blue-bg); border-color:var(--blue); color:var(--blue); font-weight:700}
+.mr-take-opt input{width:18px; height:18px; accent-color:var(--blue); flex:none}
+.mr-result-pill{font-weight:800; color:var(--green); background:var(--green-bg); padding:9px 15px; border-radius:11px; font-size:14.5px}
+
+.mr-foot{
+  max-width:680px; margin:28px auto 0; padding:0 22px; text-align:center;
+  font-size:12px; color:var(--t3); line-height:1.6; font-weight:500;
+}
+`;
+
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+</script>
+</body>
+</html>
