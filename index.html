@@ -38,11 +38,12 @@ const padPw = (pw) => String(pw) + "__mr__";
 
 const mapColumn = (r) => ({
   id: r.id, title: r.title, body: r.body || "", author: r.author || "",
-  isDraft: !!r.is_draft,
+  isDraft: !!r.is_draft, category: r.category || "elem", sortOrder: r.sort_order || 0,
   createdAt: r.created_at ? Date.parse(r.created_at) : 0,
 });
 const mapExam = (r) => ({
   id: r.id, title: r.title, questions: r.questions || [],
+  author: r.author || "", authorId: r.author_id || null,
   createdAt: r.created_at ? Date.parse(r.created_at) : 0,
 });
 const mapSub = (r) => ({
@@ -88,6 +89,13 @@ function autoScore(exam, answers) {
 }
 function totalScore(exam, sub) {
   return exam.questions.reduce((s, q) => s + questionScore(q, sub), 0);
+}
+// 한 문항을 '맞춤'으로 볼지 (회원정답률 계산용) — 자동 정답 또는 보정으로 만점인 경우
+function isQCorrect(q, sub) {
+  if (q.type === "mc") return sub.answers[q.id] === q.answer;
+  const ov = sub.manualScores && sub.manualScores[q.id];
+  if (ov !== undefined && ov !== null && ov !== "") return Number(ov) >= (Number(q.points) || 0) && (Number(q.points) || 0) > 0;
+  return isShortCorrect(q, sub.answers[q.id]);
 }
 
 /* ============================================================ */
@@ -255,7 +263,7 @@ function App() {
   const onAddColumn = async (post) => {
     const id = await currentId();
     const { data } = await sb.from("columns")
-      .insert({ title: post.title, body: post.body, author: post.author, author_id: id, is_draft: !!post.isDraft })
+      .insert({ title: post.title, body: post.body, author: post.author, author_id: id, is_draft: !!post.isDraft, category: post.category || "elem" })
       .select().maybeSingle();
     await logAction(post.isDraft ? "칼럼 임시저장" : "칼럼 작성", post.title);
     await refresh();
@@ -267,16 +275,23 @@ function App() {
     await logAction("칼럼 삭제", n ? n.title : id);
     await refresh();
   };
-  const onEditColumn = async (id, title, body, isDraft) => {
+  const onEditColumn = async (id, title, body, isDraft, category) => {
     const patch = { title, body };
     if (typeof isDraft === "boolean") patch.is_draft = isDraft;
+    if (category) patch.category = category;
     await sb.from("columns").update(patch).eq("id", id);
     await logAction(isDraft ? "칼럼 임시저장" : "칼럼 수정", title);
     await refresh();
   };
+  const onReorderColumns = async (ids) => {
+    await Promise.all(ids.map((cid, i) => sb.from("columns").update({ sort_order: i + 1 }).eq("id", cid)));
+    await logAction("칼럼 순서변경", "");
+    await refresh();
+  };
   const onAddExam = async (exam) => {
     const id = await currentId();
-    await sb.from("exams").insert({ title: exam.title, questions: exam.questions, author_id: id });
+    const author = auth ? ((auth.kakaoId || "").trim() || auth.username || "") : "";
+    await sb.from("exams").insert({ title: exam.title, questions: exam.questions, author_id: id, author });
     await logAction("시험 출제", exam.title);
     await refresh();
   };
@@ -353,11 +368,12 @@ function App() {
         ) : tab === "account" ? (
           loggedIn ? <Account auth={auth} onChangePassword={onChangePassword} onLogout={onLogout} /> : homeView
         ) : tab === "notices" ? (
-          <Notices role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} notices={notices} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} />
+          <Notices role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} notices={notices} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} />
         ) : (
           <Exams
             role={role}
             student={student}
+            myId={auth ? auth.id : null}
             loggedIn={loggedIn}
             requireLogin={requireLogin}
             exams={exams}
@@ -874,8 +890,12 @@ function Home({ role, student, loggedIn, noticeCount, examCount, onGo }) {
 }
 
 /* ===================== 칼럼 ===================== */
-function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit }) {
+function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onReorder }) {
+  const CAT = { elem: "초등학교", mid: "중학교", high: "고등학교" };
+  const CATS = ["elem", "mid", "high"];
   const [view, setView] = useState("list"); // list | write | read | edit
+  const [cat, setCat] = useState("elem"); // 목록에서 보고 있는 분류 탭
+  const [editCat, setEditCat] = useState("elem"); // 글 작성/수정 시 선택한 분류
   const [openId, setOpenId] = useState(null);
   const [draftId, setDraftId] = useState(null);
   const [title, setTitle] = useState("");
@@ -888,6 +908,7 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit }) {
     setTitle("");
     setBody("");
     setDraftId(null);
+    setEditCat(cat);
     setSavedNote("");
     setView("write");
   };
@@ -895,6 +916,7 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit }) {
     setTitle(d.title === "(제목 없음)" ? "" : d.title);
     setBody(d.body);
     setDraftId(d.id);
+    setEditCat(d.category || "elem");
     setSavedNote("");
     setView("write");
   };
@@ -903,9 +925,9 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit }) {
   const saveDraft = async () => {
     if (!title.trim() && !body.trim()) return alert("내용을 입력하세요.");
     if (draftId) {
-      await onEdit(draftId, title.trim() || "(제목 없음)", body, true);
+      await onEdit(draftId, title.trim() || "(제목 없음)", body, true, editCat);
     } else {
-      const newId = await onAdd({ title: title.trim() || "(제목 없음)", body, author: authorName(), isDraft: true });
+      const newId = await onAdd({ title: title.trim() || "(제목 없음)", body, author: authorName(), isDraft: true, category: editCat });
       if (newId) setDraftId(newId);
     }
     setSavedNote("임시저장됐어요");
@@ -915,13 +937,14 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit }) {
   const post = async () => {
     if (!title.trim()) return alert("제목을 입력하세요.");
     if (draftId) {
-      await onEdit(draftId, title.trim(), body, false);
+      await onEdit(draftId, title.trim(), body, false, editCat);
     } else {
-      await onAdd({ title: title.trim(), body, author: authorName(), isDraft: false });
+      await onAdd({ title: title.trim(), body, author: authorName(), isDraft: false, category: editCat });
     }
     setTitle("");
     setBody("");
     setDraftId(null);
+    setCat(editCat);
     setView("list");
   };
 
@@ -934,9 +957,22 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit }) {
 
   const saveEdit = async () => {
     if (!title.trim()) return alert("제목을 입력하세요.");
-    await onEdit(openId, title.trim(), body, false);
+    await onEdit(openId, title.trim(), body, false, editCat);
     setView("read");
   };
+
+  const CatPicker = (
+    <>
+      <div className="mr-cat-label">대상</div>
+      <div className="mr-cat-seg">
+        {CATS.map((k) => (
+          <button key={k} className={editCat === k ? "on" : ""} onClick={() => setEditCat(k)}>
+            {CAT[k]}
+          </button>
+        ))}
+      </div>
+    </>
+  );
 
   // 글쓰기 / 임시저장 이어쓰기
   if (view === "write")
@@ -953,6 +989,7 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit }) {
             value={title}
             onChange={(e) => { setTitle(e.target.value); setSavedNote(""); }}
           />
+          {CatPicker}
           <RichEditor
             value={body}
             onChange={(v) => { setBody(v); setSavedNote(""); }}
@@ -988,6 +1025,7 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit }) {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
+          {CatPicker}
           <RichEditor
             value={body}
             onChange={setBody}
@@ -1023,7 +1061,7 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit }) {
             {n.body ? <div className="mr-notice-body" dangerouslySetInnerHTML={{ __html: n.body }} /> : <p className="mr-muted">내용이 없어요.</p>}
             {role === "admin" && (
               <div className="mr-detail-actions" style={{ marginTop: "20px", justifyContent: "flex-end" }}>
-                <button className="mr-mini-btn" onClick={() => { setTitle(n.title); setBody(n.body); setDraftId(null); setView("edit"); }}>
+                <button className="mr-mini-btn" onClick={() => { setTitle(n.title); setBody(n.body); setEditCat(n.category || "elem"); setDraftId(null); setView("edit"); }}>
                   수정
                 </button>
                 <button className="mr-mini-btn danger" onClick={() => remove(n.id)}>
@@ -1038,8 +1076,22 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit }) {
   }
 
   // 목록
-  const published = notices.filter((n) => !n.isDraft);
-  const drafts = notices.filter((n) => n.isDraft);
+  const inCat = (n) => (n.category || "elem") === cat;
+  const published = notices
+    .filter((n) => !n.isDraft && inCat(n))
+    .sort((a, b) => (a.sortOrder - b.sortOrder) || (b.createdAt - a.createdAt));
+  const drafts = notices.filter((n) => n.isDraft && inCat(n));
+
+  const move = async (idx, dir) => {
+    const j = idx + dir;
+    if (j < 0 || j >= published.length) return;
+    const ids = published.map((n) => n.id);
+    const t = ids[idx];
+    ids[idx] = ids[j];
+    ids[j] = t;
+    await onReorder(ids);
+  };
+
   return (
     <div className="mr-col">
       <div className="mr-list-top">
@@ -1049,6 +1101,14 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit }) {
             글쓰기
           </button>
         )}
+      </div>
+
+      <div className="mr-subtabs">
+        {CATS.map((k) => (
+          <button key={k} className={cat === k ? "on" : ""} onClick={() => setCat(k)}>
+            {CAT[k]}
+          </button>
+        ))}
       </div>
 
       {role === "admin" && drafts.length > 0 && (
@@ -1073,20 +1133,26 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit }) {
       ) : (
         <div className="mr-postlist">
           {published.map((n, i) => (
-            <button
-              key={n.id}
-              className="mr-post-row"
-              style={{ animationDelay: `${i * 30}ms` }}
-              onClick={() => {
-                setOpenId(n.id);
-                setView("read");
-              }}
-            >
-              <span className="mr-post-row-title">{n.title}</span>
-              <span className="mr-post-row-meta">
-                {n.author || "익명"} · {fmtDate(n.createdAt)}
-              </span>
-            </button>
+            <div className="mr-post-item" key={n.id}>
+              <button
+                className="mr-post-row"
+                onClick={() => {
+                  setOpenId(n.id);
+                  setView("read");
+                }}
+              >
+                <span className="mr-post-row-title">{n.title}</span>
+                <span className="mr-post-row-meta">
+                  {n.author || "익명"} · {fmtDate(n.createdAt)}
+                </span>
+              </button>
+              {role === "admin" && (
+                <div className="mr-reorder">
+                  <button onClick={() => move(i, -1)} disabled={i === 0} title="위로">▲</button>
+                  <button onClick={() => move(i, 1)} disabled={i === published.length - 1} title="아래로">▼</button>
+                </div>
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -1160,15 +1226,30 @@ function Exams(props) {
   return props.role === "admin" ? <ExamsAdmin {...props} /> : <ExamsStudent {...props} />;
 }
 
-/* ---------- 관리자: 시험 목록 / 출제 / 채점 ---------- */
-function ExamsAdmin({ exams, onAddExam, subs, onGradeSub }) {
+/* ---------- 관리자: 시험 목록 / 출제 / 채점 / (남의 시험) 응시 ---------- */
+function ExamsAdmin({ exams, onAddExam, subs, onGradeSub, onAddSub, myId, student, loggedIn }) {
   const [mode, setMode] = useState("list");
   const [activeExam, setActiveExam] = useState(null);
+  const [taking, setTaking] = useState(null);
 
   const openGrade = (exam) => {
     setActiveExam(exam);
     setMode("grade");
   };
+
+  if (taking)
+    return (
+      <TakeExam
+        exam={taking}
+        student={student}
+        loggedIn={loggedIn}
+        onCancel={() => setTaking(null)}
+        onSubmit={async (sub) => {
+          await onAddSub(sub);
+          setTaking(null);
+        }}
+      />
+    );
 
   if (mode === "create")
     return (
@@ -1206,6 +1287,8 @@ function ExamsAdmin({ exams, onAddExam, subs, onGradeSub }) {
         exams.map((ex, i) => {
           const exSubs = subs.filter((s) => s.examId === ex.id);
           const pending = exSubs.filter((s) => !s.graded).length;
+          const isMine = ex.authorId && myId && ex.authorId === myId;
+          const myTake = subs.find((s) => s.examId === ex.id && s.student === student && student);
           return (
             <article className="mr-card" key={ex.id} style={{ animationDelay: `${i * 40}ms` }}>
               <div className="mr-notice-head">
@@ -1213,6 +1296,8 @@ function ExamsAdmin({ exams, onAddExam, subs, onGradeSub }) {
                 <span className="mr-date">{fmtDate(ex.createdAt)}</span>
               </div>
               <div className="mr-exam-meta">
+                <span>출제자 {ex.author || "관리자"}{isMine ? " (나)" : ""}</span>
+                <span>·</span>
                 <span>문항 {ex.questions.length}개</span>
                 <span>·</span>
                 <span>만점 {maxScore(ex)}점</span>
@@ -1220,7 +1305,18 @@ function ExamsAdmin({ exams, onAddExam, subs, onGradeSub }) {
                 <span>제출 {exSubs.length}건</span>
                 {pending > 0 && <span className="mr-badge-red">채점 대기 {pending}</span>}
               </div>
-              <div className="mr-row-end">
+              <div className="mr-row-between" style={{ marginTop: "14px" }}>
+                <div>
+                  {!isMine && (myTake ? (
+                    <span className="mr-result-pill">
+                      내 점수 {totalScore(ex, myTake)} / {maxScore(ex)}
+                    </span>
+                  ) : (
+                    <button className="mr-btn" onClick={() => setTaking(ex)}>
+                      응시하기
+                    </button>
+                  ))}
+                </div>
                 <button className="mr-btn-ghost" onClick={() => openGrade(ex)}>
                   제출/채점 보기
                 </button>
@@ -1401,6 +1497,24 @@ function GradePanel({ exam, subs, onBack, onSaveGrade }) {
         <div className="mr-notice-head">
           <h3>{exam.title}</h3>
           <span className="mr-date">만점 {maxScore(exam)}점</span>
+        </div>
+      </section>
+
+      <section className="mr-card">
+        <div className="mr-card-tag">문항별 회원정답률</div>
+        <div className="mr-qrate-list">
+          {exam.questions.map((q, qi) => {
+            const total = subs.length;
+            const correct = subs.filter((s) => isQCorrect(q, s)).length;
+            const rate = total ? Math.round((100 * correct) / total) : null;
+            return (
+              <div className="mr-qrate-row" key={q.id}>
+                <span className="mr-qnum-sm">Q{qi + 1}</span>
+                <span className="mr-qrate-val">회원정답률: {total ? rate + "%" : "—"}</span>
+                {total > 0 && <span className="mr-qrate-sub">{total}명 중 {correct}명</span>}
+              </div>
+            );
+          })}
         </div>
       </section>
 
@@ -1617,7 +1731,27 @@ function ExamsStudent({ student, loggedIn, requireLogin, exams, subs, onAddSub }
 function TakeExam({ exam, student, loggedIn, onCancel, onSubmit }) {
   const [answers, setAnswers] = useState({});
   const [result, setResult] = useState(null);
+  const [rates, setRates] = useState({});
   const set = (qid, val) => setAnswers((a) => ({ ...a, [qid]: val }));
+
+  useEffect(() => {
+    let active = true;
+    sb.rpc("exam_question_stats", { p_exam_id: exam.id })
+      .then(({ data }) => {
+        if (!active || !data) return;
+        const m = {};
+        data.forEach((r) => { m[r.qid] = { total: r.total, correct: r.correct }; });
+        setRates(m);
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  const rateOf = (qid) => {
+    const st = rates[qid];
+    if (!st || !st.total) return null;
+    return Math.round((100 * st.correct) / st.total);
+  };
 
   const submit = () => {
     const sub = {
@@ -1679,6 +1813,7 @@ function TakeExam({ exam, student, loggedIn, onCancel, onSubmit }) {
           <div className="mr-grade-qtext">
             <span className="mr-qnum">Q{qi + 1}</span>
             <span className="mr-pts-tag">{q.points}점</span>
+            <span className="mr-rate-tag">회원정답률 {rateOf(q.id) === null ? "—" : rateOf(q.id) + "%"}</span>
           </div>
           {q.image && <img className="mr-q-img" src={q.image} alt={"문제 " + (qi + 1)} />}
           {q.text && <div className="mr-q-cap">{q.text}</div>}
@@ -2083,6 +2218,22 @@ const CSS = `
 .mr-post-row-meta{font-size:12.5px; color:var(--t3); font-weight:600}
 .mr-draft-head{font-size:13px; font-weight:800; color:var(--t3); padding:2px 2px 0}
 .mr-draft-badge{font-size:11px; font-weight:700; color:#B26A00; background:#FFF4E0; padding:2px 7px; border-radius:6px; margin-left:8px; vertical-align:middle}
+.mr-cat-label{font-size:12.5px; font-weight:700; color:var(--t2); margin-top:14px}
+.mr-cat-seg{display:flex; gap:4px; background:var(--bg); border-radius:11px; padding:4px; margin-top:8px}
+.mr-cat-seg button{flex:1; border:0; background:transparent; padding:9px; font-family:inherit; font-weight:700; font-size:13.5px; color:var(--t3); border-radius:8px; cursor:pointer; transition:all .15s}
+.mr-cat-seg button.on{background:#fff; color:var(--t1); box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.mr-post-item{display:flex; align-items:stretch; border-bottom:1px solid var(--line-soft)}
+.mr-post-item:last-child{border-bottom:0}
+.mr-post-item .mr-post-row{border-bottom:0; flex:1; min-width:0}
+.mr-reorder{display:flex; flex-direction:column; justify-content:center; gap:3px; padding:0 12px; flex:none}
+.mr-reorder button{border:0; background:var(--bg); color:var(--t2); width:30px; height:22px; border-radius:6px; cursor:pointer; font-size:10px; line-height:1; font-family:inherit}
+.mr-reorder button:disabled{opacity:.3; cursor:default}
+.mr-reorder button:hover:not(:disabled){background:var(--blue-bg); color:var(--blue)}
+.mr-qrate-list{display:flex; flex-direction:column}
+.mr-qrate-row{display:flex; align-items:center; gap:9px; padding:11px 0; border-bottom:1px solid var(--line-soft)}
+.mr-qrate-row:last-child{border-bottom:0}
+.mr-qrate-val{font-size:14px; font-weight:800; color:var(--blue)}
+.mr-qrate-sub{font-size:12.5px; color:var(--t3); font-weight:600; margin-left:auto}
 
 /* 칼럼 상세 */
 .mr-post-title{font-size:23px; font-weight:800; line-height:1.4; letter-spacing:-0.5px}
@@ -2139,6 +2290,7 @@ const CSS = `
 
 /* take exam */
 .mr-pts-tag{font-size:12px; color:var(--t3); margin-left:8px; background:var(--bg); padding:3px 9px; border-radius:20px; font-weight:700}
+.mr-rate-tag{font-size:12px; color:var(--blue); margin-left:6px; background:var(--blue-bg); padding:3px 9px; border-radius:20px; font-weight:700}
 .mr-take-options{margin-top:14px; display:flex; flex-direction:column; gap:9px}
 .mr-take-opt{display:flex; align-items:center; gap:10px; padding:14px; background:var(--bg); border-radius:13px; cursor:pointer; font-size:14.5px; font-weight:600; transition:all .15s; border:2px solid transparent}
 .mr-take-opt.sel{background:var(--blue-bg); border-color:var(--blue); color:var(--blue); font-weight:700}
