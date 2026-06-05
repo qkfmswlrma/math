@@ -35,11 +35,13 @@ const { useState, useEffect, useCallback } = React;
    ============================================================ */
 
 /* ====== Supabase 설정 — 아래 두 값을 본인 프로젝트 값으로 바꾸세요 ====== */
-const SUPABASE_URL = "https://fhdwwqlvosbjonrenpqz.supabase.co"; 
+const SUPABASE_URL = "https://fhdwwqlvosbjonrenpqz.supabase.co"; // 예: https://abcd1234.supabase.co
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZoZHd3cWx2b3Niam9ucmVucHF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMTk4NzYsImV4cCI6MjA5NTg5NTg3Nn0.JgUEKxDRioqKvhSaOPxJMH9tuo0wdFv0-kkc0s5mJ8U";
-const EMAIL_DOMAIN = "mathroom.app"; 
+const EMAIL_DOMAIN = "mathroom.app"; // 아이디를 이메일로 바꿀 때 쓰는 가짜 도메인 (그대로 두세요)
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const emailOf = (id) => `${String(id).trim().toLowerCase()}@${EMAIL_DOMAIN}`;
+// Supabase 최소 6자 제한 우회: 입력 비번 뒤에 고정 문자열을 붙여 항상 6자 이상으로 만듦
+// (가입·로그인·변경에서 동일하게 적용되므로 사용자는 짧은 비번을 그대로 쓰는 것처럼 느낌)
 const padPw = (pw) => String(pw) + "__mr__";
 
 /* DB(snake_case) → 앱(camelCase) 변환 */
@@ -73,11 +75,13 @@ const fmtDate = (ts) => {
 function maxScore(exam) {
   return exam.questions.reduce((s, q) => s + (Number(q.points) || 0), 0);
 }
+// 채점: 출제자가 정한 정답 문자열과 정확히 일치할 때만 정답 (앞뒤 공백만 무시)
 function isShortCorrect(q, ans) {
   const key = String(q.accept ?? "").trim();
   if (key === "") return false;
   return String(ans ?? "").trim() === key;
 }
+// 한 문항의 점수 (객관식·주관식 모두 자동 채점, 관리자 수동 보정이 있으면 우선)
 function questionScore(q, sub) {
   const a = sub.answers[q.id];
   const ov = sub.manualScores?.[q.id];
@@ -87,6 +91,7 @@ function questionScore(q, sub) {
   if (q.type === "mc") return a === q.answer ? Number(q.points) || 0 : 0;
   return isShortCorrect(q, a) ? Number(q.points) || 0 : 0;
 }
+// 보정 무시한 순수 자동 채점 합계
 function autoScore(exam, answers) {
   return exam.questions.reduce((s, q) => {
     if (q.type === "mc") return s + (answers[q.id] === q.answer ? Number(q.points) || 0 : 0);
@@ -100,14 +105,13 @@ function totalScore(exam, sub) {
 /* ============================================================ */
 function App() {
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("home"); 
-  const [auth, setAuth] = useState(null); 
+  const [tab, setTab] = useState("home"); // home | notices | exams | account | admin | records
+  const [auth, setAuth] = useState(null); // null | { id, username, kakaoId, isAdmin }
   const [authOpen, setAuthOpen] = useState(false);
   const [users, setUsers] = useState([]);
   const [notices, setNotices] = useState([]);
   const [exams, setExams] = useState([]);
   const [subs, setSubs] = useState([]);
-  const [auditLog, setAuditLog] = useState([]);
 
   const role = auth && auth.isAdmin ? "admin" : "student";
   const student = auth ? auth.username : "";
@@ -118,6 +122,7 @@ function App() {
     let res = await sb.from("profiles").select("*").eq("id", userId).maybeSingle();
     let data = res.data;
     if (!data) {
+      // 프로필이 없으면(트리거 미작동 등) 즉석에서 생성
       const u = await sb.auth.getUser();
       const usr = u.data && u.data.user;
       const meta = (usr && usr.user_metadata) || {};
@@ -132,18 +137,16 @@ function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const [c, e, s, p, l] = await Promise.all([
+      const [c, e, s, p] = await Promise.all([
         sb.from("columns").select("*").order("created_at", { ascending: false }),
         sb.from("exams").select("*").order("created_at", { ascending: false }),
         sb.from("submissions").select("*").order("submitted_at", { ascending: false }),
         sb.from("profiles").select("*").order("created_at", { ascending: false }),
-        sb.from("audit_log").select("*").order("created_at", { ascending: false }).limit(300),
       ]);
       setNotices((c.data || []).map(mapColumn));
       setExams((e.data || []).map(mapExam));
       setSubs((s.data || []).map(mapSub));
       setUsers((p.data || []).map(mapProfile));
-      setAuditLog(l.data || []);
     } catch (err) {
       console.warn("데이터 불러오기 실패:", err);
     }
@@ -151,6 +154,7 @@ function App() {
 
   useEffect(() => {
     let active = true;
+    // 어떤 경우에도 화면이 멈추지 않도록 안전 타임아웃
     const safety = setTimeout(() => active && setLoading(false), 5000);
     (async () => {
       try {
@@ -162,10 +166,12 @@ function App() {
       } catch (err) {
         console.warn("세션 확인 실패:", err);
       }
-      if (active) setLoading(false); 
+      if (active) setLoading(false); // 데이터를 기다리지 않고 화면 먼저 표시
       clearTimeout(safety);
-      refresh(); 
+      refresh(); // 데이터는 백그라운드로 불러옴
     })();
+    // 주의: onAuthStateChange 콜백 안에서 supabase 함수를 직접 await 하면 데드락이 남.
+    // setTimeout 으로 락 밖으로 빼서 처리한다.
     const { data: listener } = sb.auth.onAuthStateChange((_evt, session) => {
       setTimeout(async () => {
         if (session && session.user) {
@@ -242,44 +248,22 @@ function App() {
   };
 
   /* ---- 데이터 ---- */
-  const logAction = async (action, target) => {
-    try {
-      await sb.from("audit_log").insert({
-        actor: auth ? auth.username : "?",
-        actor_id: auth ? auth.id : null,
-        action,
-        target: target || "",
-      });
-    } catch (e) {
-      console.warn("로그 기록 실패:", e);
-    }
-  };
   const onAddColumn = async (post) => {
     const id = await currentId();
     await sb.from("columns").insert({ title: post.title, body: post.body, author: post.author, author_id: id });
-    await logAction("칼럼 작성", post.title);
     await refresh();
   };
   const onDeleteColumn = async (id) => {
-    const n = notices.find((x) => x.id === id);
     await sb.from("columns").delete().eq("id", id);
-    await logAction("칼럼 삭제", n ? n.title : id);
-    await refresh();
-  };
-  const onEditColumn = async (id, title, body) => {
-    await sb.from("columns").update({ title, body }).eq("id", id);
-    await logAction("칼럼 수정", title);
     await refresh();
   };
   const onAddExam = async (exam) => {
     const id = await currentId();
     await sb.from("exams").insert({ title: exam.title, questions: exam.questions, author_id: id });
-    await logAction("시험 출제", exam.title);
     await refresh();
   };
   const onGradeSub = async (sub) => {
     await sb.from("submissions").update({ manual_scores: sub.manualScores || {}, graded: true }).eq("id", sub.id);
-    await logAction("채점 수정", sub.student);
     await refresh();
   };
   const onAddSub = async (sub) => {
@@ -292,12 +276,10 @@ function App() {
   };
   const onToggleAdmin = async (username, next) => {
     await sb.from("profiles").update({ is_admin: next }).eq("username", username);
-    await logAction(next ? "관리자 지정" : "관리자 해제", username);
     await refresh();
   };
   const onDeleteUser = async (username) => {
     await sb.from("profiles").delete().eq("username", username);
-    await logAction("회원 삭제", username);
     await refresh();
   };
 
@@ -343,14 +325,14 @@ function App() {
           loggedIn ? <MyRecords student={student} exams={exams} subs={subs} /> : homeView
         ) : tab === "admin" ? (
           role === "admin" ? (
-            <Admin auth={auth} users={users} notices={notices} exams={exams} subs={subs} auditLog={auditLog} onToggleAdmin={onToggleAdmin} onDeleteUser={onDeleteUser} />
+            <Admin auth={auth} users={users} notices={notices} exams={exams} subs={subs} onToggleAdmin={onToggleAdmin} onDeleteUser={onDeleteUser} />
           ) : (
             homeView
           )
         ) : tab === "account" ? (
           loggedIn ? <Account auth={auth} onChangePassword={onChangePassword} onLogout={onLogout} /> : homeView
         ) : tab === "notices" ? (
-          <Notices role={role} student={student} notices={notices} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} />
+          <Notices role={role} student={student} notices={notices} onAdd={onAddColumn} onDelete={onDeleteColumn} />
         ) : (
           <Exams
             role={role}
@@ -373,6 +355,7 @@ function App() {
   );
 }
 
+/* 사람 모양 아이콘 (이모지 X, 벡터) — 추후 사진으로 교체 가능 */
 function PersonIcon() {
   return (
     <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
@@ -492,9 +475,9 @@ function MyRecords({ student, exams, subs }) {
 }
 
 /* ===================== 관리자 페이지 ===================== */
-function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onDeleteUser }) {
-  const [subtab, setSubtab] = useState("dash"); 
-  const [selUser, setSelUser] = useState(null); 
+function Admin({ auth, users, notices, exams, subs, onToggleAdmin, onDeleteUser }) {
+  const [subtab, setSubtab] = useState("dash"); // dash | members
+  const [selUser, setSelUser] = useState(null); // username
   const [q, setQ] = useState("");
 
   const stats = [
@@ -525,6 +508,7 @@ function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onD
 
   const scoreTone = (ratio) => (ratio >= 0.8 ? "good" : ratio >= 0.5 ? "mid" : "low");
 
+  /* ---- 회원 상세: 시험 결과 ---- */
   if (selUser) {
     const u = users.find((x) => x.username === selUser);
     const theirs = subs
@@ -598,6 +582,7 @@ function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onD
     );
   }
 
+  /* ---- 메인: 대시보드 / 회원 ---- */
   return (
     <div className="mr-col">
       <div className="mr-list-top">
@@ -610,9 +595,6 @@ function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onD
         </button>
         <button className={subtab === "members" ? "on" : ""} onClick={() => setSubtab("members")}>
           회원 {users.length}
-        </button>
-        <button className={subtab === "log" ? "on" : ""} onClick={() => setSubtab("log")}>
-          활동 기록
         </button>
       </div>
 
@@ -655,7 +637,7 @@ function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onD
             )}
           </section>
         </>
-      ) : subtab === "members" ? (
+      ) : (
         <>
           <input
             className="mr-input"
@@ -691,26 +673,6 @@ function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onD
             </div>
           )}
         </>
-      ) : (
-        <section className="mr-card">
-          <div className="mr-card-tag">활동 기록</div>
-          {(!auditLog || auditLog.length === 0) ? (
-            <p className="mr-muted" style={{ fontSize: "14px" }}>아직 기록이 없어요.</p>
-          ) : (
-            <div className="mr-log-list">
-              {auditLog.map((g) => (
-                <div className="mr-log-row" key={g.id}>
-                  <div className="mr-log-main">
-                    <span className="mr-log-actor">{g.actor || "?"}</span>
-                    <span className="mr-log-action">{g.action}</span>
-                    {g.target ? <span className="mr-log-target">{g.target}</span> : null}
-                  </div>
-                  <div className="mr-log-time">{g.created_at ? fmtDate(Date.parse(g.created_at)) : ""}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
       )}
     </div>
   );
@@ -718,7 +680,7 @@ function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onD
 
 /* ===================== 로그인 / 회원가입 ===================== */
 function AuthModal({ onClose, onLogin, onSignup }) {
-  const [mode, setMode] = useState("login"); 
+  const [mode, setMode] = useState("login"); // login | signup
   const [id, setId] = useState("");
   const [pw, setPw] = useState("");
   const [kakao, setKakao] = useState("");
@@ -870,9 +832,70 @@ function Home({ role, student, loggedIn, noticeCount, examCount, onGo }) {
   );
 }
 
+/* ===================== 서식 입력기 (칼럼용) ===================== */
+function RichEditor({ value, onChange, placeholder }) {
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (ref.current && (value || "") !== ref.current.innerHTML) {
+      ref.current.innerHTML = value || "";
+    }
+    // 최초 1회만 초기화 (입력 중 커서 유지)
+  }, []);
+  const sync = () => {
+    if (ref.current) onChange(ref.current.innerHTML);
+  };
+  const exec = (cmd, arg) => {
+    document.execCommand(cmd, false, arg);
+    if (ref.current) ref.current.focus();
+    sync();
+  };
+  const colors = ["#191F28", "#F04452", "#3182F6", "#00B262", "#F59F00", "#7048E8"];
+  const tool = (e, cmd, arg) => {
+    e.preventDefault(); // 선택 영역 유지
+    exec(cmd, arg);
+  };
+  return (
+    <div className="mr-rte-wrap">
+      <div className="mr-rte-toolbar">
+        <button type="button" className="mr-rte-btn" style={{ fontWeight: 800 }} title="굵게" onMouseDown={(e) => tool(e, "bold")}>가</button>
+        <button type="button" className="mr-rte-btn" style={{ fontStyle: "italic" }} title="기울임" onMouseDown={(e) => tool(e, "italic")}>가</button>
+        <button type="button" className="mr-rte-btn" style={{ textDecoration: "underline" }} title="밑줄" onMouseDown={(e) => tool(e, "underline")}>가</button>
+        <button type="button" className="mr-rte-btn" style={{ textDecoration: "line-through" }} title="취소선" onMouseDown={(e) => tool(e, "strikeThrough")}>가</button>
+        <span className="mr-rte-div" />
+        <button type="button" className="mr-rte-btn sm" title="작게" onMouseDown={(e) => tool(e, "fontSize", "2")}>작게</button>
+        <button type="button" className="mr-rte-btn sm" title="보통" onMouseDown={(e) => tool(e, "fontSize", "4")}>보통</button>
+        <button type="button" className="mr-rte-btn sm" title="크게" onMouseDown={(e) => tool(e, "fontSize", "6")}>크게</button>
+        <span className="mr-rte-div" />
+        <button type="button" className="mr-rte-btn sm" title="고딕체" onMouseDown={(e) => tool(e, "fontName", "'Pretendard', sans-serif")}>고딕</button>
+        <button type="button" className="mr-rte-btn sm" style={{ fontFamily: "serif" }} title="명조체" onMouseDown={(e) => tool(e, "fontName", "serif")}>명조</button>
+        <span className="mr-rte-div" />
+        {colors.map((c) => (
+          <button
+            type="button"
+            key={c}
+            className="mr-rte-color"
+            style={{ background: c }}
+            title="글자색"
+            onMouseDown={(e) => tool(e, "foreColor", c)}
+          />
+        ))}
+      </div>
+      <div
+        ref={ref}
+        className="mr-rte"
+        contentEditable
+        suppressContentEditableWarning
+        data-placeholder={placeholder || ""}
+        onInput={sync}
+        onBlur={sync}
+      />
+    </div>
+  );
+}
+
 /* ===================== 칼럼 ===================== */
-function Notices({ role, student, notices, onAdd, onDelete, onEdit }) {
-  const [view, setView] = useState("list"); // list | write | read | edit
+function Notices({ role, student, notices, onAdd, onDelete }) {
+  const [view, setView] = useState("list"); // list | write | read
   const [openId, setOpenId] = useState(null);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -885,18 +908,10 @@ function Notices({ role, student, notices, onAdd, onDelete, onEdit }) {
     setBody("");
     setView("list");
   };
-  
   const remove = async (id) => {
-    if (!confirm("이 칼럼을 삭제할까요?")) return;
     await onDelete(id);
     setOpenId(null);
     setView("list");
-  };
-
-  const saveEdit = async () => {
-    if (!title.trim()) return alert("제목을 입력하세요.");
-    await onEdit(openId, title.trim(), body.trim());
-    setView("read");
   };
 
   // 글쓰기
@@ -914,47 +929,14 @@ function Notices({ role, student, notices, onAdd, onDelete, onEdit }) {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
-          <textarea
-            className="mr-textarea"
-            placeholder="이야기를 자유롭게 풀어보세요. 풀이 접근법, 개념 정리, 공부 팁 무엇이든 좋아요."
-            rows={10}
+          <RichEditor
             value={body}
-            onChange={(e) => setBody(e.target.value)}
+            onChange={setBody}
+            placeholder="이야기를 자유롭게 풀어보세요. 풀이 접근법, 개념 정리, 공부 팁 무엇이든 좋아요."
           />
           <div className="mr-row-end">
             <button className="mr-btn" onClick={post}>
               발행하기
-            </button>
-          </div>
-        </section>
-      </div>
-    );
-
-  // 글 수정하기
-  if (view === "edit")
-    return (
-      <div className="mr-col">
-        <button className="mr-btn-text" onClick={() => setView("read")}>
-          ← 칼럼 보기
-        </button>
-        <section className="mr-card mr-writer">
-          <div className="mr-card-tag">칼럼 수정하기</div>
-          <input
-            className="mr-input mr-title-input"
-            placeholder="제목"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-          <textarea
-            className="mr-textarea"
-            placeholder="내용을 입력하세요."
-            rows={10}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-          />
-          <div className="mr-row-end">
-            <button className="mr-btn" onClick={saveEdit}>
-              수정 완료
             </button>
           </div>
         </section>
@@ -979,16 +961,11 @@ function Notices({ role, student, notices, onAdd, onDelete, onEdit }) {
               {n.author || "익명"} · {fmtDate(n.createdAt)}
             </div>
             <div className="mr-post-divider" />
-            {n.body ? <p className="mr-notice-body">{n.body}</p> : <p className="mr-muted">내용이 없어요.</p>}
+            {n.body ? <div className="mr-notice-body" dangerouslySetInnerHTML={{ __html: n.body }} /> : <p className="mr-muted">내용이 없어요.</p>}
             {role === "admin" && (
-              <div className="mr-detail-actions" style={{ marginTop: "20px", justifyContent: "flex-end" }}>
-                <button className="mr-mini-btn" onClick={() => { setTitle(n.title); setBody(n.body); setView("edit"); }}>
-                  수정
-                </button>
-                <button className="mr-mini-btn danger" onClick={() => remove(n.id)}>
-                  삭제
-                </button>
-              </div>
+              <button className="mr-link-del" onClick={() => remove(n.id)}>
+                삭제
+              </button>
             )}
           </article>
         )}
@@ -1047,7 +1024,7 @@ function Exams(props) {
 
 /* ---------- 관리자: 시험 목록 / 출제 / 채점 ---------- */
 function ExamsAdmin({ exams, onAddExam, subs, onGradeSub }) {
-  const [mode, setMode] = useState("list"); 
+  const [mode, setMode] = useState("list"); // list | create | grade
   const [activeExam, setActiveExam] = useState(null);
 
   const openGrade = (exam) => {
@@ -1317,7 +1294,7 @@ function SubmissionRow({ exam, sub, open, onToggle, onSaveGrade }) {
       .filter((q) => q.type === "short")
       .forEach((q) => {
         const raw = manual[q.id];
-        if (raw === undefined || raw === null || raw === "") return; 
+        if (raw === undefined || raw === null || raw === "") return; // 비우면 자동 채점 사용
         cleaned[q.id] = Math.max(0, Math.min(Number(q.points) || 0, Number(raw) || 0));
       });
     onSaveGrade({ ...sub, manualScores: cleaned, graded: true });
@@ -1383,6 +1360,7 @@ function SubmissionRow({ exam, sub, open, onToggle, onSaveGrade }) {
                 </div>
               );
             }
+            // 주관식 — 자동 채점 + 필요시 보정
             const scorrect = isShortCorrect(q, a);
             const overridden = manual[q.id] !== undefined && manual[q.id] !== null && manual[q.id] !== "";
             return (
@@ -1510,7 +1488,7 @@ function TakeExam({ exam, student, onCancel, onSubmit }) {
       student: student.trim(),
       answers,
       manualScores: {},
-      graded: true, 
+      graded: true, // 객관식·주관식 모두 자동 채점
       submittedAt: Date.now(),
     };
     onSubmit(sub);
@@ -1580,6 +1558,7 @@ function Empty({ text }) {
   return <div className="mr-empty">{text}</div>;
 }
 
+/* 문제 사진 업로드 (업로드 시 최대 1000px로 축소해 저장) */
 function QuestionImage({ value, onChange }) {
   const onFile = (e) => {
     const file = e.target.files && e.target.files[0];
@@ -1631,7 +1610,7 @@ function QuestionImage({ value, onChange }) {
 }
 
 /* ============================================================
-   스타일 — Toss 스타일
+   스타일 — Toss 스타일: 회색 배경 · 흰 라운드 카드 · Pretendard · 클린 블루
    ============================================================ */
 const CSS = `
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
@@ -1748,14 +1727,6 @@ const CSS = `
 .mr-exam-sum-row:last-child{border-bottom:0}
 .mr-exam-sum-title{font-size:14.5px; font-weight:700; color:var(--t1)}
 .mr-exam-sum-meta{font-size:12.5px; color:var(--t3); font-weight:600; margin-top:3px}
-.mr-log-list{display:flex; flex-direction:column}
-.mr-log-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 0; border-bottom:1px solid var(--line-soft)}
-.mr-log-row:last-child{border-bottom:0}
-.mr-log-main{display:flex; align-items:center; gap:7px; flex-wrap:wrap; min-width:0}
-.mr-log-actor{font-size:13.5px; font-weight:800; color:var(--t1)}
-.mr-log-action{font-size:13px; font-weight:700; color:var(--blue); background:var(--blue-bg); padding:3px 9px; border-radius:20px}
-.mr-log-target{font-size:13px; color:var(--t2); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:160px}
-.mr-log-time{font-size:12px; color:var(--t3); font-weight:600; white-space:nowrap; flex:none}
 
 /* 모달 */
 .mr-modal-overlay{
@@ -1852,6 +1823,18 @@ const CSS = `
 .mr-input:focus,.mr-textarea:focus{outline:none; background:#fff; box-shadow:inset 0 0 0 2px var(--blue)}
 .mr-textarea{resize:vertical; line-height:1.6}
 .mr-writer .mr-input:first-of-type{margin-top:0}
+
+/* 서식 입력기 */
+.mr-rte-wrap{margin-top:10px; border-radius:12px; background:#fff; box-shadow:inset 0 0 0 1px var(--line); overflow:hidden}
+.mr-rte-toolbar{display:flex; flex-wrap:wrap; align-items:center; gap:4px; padding:8px; background:#fff; border-bottom:1px solid var(--line-soft)}
+.mr-rte-btn{border:0; background:var(--bg); color:var(--t1); min-width:34px; height:34px; padding:0 9px; border-radius:8px; font-family:inherit; font-size:15px; cursor:pointer; transition:background .12s; line-height:1}
+.mr-rte-btn.sm{font-size:13px; font-weight:700}
+.mr-rte-btn:hover{background:var(--blue-bg); color:var(--blue)}
+.mr-rte-div{width:1px; height:20px; background:var(--line); margin:0 3px}
+.mr-rte-color{width:22px; height:22px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px var(--line); cursor:pointer; padding:0; transition:transform .1s}
+.mr-rte-color:hover{transform:scale(1.15)}
+.mr-rte{min-height:240px; padding:14px; font-size:15px; line-height:1.75; color:var(--t1); outline:none; white-space:pre-wrap; word-break:break-word}
+.mr-rte:empty:before{content:attr(data-placeholder); color:var(--t3)}
 
 /* buttons */
 .mr-btn{
@@ -1990,6 +1973,7 @@ const CSS = `
   font-size:12px; color:var(--t3); line-height:1.6; font-weight:500;
 }
 `;
+
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(<App />);
