@@ -124,20 +124,25 @@ function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const [c, e, s, p, l] = await Promise.all([
+      const [c, e, s, p] = await Promise.all([
         sb.from("columns").select("*").order("created_at", { ascending: false }),
         sb.from("exams").select("*").order("created_at", { ascending: false }),
         sb.from("submissions").select("*").order("submitted_at", { ascending: false }),
         sb.from("profiles").select("*").order("created_at", { ascending: false }),
-        sb.from("audit_log").select("*").order("created_at", { ascending: false }).limit(300),
       ]);
       setNotices((c.data || []).map(mapColumn));
       setExams((e.data || []).map(mapExam));
       setSubs((s.data || []).map(mapSub));
       setUsers((p.data || []).map(mapProfile));
-      setAuditLog(l.data || []);
     } catch (err) {
       console.warn("데이터 불러오기 실패:", err);
+    }
+    // 활동 기록은 관리자만 읽을 수 있으니 따로 불러온다 (실패해도 칼럼·시험엔 영향 없음)
+    try {
+      const l = await sb.from("audit_log").select("*").order("created_at", { ascending: false }).limit(300);
+      setAuditLog(l.data || []);
+    } catch (err) {
+      setAuditLog([]);
     }
   }, []);
 
@@ -1495,6 +1500,7 @@ function ExamsStudent({ student, loggedIn, requireLogin, exams, subs, onAddSub }
       <TakeExam
         exam={taking}
         student={student}
+        loggedIn={loggedIn}
         onCancel={() => setTaking(null)}
         onSubmit={async (sub) => {
           await onAddSub(sub);
@@ -1533,7 +1539,7 @@ function ExamsStudent({ student, loggedIn, requireLogin, exams, subs, onAddSub }
                 ) : (
                   <button
                     className="mr-btn"
-                    onClick={() => (loggedIn ? setTaking(ex) : requireLogin())}
+                    onClick={() => setTaking(ex)}
                   >
                     응시하기
                   </button>
@@ -1547,23 +1553,49 @@ function ExamsStudent({ student, loggedIn, requireLogin, exams, subs, onAddSub }
   );
 }
 
-function TakeExam({ exam, student, onCancel, onSubmit }) {
+function TakeExam({ exam, student, loggedIn, onCancel, onSubmit }) {
   const [answers, setAnswers] = useState({});
+  const [result, setResult] = useState(null);
   const set = (qid, val) => setAnswers((a) => ({ ...a, [qid]: val }));
 
   const submit = () => {
-    if (!student.trim()) return alert("로그인이 필요해요.");
     const sub = {
       id: uid(),
       examId: exam.id,
-      student: student.trim(),
+      student: (student || "").trim() || "비회원",
       answers,
       manualScores: {},
       graded: true,
       submittedAt: Date.now(),
     };
-    onSubmit(sub);
+    if (loggedIn && student.trim()) {
+      onSubmit(sub); // 회원: 기록 저장
+    } else {
+      setResult({ score: totalScore(exam, sub), max: maxScore(exam) }); // 비회원: 저장 안 함
+    }
   };
+
+  if (result) {
+    const ratio = result.max ? result.score / result.max : 0;
+    const tone = ratio >= 0.8 ? "good" : ratio >= 0.5 ? "mid" : "low";
+    return (
+      <div className="mr-col">
+        <section className="mr-card" style={{ textAlign: "center", padding: "32px 20px" }}>
+          <div className="mr-card-tag" style={{ marginBottom: "10px" }}>{exam.title}</div>
+          <div className={"mr-record-score " + tone} style={{ fontSize: "40px" }}>
+            {result.score}
+            <span className="mr-record-max"> / {result.max}</span>
+          </div>
+          <p className="mr-guest-note" style={{ marginTop: "20px" }}>
+            비회원은 시험 기록이 저장되지 않습니다
+          </p>
+          <div style={{ marginTop: "18px" }}>
+            <button className="mr-btn" onClick={onCancel}>확인</button>
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="mr-col">
@@ -1576,6 +1608,10 @@ function TakeExam({ exam, student, onCancel, onSubmit }) {
           <span className="mr-date">만점 {maxScore(exam)}점</span>
         </div>
       </section>
+
+      {!loggedIn && (
+        <div className="mr-guest-note">비회원은 시험 기록이 저장되지 않습니다</div>
+      )}
 
       {exam.questions.map((q, qi) => (
         <section className="mr-card mr-take-q" key={q.id}>
@@ -2045,6 +2081,7 @@ const CSS = `
 .mr-take-opt.sel{background:var(--blue-bg); border-color:var(--blue); color:var(--blue); font-weight:700}
 .mr-take-opt input{width:18px; height:18px; accent-color:var(--blue); flex:none}
 .mr-result-pill{font-weight:800; color:var(--green); background:var(--green-bg); padding:9px 15px; border-radius:11px; font-size:14.5px}
+.mr-guest-note{background:var(--red-bg); color:var(--red); font-size:13.5px; font-weight:700; padding:12px 14px; border-radius:12px; text-align:center; line-height:1.5}
 
 .mr-foot{
   max-width:680px; margin:28px auto 0; padding:0 22px; text-align:center;
