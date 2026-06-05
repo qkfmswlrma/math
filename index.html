@@ -38,6 +38,7 @@ const padPw = (pw) => String(pw) + "__mr__";
 
 const mapColumn = (r) => ({
   id: r.id, title: r.title, body: r.body || "", author: r.author || "",
+  isDraft: !!r.is_draft,
   createdAt: r.created_at ? Date.parse(r.created_at) : 0,
 });
 const mapExam = (r) => ({
@@ -253,9 +254,12 @@ function App() {
   };
   const onAddColumn = async (post) => {
     const id = await currentId();
-    await sb.from("columns").insert({ title: post.title, body: post.body, author: post.author, author_id: id });
-    await logAction("칼럼 작성", post.title);
+    const { data } = await sb.from("columns")
+      .insert({ title: post.title, body: post.body, author: post.author, author_id: id, is_draft: !!post.isDraft })
+      .select().maybeSingle();
+    await logAction(post.isDraft ? "칼럼 임시저장" : "칼럼 작성", post.title);
     await refresh();
+    return data ? data.id : null;
   };
   const onDeleteColumn = async (id) => {
     const n = notices.find((x) => x.id === id);
@@ -263,9 +267,11 @@ function App() {
     await logAction("칼럼 삭제", n ? n.title : id);
     await refresh();
   };
-  const onEditColumn = async (id, title, body) => {
-    await sb.from("columns").update({ title, body }).eq("id", id);
-    await logAction("칼럼 수정", title);
+  const onEditColumn = async (id, title, body, isDraft) => {
+    const patch = { title, body };
+    if (typeof isDraft === "boolean") patch.is_draft = isDraft;
+    await sb.from("columns").update(patch).eq("id", id);
+    await logAction(isDraft ? "칼럼 임시저장" : "칼럼 수정", title);
     await refresh();
   };
   const onAddExam = async (exam) => {
@@ -347,7 +353,7 @@ function App() {
         ) : tab === "account" ? (
           loggedIn ? <Account auth={auth} onChangePassword={onChangePassword} onLogout={onLogout} /> : homeView
         ) : tab === "notices" ? (
-          <Notices role={role} student={student} notices={notices} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} />
+          <Notices role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} notices={notices} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} />
         ) : (
           <Exams
             role={role}
@@ -868,18 +874,54 @@ function Home({ role, student, loggedIn, noticeCount, examCount, onGo }) {
 }
 
 /* ===================== 칼럼 ===================== */
-function Notices({ role, student, notices, onAdd, onDelete, onEdit }) {
+function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit }) {
   const [view, setView] = useState("list"); // list | write | read | edit
   const [openId, setOpenId] = useState(null);
+  const [draftId, setDraftId] = useState(null);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [savedNote, setSavedNote] = useState("");
 
-  const post = async () => {
-    if (!title.trim()) return alert("제목을 입력하세요.");
-    const author = role === "admin" ? "관리자" : student.trim() || "익명";
-    await onAdd({ title: title.trim(), body: body.trim(), author });
+  const authorName = () => (kakaoId || "").trim() || (student || "").trim() || "익명";
+
+  const newWrite = () => {
     setTitle("");
     setBody("");
+    setDraftId(null);
+    setSavedNote("");
+    setView("write");
+  };
+  const resumeDraft = (d) => {
+    setTitle(d.title === "(제목 없음)" ? "" : d.title);
+    setBody(d.body);
+    setDraftId(d.id);
+    setSavedNote("");
+    setView("write");
+  };
+
+  // 임시저장 (발행 안 함)
+  const saveDraft = async () => {
+    if (!title.trim() && !body.trim()) return alert("내용을 입력하세요.");
+    if (draftId) {
+      await onEdit(draftId, title.trim() || "(제목 없음)", body, true);
+    } else {
+      const newId = await onAdd({ title: title.trim() || "(제목 없음)", body, author: authorName(), isDraft: true });
+      if (newId) setDraftId(newId);
+    }
+    setSavedNote("임시저장됐어요");
+  };
+
+  // 발행 (목록에 공개)
+  const post = async () => {
+    if (!title.trim()) return alert("제목을 입력하세요.");
+    if (draftId) {
+      await onEdit(draftId, title.trim(), body, false);
+    } else {
+      await onAdd({ title: title.trim(), body, author: authorName(), isDraft: false });
+    }
+    setTitle("");
+    setBody("");
+    setDraftId(null);
     setView("list");
   };
 
@@ -892,11 +934,11 @@ function Notices({ role, student, notices, onAdd, onDelete, onEdit }) {
 
   const saveEdit = async () => {
     if (!title.trim()) return alert("제목을 입력하세요.");
-    await onEdit(openId, title.trim(), body.trim());
+    await onEdit(openId, title.trim(), body, false);
     setView("read");
   };
 
-  // 글쓰기
+  // 글쓰기 / 임시저장 이어쓰기
   if (view === "write")
     return (
       <div className="mr-col">
@@ -904,28 +946,34 @@ function Notices({ role, student, notices, onAdd, onDelete, onEdit }) {
           ← 칼럼 목록
         </button>
         <section className="mr-card mr-writer">
-          <div className="mr-card-tag">새 칼럼 쓰기</div>
+          <div className="mr-card-tag">{draftId ? "임시저장 이어쓰기" : "새 칼럼 쓰기"}</div>
           <input
             className="mr-input mr-title-input"
             placeholder="제목"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => { setTitle(e.target.value); setSavedNote(""); }}
           />
           <RichEditor
             value={body}
-            onChange={setBody}
+            onChange={(v) => { setBody(v); setSavedNote(""); }}
             placeholder="이야기를 자유롭게 풀어보세요. 풀이 접근법, 개념 정리, 공부 팁 무엇이든 좋아요."
           />
-          <div className="mr-row-end">
-            <button className="mr-btn" onClick={post}>
-              발행하기
-            </button>
+          <div className="mr-row-between" style={{ marginTop: "14px" }}>
+            <span className="mr-ok-msg">{savedNote}</span>
+            <div className="mr-gap">
+              <button className="mr-btn-ghost" onClick={saveDraft}>
+                임시저장
+              </button>
+              <button className="mr-btn" onClick={post}>
+                발행하기
+              </button>
+            </div>
           </div>
         </section>
       </div>
     );
 
-  // 글 수정하기
+  // 글 수정하기 (발행된 글)
   if (view === "edit")
     return (
       <div className="mr-col">
@@ -975,7 +1023,7 @@ function Notices({ role, student, notices, onAdd, onDelete, onEdit }) {
             {n.body ? <div className="mr-notice-body" dangerouslySetInnerHTML={{ __html: n.body }} /> : <p className="mr-muted">내용이 없어요.</p>}
             {role === "admin" && (
               <div className="mr-detail-actions" style={{ marginTop: "20px", justifyContent: "flex-end" }}>
-                <button className="mr-mini-btn" onClick={() => { setTitle(n.title); setBody(n.body); setView("edit"); }}>
+                <button className="mr-mini-btn" onClick={() => { setTitle(n.title); setBody(n.body); setDraftId(null); setView("edit"); }}>
                   수정
                 </button>
                 <button className="mr-mini-btn danger" onClick={() => remove(n.id)}>
@@ -990,28 +1038,41 @@ function Notices({ role, student, notices, onAdd, onDelete, onEdit }) {
   }
 
   // 목록
+  const published = notices.filter((n) => !n.isDraft);
+  const drafts = notices.filter((n) => n.isDraft);
   return (
     <div className="mr-col">
       <div className="mr-list-top">
         <span className="mr-list-title">칼럼</span>
         {role === "admin" && (
-          <button
-            className="mr-btn"
-            onClick={() => {
-              setTitle("");
-              setBody("");
-              setView("write");
-            }}
-          >
+          <button className="mr-btn" onClick={newWrite}>
             글쓰기
           </button>
         )}
       </div>
-      {notices.length === 0 ? (
+
+      {role === "admin" && drafts.length > 0 && (
+        <>
+          <div className="mr-draft-head">임시저장 {drafts.length}</div>
+          <div className="mr-postlist">
+            {drafts.map((n) => (
+              <button key={n.id} className="mr-post-row" onClick={() => resumeDraft(n)}>
+                <span className="mr-post-row-title">
+                  {n.title}
+                  <span className="mr-draft-badge">임시저장</span>
+                </span>
+                <span className="mr-post-row-meta">{fmtDate(n.createdAt)}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {published.length === 0 ? (
         <Empty text="아직 발행된 칼럼이 없어요." />
       ) : (
         <div className="mr-postlist">
-          {notices.map((n, i) => (
+          {published.map((n, i) => (
             <button
               key={n.id}
               className="mr-post-row"
@@ -2020,6 +2081,8 @@ const CSS = `
 .mr-post-row:active{background:var(--bg)}
 .mr-post-row-title{font-size:15.5px; font-weight:700; color:var(--t1); letter-spacing:-0.3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .mr-post-row-meta{font-size:12.5px; color:var(--t3); font-weight:600}
+.mr-draft-head{font-size:13px; font-weight:800; color:var(--t3); padding:2px 2px 0}
+.mr-draft-badge{font-size:11px; font-weight:700; color:#B26A00; background:#FFF4E0; padding:2px 7px; border-radius:6px; margin-left:8px; vertical-align:middle}
 
 /* 칼럼 상세 */
 .mr-post-title{font-size:23px; font-weight:800; line-height:1.4; letter-spacing:-0.5px}
