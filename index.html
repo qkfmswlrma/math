@@ -98,6 +98,15 @@ function isQCorrect(q, sub) {
   if (ov !== undefined && ov !== null && ov !== "") return Number(ov) >= (Number(q.points) || 0) && (Number(q.points) || 0) > 0;
   return isShortCorrect(q, sub.answers[q.id]);
 }
+// 정답률 구간별 색
+function rateColor(rate) {
+  if (rate === null || rate === undefined) return "#8B95A1"; // 데이터 없음(회색)
+  if (rate >= 80) return "#00B262"; // 초록
+  if (rate >= 50) return "#E5A300"; // 노랑
+  if (rate >= 20) return "#F97316"; // 주황
+  if (rate >= 10) return "#F04452"; // 빨강
+  return "#6A0012"; // 10% 미만: 가장 어려운 색(짙은 빨강)
+}
 
 /* ============================================================ */
 function App() {
@@ -1626,7 +1635,7 @@ function GradePanel({ exam, subs, guestSubs, onBack, onSaveGrade }) {
             return (
               <div className="mr-qrate-row" key={q.id}>
                 <span className="mr-qnum-sm">Q{qi + 1}</span>
-                <span className="mr-qrate-val">회원정답률 {mTotal ? mRate + "%" : "—"}</span>
+                <span className="mr-qrate-val" style={{ color: rateColor(mRate) }}>회원정답률 {mTotal ? mRate + "%" : "—"}</span>
                 <span className="mr-qrate-wrong">비회원 오답률 {gTotal ? gWrongRate + "%" : "—"}</span>
               </div>
             );
@@ -1863,17 +1872,20 @@ function TakeExam({ exam, student, loggedIn, onGuestSubmit, onCancel, onSubmit }
       .then(({ data }) => {
         if (!active || !data) return;
         const m = {};
-        data.forEach((r) => { m[r.qid] = { total: r.total, correct: r.correct }; });
+        data.forEach((r) => { m[r.qid] = { total: r.total, correct: r.correct, gtotal: r.gtotal, gcorrect: r.gcorrect }; });
         setRates(m);
       })
       .catch(() => {});
     return () => { active = false; };
   }, []);
 
-  const rateOf = (qid) => {
+  const memRate = (qid) => {
     const st = rates[qid];
-    if (!st || !st.total) return null;
-    return Math.round((100 * st.correct) / st.total);
+    return st && st.total ? Math.round((100 * st.correct) / st.total) : null;
+  };
+  const guestRate = (qid) => {
+    const st = rates[qid];
+    return st && st.gtotal ? Math.round((100 * st.gcorrect) / st.gtotal) : null;
   };
 
   const submit = () => {
@@ -1937,7 +1949,8 @@ function TakeExam({ exam, student, loggedIn, onGuestSubmit, onCancel, onSubmit }
           <div className="mr-grade-qtext">
             <span className="mr-qnum">Q{qi + 1}</span>
             <span className="mr-pts-tag">{q.points}점</span>
-            <span className="mr-rate-tag">회원정답률 {rateOf(q.id) === null ? "—" : rateOf(q.id) + "%"}</span>
+            <span className="mr-rate-tag" style={{ color: rateColor(memRate(q.id)) }}>회원정답률 {memRate(q.id) === null ? "—" : memRate(q.id) + "%"}</span>
+            <span className="mr-rate-tag" style={{ color: rateColor(guestRate(q.id)) }}>비회원정답률 {guestRate(q.id) === null ? "—" : guestRate(q.id) + "%"}</span>
           </div>
           {q.image && <img className="mr-q-img" src={q.image} alt={"문제 " + (qi + 1)} />}
           {q.text && <div className="mr-q-cap">{q.text}</div>}
@@ -2426,7 +2439,7 @@ const CSS = `
 
 /* take exam */
 .mr-pts-tag{font-size:12px; color:var(--t3); margin-left:8px; background:var(--bg); padding:3px 9px; border-radius:20px; font-weight:700}
-.mr-rate-tag{font-size:12px; color:var(--blue); margin-left:6px; background:var(--blue-bg); padding:3px 9px; border-radius:20px; font-weight:700}
+.mr-rate-tag{font-size:12px; color:var(--blue); margin-left:6px; background:var(--bg); padding:3px 9px; border-radius:20px; font-weight:700}
 .mr-take-options{margin-top:14px; display:flex; flex-direction:column; gap:9px}
 .mr-take-opt{display:flex; align-items:center; gap:10px; padding:14px; background:var(--bg); border-radius:13px; cursor:pointer; font-size:14.5px; font-weight:600; transition:all .15s; border:2px solid transparent}
 .mr-take-opt.sel{background:var(--blue-bg); border-color:var(--blue); color:var(--blue); font-weight:700}
