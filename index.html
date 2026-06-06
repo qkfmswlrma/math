@@ -432,7 +432,8 @@ function App() {
 
       <footer className="mr-foot">
         <button className="mr-foot-link" onClick={() => setTab("privacy")}>개인정보 처리방침</button>
-        <div className="mr-foot-copy">© suhakjilmoon</div>
+        <span className="mr-foot-sep">·</span>
+        <span className="mr-foot-copy">© suhakjilmoon</span>
       </footer>
 
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onLogin={onLogin} onSignup={onSignup} />}
@@ -2087,9 +2088,8 @@ function Privacy({ onBack }) {
         </table>
 
         <div className="mr-pp-note">
-          <strong>💡 비회원(익명) 이용자의 IP 주소 처리에 관한 안내</strong>
-          <br />
-          비회원의 중복 제출 및 정답률 조작을 방지하기 위해 시스템적으로 방문자의 IP 주소를 참조합니다. 하지만 수집 즉시 암호화 해시 함수(MD5)로 변환하여 중복 체크 용도로만 사용할 뿐, <strong>원본 IP 주소는 데이터베이스에 저장되지 않으며 개인을 식별할 수 없습니다.</strong>
+          <div className="mr-pp-note-tag">비회원 IP 주소 처리 안내</div>
+          <p>비회원의 중복 제출 및 정답률 조작을 방지하기 위해 시스템적으로 방문자의 IP 주소를 참조합니다. 다만 수집 즉시 암호화 해시 함수(MD5)로 변환해 중복 체크 용도로만 사용하며, 원본 IP 주소는 데이터베이스에 저장되지 않아 개인을 식별할 수 없습니다.</p>
         </div>
 
         <h2 className="mr-pp-h2">3. 개인정보의 처리 위탁 (해외 이전)</h2>
@@ -2592,12 +2592,14 @@ const CSS = `
 .mr-guest-note{background:var(--red-bg); color:var(--red); font-size:13.5px; font-weight:700; padding:12px 14px; border-radius:12px; text-align:center; line-height:1.5}
 
 .mr-foot{
-  max-width:680px; margin:28px auto 0; padding:0 22px; text-align:center;
+  max-width:680px; margin:28px auto 0; padding:0 22px;
+  display:flex; justify-content:center; align-items:center; gap:8px;
   font-size:12px; color:var(--t3); line-height:1.6; font-weight:500;
 }
 .mr-foot-link{background:none; border:0; color:var(--t2); font-family:inherit; font-size:12px; font-weight:700; cursor:pointer; text-decoration:underline; padding:4px}
 .mr-foot-link:hover{color:var(--blue)}
-.mr-foot-copy{margin-top:4px}
+.mr-foot-sep{color:var(--t3)}
+.mr-foot-copy{}
 .mr-pp-title{font-size:21px; font-weight:800; color:var(--t1); letter-spacing:-0.5px; padding-bottom:12px; border-bottom:2px solid var(--t1); margin:0 0 14px}
 .mr-pp-intro{font-size:13.5px; color:var(--t2); line-height:1.7; margin:0}
 .mr-pp-h2{font-size:16px; font-weight:800; color:var(--blue); margin:26px 0 9px; letter-spacing:-0.3px}
@@ -2607,7 +2609,9 @@ const CSS = `
 .mr-pp-table{width:100%; border-collapse:collapse; margin:12px 0; font-size:12.5px}
 .mr-pp-table th,.mr-pp-table td{border:1px solid var(--line); padding:9px 10px; text-align:left; vertical-align:top; color:var(--t2); line-height:1.5}
 .mr-pp-table th{background:var(--bg); color:var(--t1); font-weight:700}
-.mr-pp-note{background:#FFF8EC; border-left:4px solid #F5A300; border-radius:8px; padding:12px 14px; margin:14px 0; font-size:13px; color:var(--t2); line-height:1.7}
+.mr-pp-note{background:var(--bg); border-radius:14px; padding:16px; margin:16px 0}
+.mr-pp-note-tag{display:inline-block; font-size:11px; font-weight:800; color:var(--blue); background:var(--blue-bg); padding:4px 10px; border-radius:8px; margin-bottom:9px; letter-spacing:-0.2px}
+.mr-pp-note p{font-size:13px; color:var(--t2); line-height:1.7; margin:0}
 .mr-pp a{color:var(--blue); font-weight:700; text-decoration:underline}
 `;
 
