@@ -357,6 +357,13 @@ function App() {
     await logAction("회원 삭제", username);
     await refresh();
   };
+  const onResetPassword = async (username) => {
+    const { data, error } = await sb.rpc("admin_reset_password", { p_username: username });
+    if (error) { alert("초기화 실패: " + error.message); return; }
+    if (data === false) { alert("해당 회원을 찾지 못했어요."); return; }
+    await logAction("비밀번호 초기화", username);
+    alert(username + " 님의 비밀번호를 0000 으로 초기화했어요.\n로그인 후 계정 화면에서 바꾸도록 안내해주세요.");
+  };
 
   const homeView = (
     <Home role={role} student={student} loggedIn={loggedIn} noticeCount={notices.length} examCount={exams.length} onGo={setTab} />
@@ -400,7 +407,7 @@ function App() {
           loggedIn ? <MyRecords student={student} exams={exams} subs={subs} /> : homeView
         ) : tab === "admin" ? (
           role === "admin" ? (
-            <Admin auth={auth} users={users} notices={notices} exams={exams} subs={subs} auditLog={auditLog} onToggleAdmin={onToggleAdmin} onDeleteUser={onDeleteUser} />
+            <Admin auth={auth} users={users} notices={notices} exams={exams} subs={subs} auditLog={auditLog} onToggleAdmin={onToggleAdmin} onDeleteUser={onDeleteUser} onResetPassword={onResetPassword} />
           ) : (
             homeView
           )
@@ -586,7 +593,7 @@ function MyRecords({ student, exams, subs }) {
 }
 
 /* ===================== 관리자 페이지 ===================== */
-function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onDeleteUser }) {
+function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onDeleteUser, onResetPassword }) {
   const [subtab, setSubtab] = useState("dash");
   const [selUser, setSelUser] = useState(null);
   const [q, setQ] = useState("");
@@ -606,6 +613,10 @@ function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onD
     if (!confirm(`'${username}' 회원을 삭제할까요?`)) return;
     await onDeleteUser(username);
     if (selUser === username) setSelUser(null);
+  };
+  const resetPw = async (username) => {
+    if (!confirm(`'${username}' 회원의 비밀번호를 0000 으로 초기화할까요?`)) return;
+    await onResetPassword(username);
   };
 
   const sorted = [...users].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
@@ -651,6 +662,9 @@ function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onD
               <div className="mr-detail-actions">
                 <button className="mr-mini-btn" onClick={() => toggleAdmin(u.username)}>
                   {u.isAdmin ? "관리자 해제" : "관리자 지정"}
+                </button>
+                <button className="mr-mini-btn" onClick={() => resetPw(u.username)}>
+                  비밀번호 초기화
                 </button>
                 <button className="mr-mini-btn danger" onClick={() => removeUser(u.username)}>
                   회원 삭제
