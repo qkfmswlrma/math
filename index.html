@@ -308,6 +308,12 @@ function App() {
     await logAction("시험 수정", exam.title);
     await refresh();
   };
+  const onDeleteExam = async (id) => {
+    const ex = exams.find((e) => e.id === id);
+    await sb.from("exams").delete().eq("id", id);
+    await logAction("시험 삭제", ex ? ex.title : id);
+    await refresh();
+  };
   const onGradeSub = async (sub) => {
     await sb.from("submissions").update({ manual_scores: sub.manualScores || {}, graded: true }).eq("id", sub.id);
     await logAction("채점 수정", sub.student);
@@ -401,6 +407,7 @@ function App() {
             subs={subs}
             onAddExam={onAddExam}
             onEditExam={onEditExam}
+            onDeleteExam={onDeleteExam}
             onGradeSub={onGradeSub}
             onAddSub={onAddSub}
             onGuestSubmit={onGuestSubmit}
@@ -1251,7 +1258,7 @@ function Exams(props) {
 }
 
 /* ---------- 관리자: 시험 목록 / 출제 / 채점 / (남의 시험) 응시 ---------- */
-function ExamsAdmin({ exams, onAddExam, onEditExam, subs, onGradeSub, onAddSub, myId, student, loggedIn, guestSubs }) {
+function ExamsAdmin({ exams, onAddExam, onEditExam, onDeleteExam, subs, onGradeSub, onAddSub, myId, student, loggedIn, guestSubs }) {
   const [mode, setMode] = useState("list");
   const [activeExam, setActiveExam] = useState(null);
   const [taking, setTaking] = useState(null);
@@ -1263,6 +1270,10 @@ function ExamsAdmin({ exams, onAddExam, onEditExam, subs, onGradeSub, onAddSub, 
   const openEdit = (exam) => {
     setActiveExam(exam);
     setMode("edit");
+  };
+  const removeExam = async (exam) => {
+    if (!confirm(`'${exam.title}' 시험을 삭제할까요? 되돌릴 수 없어요.`)) return;
+    await onDeleteExam(exam.id);
   };
 
   if (taking)
@@ -1363,6 +1374,11 @@ function ExamsAdmin({ exams, onAddExam, onEditExam, subs, onGradeSub, onAddSub, 
                   {canEdit && (
                     <button className="mr-btn-ghost" onClick={() => openEdit(ex)}>
                       수정
+                    </button>
+                  )}
+                  {canEdit && (
+                    <button className="mr-btn-ghost danger" onClick={() => removeExam(ex)}>
+                      삭제
                     </button>
                   )}
                   <button className="mr-btn-ghost" onClick={() => openGrade(ex)}>
@@ -2217,6 +2233,8 @@ const CSS = `
   font-family:inherit; font-weight:700; font-size:14.5px; cursor:pointer; transition:background .15s;
 }
 .mr-btn-ghost:hover{background:#DBEAFE}
+.mr-btn-ghost.danger{background:var(--red-bg); color:var(--red)}
+.mr-btn-ghost.danger:hover{background:#FBD5DA}
 .mr-btn-text{border:0; background:none; color:var(--t2); cursor:pointer; font-family:inherit; font-size:14.5px; font-weight:700; align-self:flex-start; padding:4px 0}
 .mr-row-end{display:flex; justify-content:flex-end; margin-top:14px}
 .mr-row-between{display:flex; justify-content:space-between; align-items:center; gap:10px}
