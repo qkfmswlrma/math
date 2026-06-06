@@ -428,9 +428,7 @@ function App() {
         )}
       </main>
 
-      <footer className="mr-foot">
-        © suhakjilmoon | <a href="privacy.html" target="_blank" style={{ color: 'inherit', marginLeft: '10px', textDecoration: 'underline' }}>개인정보 처리방침</a>
-      </footer>
+      <footer className="mr-foot">© suhakjilmoon</footer>
 
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onLogin={onLogin} onSignup={onSignup} />}
     </div>
@@ -1327,7 +1325,6 @@ function ExamsAdmin({ exams, onAddExam, onEditExam, onDeleteExam, subs, onGradeS
         onCancel={() => setTaking(null)}
         onSubmit={async (sub) => {
           await onAddSub(sub);
-          setTaking(null);
         }}
       />
     );
@@ -1807,7 +1804,6 @@ function ExamsStudent({ student, loggedIn, requireLogin, exams, subs, onAddSub, 
         onCancel={() => setTaking(null)}
         onSubmit={async (sub) => {
           await onAddSub(sub);
-          setTaking(null);
         }}
       />
     );
@@ -1901,31 +1897,87 @@ function TakeExam({ exam, student, loggedIn, onGuestSubmit, onCancel, onSubmit }
       submittedAt: Date.now(),
     };
     if (loggedIn && student.trim()) {
-      onSubmit(sub); // 회원: 기록 저장
+      onSubmit(sub); // 회원: 기록 저장 (목록 이동은 리뷰 화면에서)
     } else {
       if (onGuestSubmit) onGuestSubmit(exam.id, answers); // 비회원: 익명 집계만
-      setResult({ score: totalScore(exam, sub), max: maxScore(exam) }); // 비회원: 개인 기록 저장 안 함
     }
+    setResult(sub); // 회원·비회원 모두 채점 리뷰 화면 표시
   };
 
   if (result) {
-    const ratio = result.max ? result.score / result.max : 0;
+    const sub = result;
+    const score = totalScore(exam, sub);
+    const max = maxScore(exam);
+    const ratio = max ? score / max : 0;
     const tone = ratio >= 0.8 ? "good" : ratio >= 0.5 ? "mid" : "low";
     return (
       <div className="mr-col">
-        <section className="mr-card" style={{ textAlign: "center", padding: "32px 20px" }}>
+        <section className="mr-card" style={{ textAlign: "center", padding: "28px 20px" }}>
           <div className="mr-card-tag" style={{ marginBottom: "10px" }}>{exam.title}</div>
           <div className={"mr-record-score " + tone} style={{ fontSize: "40px" }}>
-            {result.score}
-            <span className="mr-record-max"> / {result.max}</span>
+            {score}
+            <span className="mr-record-max"> / {max}</span>
           </div>
-          <p className="mr-guest-note" style={{ marginTop: "20px" }}>
-            비회원은 시험 기록이 저장되지 않습니다
-          </p>
-          <div style={{ marginTop: "18px" }}>
-            <button className="mr-btn" onClick={onCancel}>확인</button>
-          </div>
+          {!loggedIn && (
+            <p className="mr-guest-note" style={{ marginTop: "16px" }}>
+              비회원은 시험 기록이 저장되지 않습니다
+            </p>
+          )}
         </section>
+
+        <div className="mr-list-top">
+          <span className="mr-list-title">채점 결과</span>
+        </div>
+
+        {exam.questions.map((q, qi) => {
+          const correct = isQCorrect(q, sub);
+          const mine = sub.answers[q.id];
+          return (
+            <section className={"mr-card mr-take-q" + (correct ? "" : " wrong")} key={q.id}>
+              <div className="mr-grade-qtext">
+                <span className="mr-qnum">Q{qi + 1}</span>
+                <span className="mr-pts-tag">{q.points}점</span>
+                <span className={"mr-ox " + (correct ? "o" : "x")}>{correct ? "O 정답" : "X 오답"}</span>
+              </div>
+              {q.image && <img className="mr-q-img" src={q.image} alt={"문제 " + (qi + 1)} />}
+              {q.text && <div className="mr-q-cap">{q.text}</div>}
+              {q.type === "mc" ? (
+                <div className="mr-take-options">
+                  {q.options.map((opt, oi) => {
+                    const isAns = oi === q.answer;
+                    const isMine = mine === oi;
+                    let cls = "mr-take-opt review";
+                    if (isAns) cls += " ans";
+                    if (isMine && !isAns) cls += " mychoice";
+                    return (
+                      <div key={oi} className={cls}>
+                        <span className="mr-opt-label">{String.fromCharCode(9311 + oi + 1)}</span>
+                        {opt}
+                        {isAns && <span className="mr-opt-flag ans">정답</span>}
+                        {isMine && !isAns && <span className="mr-opt-flag mine">내 답</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="mr-short-review">
+                  <div className="mr-sr-row">
+                    <span className="mr-sr-k">내 답</span>
+                    <span className={"mr-sr-v " + (correct ? "ok" : "no")}>{(mine && String(mine).trim()) || "(미작성)"}</span>
+                  </div>
+                  <div className="mr-sr-row">
+                    <span className="mr-sr-k">정답</span>
+                    <span className="mr-sr-v ans">{q.accept || "—"}</span>
+                  </div>
+                </div>
+              )}
+            </section>
+          );
+        })}
+
+        <div className="mr-row-end">
+          <button className="mr-btn" onClick={onCancel}>목록으로</button>
+        </div>
       </div>
     );
   }
@@ -2444,6 +2496,22 @@ const CSS = `
 .mr-rate-tag{font-size:12px; color:var(--blue); margin-left:6px; background:var(--bg); padding:3px 9px; border-radius:20px; font-weight:700}
 .mr-take-options{margin-top:14px; display:flex; flex-direction:column; gap:9px}
 .mr-take-opt{display:flex; align-items:center; gap:10px; padding:14px; background:var(--bg); border-radius:13px; cursor:pointer; font-size:14.5px; font-weight:600; transition:all .15s; border:2px solid transparent}
+.mr-take-opt.review{cursor:default}
+.mr-take-opt.review.ans{border-color:var(--green); background:var(--green-bg)}
+.mr-take-opt.review.mychoice{border-color:var(--red); background:var(--red-bg)}
+.mr-opt-flag{margin-left:auto; font-size:11px; font-weight:800; padding:2px 9px; border-radius:7px}
+.mr-opt-flag.ans{color:var(--green); background:#fff}
+.mr-opt-flag.mine{color:var(--red); background:#fff}
+.mr-ox{font-size:12px; font-weight:800; padding:3px 11px; border-radius:20px; margin-left:6px}
+.mr-ox.o{color:var(--green); background:var(--green-bg)}
+.mr-ox.x{color:var(--red); background:var(--red-bg)}
+.mr-take-q.wrong{border-left:3px solid var(--red)}
+.mr-short-review{margin-top:12px; display:flex; flex-direction:column; gap:8px}
+.mr-sr-row{display:flex; gap:10px; align-items:center}
+.mr-sr-k{font-size:12px; font-weight:700; color:var(--t3); width:44px; flex:none}
+.mr-sr-v{font-size:14.5px; font-weight:700; color:var(--t1)}
+.mr-sr-v.ok{color:var(--green)}
+.mr-sr-v.no{color:var(--red)}
 .mr-take-opt.sel{background:var(--blue-bg); border-color:var(--blue); color:var(--blue); font-weight:700}
 .mr-take-opt input{width:18px; height:18px; accent-color:var(--blue); flex:none}
 .mr-result-pill{font-weight:800; color:var(--green); background:var(--green-bg); padding:9px 15px; border-radius:11px; font-size:14.5px}
