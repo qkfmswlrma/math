@@ -524,15 +524,16 @@ function Account({ auth, onChangePassword, onUpdateKakao, onLogout }) {
         <div className="mr-account-name">{auth.username}</div>
         <div className="mr-account-role">
           {auth.isAdmin ? "관리자" : "일반 회원"}
-          {!auth.isAdmin && auth.kakaoId ? ` · 카톡방 ${auth.kakaoId}` : ""}
+          {!auth.isAdmin && auth.kakaoId ? ` · 채팅방 ${auth.kakaoId}` : ""}
         </div>
       </section>
 
       <section className="mr-card">
         <div className="mr-card-tag">내 정보</div>
+        <div className="mr-cat-label">채팅방 닉네임</div>
         <input
           className="mr-input"
-          placeholder="카톡방 닉네임"
+          placeholder="채팅방에서 쓰는 이름"
           value={kakao}
           onChange={(e) => { setKakao(e.target.value); setKakaoDone(false); }}
         />
@@ -710,7 +711,7 @@ function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onD
                 {u.isAdmin && <span className="mr-user-badge">관리자</span>}
               </div>
               <div className="mr-account-role">
-                {u.kakaoId ? `카톡방 ${u.kakaoId}` : "카톡방 미입력"}
+                {u.kakaoId ? `채팅방 ${u.kakaoId}` : "채팅방 미입력"}
                 {u.createdAt ? ` · 가입 ${fmtDate(u.createdAt)}` : ""}
               </div>
               <div className="mr-detail-actions">
@@ -821,7 +822,7 @@ function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onD
         <>
           <input
             className="mr-input"
-            placeholder="아이디 · 카톡방 아이디 검색"
+            placeholder="아이디 · 채팅방 닉네임 검색"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             style={{ marginTop: 0 }}
@@ -843,7 +844,7 @@ function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onD
                       {u.isAdmin && <span className="mr-user-badge">관리자</span>}
                     </span>
                     <span className="mr-member-meta">
-                      {u.kakaoId ? `카톡방 ${u.kakaoId}` : "카톡방 미입력"}
+                      {u.kakaoId ? <strong className="mr-member-nick">{u.kakaoId}</strong> : "닉네임 미입력"}
                       {u.createdAt ? ` · ${fmtDate(u.createdAt)}` : ""}
                     </span>
                   </span>
@@ -927,7 +928,7 @@ function AuthModal({ onClose, onLogin, onSignup }) {
         {mode === "signup" && (
           <input
             className="mr-input"
-            placeholder="카톡방 아이디 (선택)"
+            placeholder="채팅방 닉네임 (선택)"
             value={kakao}
             onChange={(e) => setKakao(e.target.value)}
           />
@@ -2475,6 +2476,7 @@ const CSS = `
 .mr-member-info{flex:1; min-width:0}
 .mr-member-name{display:flex; align-items:center; gap:6px; font-size:14.5px; font-weight:700; color:var(--t1)}
 .mr-member-meta{font-size:12px; color:var(--t3); font-weight:600; margin-top:2px}
+.mr-member-nick{font-weight:800; color:var(--t1)}
 .mr-member-actions{display:flex; gap:6px; flex:none}
 .mr-mini-btn{border:0; background:var(--bg); color:var(--t2); font-family:inherit; font-weight:700; font-size:12px; padding:7px 10px; border-radius:9px; cursor:pointer; white-space:nowrap}
 .mr-mini-btn:hover{background:var(--blue-bg); color:var(--blue)}
