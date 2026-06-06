@@ -2370,6 +2370,8 @@ function PolicyModal({ onClose }) {
 }
 
 function QuestionImage({ value, onChange }) {
+  const [busy, setBusy] = useState(false);
+
   const onFile = (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -2388,12 +2390,42 @@ function QuestionImage({ value, onChange }) {
         c.width = width;
         c.height = height;
         c.getContext("2d").drawImage(img, 0, 0, width, height);
-        onChange(c.toDataURL("image/jpeg", 0.82));
+        const dataUrl = c.toDataURL("image/jpeg", 0.82);
+        c.toBlob(
+          async (blob) => {
+            if (!blob) {
+              onChange(dataUrl);
+              return;
+            }
+            setBusy(true);
+            try {
+              const path = "q-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + ".jpg";
+              const up = await sb.storage.from("exam-images").upload(path, blob, { contentType: "image/jpeg", upsert: false });
+              if (up.error) throw up.error;
+              const { data: pub } = sb.storage.from("exam-images").getPublicUrl(path);
+              onChange(pub.publicUrl);
+            } catch (err) {
+              console.warn("이미지 업로드 실패, 내장 방식으로 저장:", err);
+              onChange(dataUrl); // 실패 시 base64로 폴백 (기능은 유지)
+            } finally {
+              setBusy(false);
+            }
+          },
+          "image/jpeg",
+          0.82
+        );
       };
       img.src = reader.result;
     };
     reader.readAsDataURL(file);
   };
+
+  if (busy)
+    return (
+      <div className="mr-img-drop">
+        <span className="mr-img-main">업로드 중…</span>
+      </div>
+    );
 
   if (value)
     return (
