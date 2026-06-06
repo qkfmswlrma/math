@@ -2247,29 +2247,79 @@ function SpeedGame({ onBack }) {
   const PENALTY = 5; // 오답 -5초
   const rand = (lo, hi) => Math.floor(Math.random() * (hi - lo + 1)) + lo;
 
-  const makeQ = (combo) => {
-    const level = Math.floor(combo / 5);
-    const cap = 9 + level * 4;
-    const ops = ["+", "−", "×", "÷"];
-    const op = ops[rand(0, 3)];
-    let a, b, ans;
-    if (op === "+") { a = rand(1, cap); b = rand(1, cap); ans = a + b; }
-    else if (op === "−") { a = rand(1, cap); b = rand(1, a); ans = a - b; }
-    else if (op === "×") { const m = Math.max(2, Math.floor(cap / 3) + 2); a = rand(2, m); b = rand(2, m); ans = a * b; }
-    else { const m = Math.max(2, Math.floor(cap / 3) + 2); b = rand(2, m); ans = rand(2, m); a = b * ans; }
+  // 연산자 우선순위를 지켜 정수로 평가 (×,÷ 먼저). 나눗셈은 항상 떨어지게 생성하므로 정수 보장.
+  const evalExpr = (nums, ops) => {
+    const n = nums.slice();
+    const o = ops.slice();
+    for (let i = 0; i < o.length; ) {
+      if (o[i] === "×" || o[i] === "÷") {
+        const v = o[i] === "×" ? n[i] * n[i + 1] : n[i] / n[i + 1];
+        n.splice(i, 2, v);
+        o.splice(i, 1);
+      } else i++;
+    }
+    let r = n[0];
+    for (let i = 0; i < o.length; i++) r = o[i] === "+" ? r + n[i + 1] : r - n[i + 1];
+    return r;
+  };
 
-    // 보기: 정답 + 그럴듯한 오답 3개
-    const opts = new Set([ans]);
-    let guard = 0;
-    while (opts.size < 4 && guard < 50) {
+  const makeQ = (combo) => {
+    const level = Math.floor(combo / 3); // 3콤보마다 레벨업
+    const cap = 9 + level * 6;
+    // 항 개수: 레벨 오를수록 2개 → 3개 → 4개
+    let terms = 2;
+    if (level >= 9) terms = 4;
+    else if (level >= 5) terms = 3;
+    // 연산자 풀: 레벨 오를수록 ×,÷ 비중↑
+    let pool;
+    if (level <= 1) pool = ["+", "−", "+", "−", "×"];
+    else if (level <= 3) pool = ["+", "−", "×", "÷", "×"];
+    else pool = ["×", "÷", "×", "÷", "−", "+"];
+
+    let nums, ops, ans, guard = 0;
+    do {
       guard++;
-      const spread = Math.max(2, Math.round(Math.abs(ans) * 0.25) + 2);
+      nums = [];
+      ops = [];
+      for (let i = 0; i < terms; i++) {
+        if (i === 0) {
+          nums.push(rand(2, cap));
+        } else {
+          const op = pool[rand(0, pool.length - 1)];
+          if (op === "÷") {
+            // 나눗셈은 직전 수를 나누어떨어지게: 직전 수를 b의 배수로 다시 맞춤
+            const b = rand(2, Math.max(3, Math.floor(cap / 2)));
+            const q = rand(2, Math.max(3, Math.floor(cap / 2)));
+            nums[i - 1] = b * q; // 앞 항을 나눠떨어지는 값으로 교체
+            nums.push(b);
+          } else if (op === "×") {
+            nums.push(rand(2, Math.max(3, Math.floor(cap / 2))));
+          } else {
+            nums.push(rand(2, cap));
+          }
+          ops.push(op);
+        }
+      }
+      ans = evalExpr(nums, ops);
+    } while ((ans < 0 || !Number.isInteger(ans)) && guard < 40);
+    if (ans < 0 || !Number.isInteger(ans)) { nums = [rand(2, cap), rand(2, cap)]; ops = ["+"]; ans = nums[0] + nums[1]; }
+
+    // 문제 텍스트
+    let text = String(nums[0]);
+    for (let i = 0; i < ops.length; i++) text += " " + ops[i] + " " + nums[i + 1];
+
+    // 보기: 정답 + 정답에 촘촘히 붙는 오답 3개 (찍기 어렵게)
+    const opts = new Set([ans]);
+    let g2 = 0;
+    while (opts.size < 4 && g2 < 60) {
+      g2++;
+      const spread = Math.max(1, Math.round(Math.abs(ans) * 0.12) + 1);
       let cand = ans + rand(-spread, spread);
-      if (cand === ans || cand < 0) cand = ans + rand(1, spread + 2);
+      if (cand === ans || cand < 0) cand = ans + (rand(0, 1) ? 1 : -1) * rand(1, spread + 1);
       if (cand !== ans && cand >= 0) opts.add(cand);
     }
     const options = Array.from(opts).sort(() => Math.random() - 0.5);
-    return { text: a + " " + op + " " + b, ans, options };
+    return { text, ans, options };
   };
 
   const [phase, setPhase] = useState("ready"); // ready | playing | over
@@ -3142,3 +3192,4 @@ root.render(<App />);
 </script>
 </body>
 </html>
+
