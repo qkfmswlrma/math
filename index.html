@@ -3,7 +3,17 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>수학방</title>
+<title>수학질문방</title>
+<meta name="description" content="수학질문방 - 칼럼과 시험으로 함께 공부하는 수학 커뮤니티" />
+<meta name="theme-color" content="#3182F6" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="수학질문방" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="수학질문방" />
+<meta property="og:description" content="칼럼과 시험으로 함께 공부하는 수학 커뮤니티" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%233182F6'/%3E%3Ctext x='32' y='44' font-size='38' font-weight='800' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E2%88%AB%3C/text%3E%3C/svg%3E" />
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%233182F6'/%3E%3Ctext x='32' y='44' font-size='38' font-weight='800' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E2%88%AB%3C/text%3E%3C/svg%3E" />
 <style>
   html,body,#root{margin:0;padding:0;height:100%;background:#F2F4F6}
   .mr-splash{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:'Pretendard',-apple-system,sans-serif;color:#4E5968}
@@ -20,8 +30,8 @@
 <body>
 <div id="root">
   <div class="mr-splash">
-    <div class="lg">∑</div>
-    <div class="tx">수학방 불러오는 중…</div>
+    <div class="lg">∫</div>
+    <div class="tx">수학질문방 불러오는 중…</div>
     <div class="sp"></div>
   </div>
 </div>
@@ -270,6 +280,14 @@ function App() {
     if (error) return { error: error.message };
     return {};
   };
+  const onUpdateKakao = async (kakao) => {
+    if (!auth) return { error: "로그인이 필요해요." };
+    const { error } = await sb.from("profiles").update({ kakao_id: kakao }).eq("id", auth.id);
+    if (error) return { error: error.message };
+    setAuth({ ...auth, kakaoId: kakao });
+    await refresh();
+    return {};
+  };
 
   /* ---- 데이터 ---- */
   const logAction = async (action, target) => {
@@ -339,11 +357,13 @@ function App() {
   };
   const onAddSub = async (sub) => {
     const id = await currentId();
-    await sb.from("submissions").insert({
+    const { error } = await sb.from("submissions").insert({
       exam_id: sub.examId, student: sub.student, student_id: id,
       answers: sub.answers, manual_scores: sub.manualScores || {}, graded: sub.graded,
     });
+    if (error) return { error: error.message };
     await refresh();
+    return {};
   };
   // 비회원: IP 기준 24시간 중복 방지 함수로 보냄 (개인정보 없이 익명 집계)
   const onGuestSubmit = async (examId, answers) => {
@@ -386,7 +406,7 @@ function App() {
 
       <header className="mr-header">
         <div className="mr-brand" onClick={() => setTab("home")} role="button">
-          <span className="mr-logo">∑</span>
+          <span className="mr-logo">∫</span>
           <div>
             <div className="mr-brand-name">수학질문방</div>
           </div>
@@ -423,7 +443,7 @@ function App() {
             homeView
           )
         ) : tab === "account" ? (
-          loggedIn ? <Account auth={auth} onChangePassword={onChangePassword} onLogout={onLogout} /> : homeView
+          loggedIn ? <Account auth={auth} onChangePassword={onChangePassword} onUpdateKakao={onUpdateKakao} onLogout={onLogout} /> : homeView
         ) : tab === "notices" ? (
           <Notices role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} notices={notices} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} />
         ) : tab === "privacy" ? (
@@ -473,10 +493,12 @@ function PersonIcon() {
 }
 
 /* ===================== 회원정보 ===================== */
-function Account({ auth, onChangePassword, onLogout }) {
+function Account({ auth, onChangePassword, onUpdateKakao, onLogout }) {
   const [curPw, setCurPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [done, setDone] = useState(false);
+  const [kakao, setKakao] = useState(auth.kakaoId || "");
+  const [kakaoDone, setKakaoDone] = useState(false);
 
   const changePw = async () => {
     if (!curPw || !newPw) return alert("현재 비밀번호와 새 비밀번호를 입력하세요.");
@@ -485,6 +507,12 @@ function Account({ auth, onChangePassword, onLogout }) {
     setCurPw("");
     setNewPw("");
     setDone(true);
+  };
+
+  const saveKakao = async () => {
+    const { error } = await onUpdateKakao(kakao.trim());
+    if (error) return alert(error);
+    setKakaoDone(true);
   };
 
   return (
@@ -497,6 +525,20 @@ function Account({ auth, onChangePassword, onLogout }) {
         <div className="mr-account-role">
           {auth.isAdmin ? "관리자" : "일반 회원"}
           {!auth.isAdmin && auth.kakaoId ? ` · 카톡방 ${auth.kakaoId}` : ""}
+        </div>
+      </section>
+
+      <section className="mr-card">
+        <div className="mr-card-tag">내 정보</div>
+        <input
+          className="mr-input"
+          placeholder="카톡방 닉네임"
+          value={kakao}
+          onChange={(e) => { setKakao(e.target.value); setKakaoDone(false); }}
+        />
+        <div className="mr-row-between" style={{ marginTop: "14px" }}>
+          <span className="mr-ok-msg">{kakaoDone ? "저장됐어요" : ""}</span>
+          <button className="mr-btn" onClick={saveKakao}>저장</button>
         </div>
       </section>
 
@@ -1400,7 +1442,7 @@ function ExamsAdmin({ exams, onAddExam, onEditExam, onDeleteExam, subs, onGradeS
         loggedIn={loggedIn}
         onCancel={() => setTaking(null)}
         onSubmit={async (sub) => {
-          await onAddSub(sub);
+          return await onAddSub(sub);
         }}
       />
     );
@@ -1881,7 +1923,7 @@ function ExamsStudent({ student, loggedIn, requireLogin, exams, subs, onAddSub, 
         onGuestSubmit={onGuestSubmit}
         onCancel={() => setTaking(null)}
         onSubmit={async (sub) => {
-          await onAddSub(sub);
+          return await onAddSub(sub);
         }}
       />
     );
@@ -1964,7 +2006,14 @@ function TakeExam({ exam, student, loggedIn, onGuestSubmit, onCancel, onSubmit }
     return st && st.gtotal ? Math.round((100 * st.gcorrect) / st.gtotal) : null;
   };
 
-  const submit = () => {
+  const submit = async () => {
+    const unanswered = exam.questions.filter((q) => {
+      const a = answers[q.id];
+      if (q.type === "mc") return a === undefined || a === null;
+      return !a || !String(a).trim();
+    }).length;
+    if (unanswered > 0 && !confirm(`아직 풀지 않은 문항이 ${unanswered}개 있어요. 그래도 제출할까요?`)) return;
+
     const sub = {
       id: uid(),
       examId: exam.id,
@@ -1975,7 +2024,11 @@ function TakeExam({ exam, student, loggedIn, onGuestSubmit, onCancel, onSubmit }
       submittedAt: Date.now(),
     };
     if (loggedIn && student.trim()) {
-      onSubmit(sub); // 회원: 기록 저장 (목록 이동은 리뷰 화면에서)
+      const res = await onSubmit(sub); // 회원: 기록 저장 (목록 이동은 리뷰 화면에서)
+      if (res && res.error) {
+        alert("제출 저장에 실패했어요: " + res.error + "\n네트워크를 확인하고 다시 시도해주세요.");
+        return;
+      }
     } else {
       if (onGuestSubmit) onGuestSubmit(exam.id, answers); // 비회원: 익명 집계만
     }
