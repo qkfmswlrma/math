@@ -520,11 +520,37 @@ function Account({ auth, onChangePassword, onLogout }) {
 
 /* ===================== 내 시험 기록 ===================== */
 function MyRecords({ student, exams, subs }) {
+  const [open, setOpen] = useState(null);
   const mine = subs
     .filter((s) => s.student === student)
     .map((s) => ({ sub: s, exam: exams.find((e) => e.id === s.examId) }))
     .filter((r) => r.exam)
     .sort((a, b) => (b.sub.submittedAt || 0) - (a.sub.submittedAt || 0));
+
+  if (open) {
+    const { sub, exam } = open;
+    const score = totalScore(exam, sub);
+    const max = maxScore(exam);
+    const ratio = max ? score / max : 0;
+    const tone = ratio >= 0.8 ? "good" : ratio >= 0.5 ? "mid" : "low";
+    return (
+      <div className="mr-col">
+        <button className="mr-btn-text" onClick={() => setOpen(null)}>← 내 시험 기록</button>
+        <section className="mr-card" style={{ textAlign: "center", padding: "28px 20px" }}>
+          <div className="mr-card-tag" style={{ marginBottom: "10px" }}>{exam.title}</div>
+          <div className={"mr-record-score " + tone} style={{ fontSize: "40px" }}>
+            {score}
+            <span className="mr-record-max"> / {max}</span>
+          </div>
+          <div className="mr-record-meta" style={{ marginTop: "10px" }}>{fmtDate(sub.submittedAt)}</div>
+        </section>
+        <div className="mr-list-top">
+          <span className="mr-list-title">채점 결과</span>
+        </div>
+        <ReviewList exam={exam} sub={sub} />
+      </div>
+    );
+  }
 
   return (
     <div className="mr-col">
@@ -541,16 +567,16 @@ function MyRecords({ student, exams, subs }) {
             const ratio = max ? score / max : 0;
             const tone = ratio >= 0.8 ? "good" : ratio >= 0.5 ? "mid" : "low";
             return (
-              <div className="mr-record" key={sub.id} style={{ animationDelay: `${i * 30}ms` }}>
+              <button className="mr-record mr-record-btn" key={sub.id} style={{ animationDelay: `${i * 30}ms` }} onClick={() => setOpen({ sub, exam })}>
                 <div className="mr-record-info">
                   <div className="mr-record-title">{exam.title}</div>
-                  <div className="mr-record-meta">{fmtDate(sub.submittedAt)}</div>
+                  <div className="mr-record-meta">{fmtDate(sub.submittedAt)} · 채점 결과 보기</div>
                 </div>
                 <div className={"mr-record-score " + tone}>
                   {score}
                   <span className="mr-record-max"> / {max}</span>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -790,6 +816,8 @@ function AuthModal({ onClose, onLogin, onSignup }) {
   const [id, setId] = useState("");
   const [pw, setPw] = useState("");
   const [kakao, setKakao] = useState("");
+  const [agree, setAgree] = useState(false);
+  const [showPolicy, setShowPolicy] = useState(false);
 
   const doLogin = async () => {
     const { error } = await onLogin(id, pw);
@@ -797,6 +825,10 @@ function AuthModal({ onClose, onLogin, onSignup }) {
   };
 
   const doSignup = async () => {
+    if (!agree) {
+      alert("개인정보 수집·이용에 동의해주세요.");
+      return;
+    }
     const { error } = await onSignup(id, pw, kakao);
     if (error) alert(error);
   };
@@ -833,6 +865,16 @@ function AuthModal({ onClose, onLogin, onSignup }) {
           />
         )}
 
+        {mode === "signup" && (
+          <label className="mr-consent">
+            <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
+            <span>
+              <button type="button" className="mr-consent-link" onClick={() => setShowPolicy(true)}>개인정보 처리방침</button>
+              에 동의하며 개인정보 수집·이용에 동의합니다. (필수)
+            </span>
+          </label>
+        )}
+
         <button
           className="mr-btn mr-modal-submit"
           onClick={mode === "login" ? doLogin : doSignup}
@@ -854,6 +896,8 @@ function AuthModal({ onClose, onLogin, onSignup }) {
           )}
         </div>
       </div>
+
+      {showPolicy && <PolicyModal onClose={() => setShowPolicy(false)} />}
     </div>
   );
 }
@@ -1935,51 +1979,7 @@ function TakeExam({ exam, student, loggedIn, onGuestSubmit, onCancel, onSubmit }
           <span className="mr-list-title">채점 결과</span>
         </div>
 
-        {exam.questions.map((q, qi) => {
-          const correct = isQCorrect(q, sub);
-          const mine = sub.answers[q.id];
-          return (
-            <section className={"mr-card mr-take-q" + (correct ? "" : " wrong")} key={q.id}>
-              <div className="mr-grade-qtext">
-                <span className="mr-qnum">Q{qi + 1}</span>
-                <span className="mr-pts-tag">{q.points}점</span>
-                <span className={"mr-ox " + (correct ? "o" : "x")}>{correct ? "O 정답" : "X 오답"}</span>
-              </div>
-              {q.image && <img className="mr-q-img" src={q.image} alt={"문제 " + (qi + 1)} />}
-              {q.text && <div className="mr-q-cap">{q.text}</div>}
-              {q.type === "mc" ? (
-                <div className="mr-take-options">
-                  {q.options.map((opt, oi) => {
-                    const isAns = oi === q.answer;
-                    const isMine = mine === oi;
-                    let cls = "mr-take-opt review";
-                    if (isAns) cls += " ans";
-                    if (isMine && !isAns) cls += " mychoice";
-                    return (
-                      <div key={oi} className={cls}>
-                        <span className="mr-opt-label">{String.fromCharCode(9311 + oi + 1)}</span>
-                        {opt}
-                        {isAns && <span className="mr-opt-flag ans">정답</span>}
-                        {isMine && !isAns && <span className="mr-opt-flag mine">내 답</span>}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="mr-short-review">
-                  <div className="mr-sr-row">
-                    <span className="mr-sr-k">내 답</span>
-                    <span className={"mr-sr-v " + (correct ? "ok" : "no")}>{(mine && String(mine).trim()) || "(미작성)"}</span>
-                  </div>
-                  <div className="mr-sr-row">
-                    <span className="mr-sr-k">정답</span>
-                    <span className="mr-sr-v ans">{q.accept || "—"}</span>
-                  </div>
-                </div>
-              )}
-            </section>
-          );
-        })}
+        <ReviewList exam={exam} sub={sub} />
 
         <div className="mr-row-end">
           <button className="mr-btn" onClick={onCancel}>목록으로</button>
@@ -2058,70 +2058,177 @@ function Empty({ text }) {
   return <div className="mr-empty">{text}</div>;
 }
 
+// 채점 리뷰(문항별 정오·내 답·정답) — 응시 직후 / 내 시험 기록에서 공용 사용
+function ReviewList({ exam, sub }) {
+  return (
+    <>
+      {exam.questions.map((q, qi) => {
+        const correct = isQCorrect(q, sub);
+        const mine = sub.answers[q.id];
+        return (
+          <section className={"mr-card mr-take-q" + (correct ? "" : " wrong")} key={q.id}>
+            <div className="mr-grade-qtext">
+              <span className="mr-qnum">Q{qi + 1}</span>
+              <span className="mr-pts-tag">{q.points}점</span>
+              <span className={"mr-ox " + (correct ? "o" : "x")}>{correct ? "O 정답" : "X 오답"}</span>
+            </div>
+            {q.image && <img className="mr-q-img" src={q.image} alt={"문제 " + (qi + 1)} />}
+            {q.text && <div className="mr-q-cap">{q.text}</div>}
+            {q.type === "mc" ? (
+              <div className="mr-take-options">
+                {q.options.map((opt, oi) => {
+                  const isAns = oi === q.answer;
+                  const isMine = mine === oi;
+                  let cls = "mr-take-opt review";
+                  if (isAns) cls += " ans";
+                  if (isMine && !isAns) cls += " mychoice";
+                  return (
+                    <div key={oi} className={cls}>
+                      <span className="mr-opt-label">{String.fromCharCode(9311 + oi + 1)}</span>
+                      {opt}
+                      {isAns && <span className="mr-opt-flag ans">정답</span>}
+                      {isMine && !isAns && <span className="mr-opt-flag mine">내 답</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="mr-short-review">
+                <div className="mr-sr-row">
+                  <span className="mr-sr-k">내 답</span>
+                  <span className={"mr-sr-v " + (correct ? "ok" : "no")}>{(mine && String(mine).trim()) || "(미작성)"}</span>
+                </div>
+                <div className="mr-sr-row">
+                  <span className="mr-sr-k">정답</span>
+                  <span className="mr-sr-v ans">{q.accept || "—"}</span>
+                </div>
+              </div>
+            )}
+          </section>
+        );
+      })}
+    </>
+  );
+}
+
+function PrivacyBody() {
+  return (
+    <section className="mr-card">
+      <h1 className="mr-pp-title">개인정보 처리방침</h1>
+      <p className="mr-pp-intro">
+        <strong>수학질문방</strong>(이하 '서비스')은(는) 「개인정보 보호법」 제30조에 따라 정보주체의 개인정보를 보호하고 이와 관련한 고충을 신속하고 원활하게 처리할 수 있도록 하기 위하여 다음과 같이 개인정보 처리방침을 수립·공개합니다.
+      </p>
+
+      <h2 className="mr-pp-h2">1. 개인정보의 처리 목적</h2>
+      <p>서비스는 다음의 목적을 위하여 개인정보를 처리하며, 목적 이외의 용도로는 이용하지 않습니다. 이용 목적이 변경되는 경우에는 별도의 동의를 받는 등 필요한 조치를 이행합니다.</p>
+      <ul className="mr-pp-ul">
+        <li><strong>회원 가입 및 관리:</strong> 가입 의사 확인, 로그인 및 본인 식별, 부정이용 방지, 고지사항 전달</li>
+        <li><strong>서비스 제공:</strong> 수학 시험(레벨테스트/오늘의 문제) 응시, 답안 채점 및 점수 기록 관리, 칼럼 게시글 작성·관리, 관리자 기능(감사 로그) 수행</li>
+      </ul>
+
+      <h2 className="mr-pp-h2">2. 처리하는 개인정보의 항목</h2>
+      <table className="mr-pp-table">
+        <thead>
+          <tr><th>구분</th><th>수집 항목</th><th>목적 및 보유 기간</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>회원 필수</strong></td><td>아이디, 비밀번호(암호화하여 저장)</td><td>회원 식별 및 로그인 / 회원 탈퇴 시까지</td></tr>
+          <tr><td><strong>회원 선택</strong></td><td>카카오톡 방 닉네임</td><td>출제자·칼럼 작성자 이름 표시 / 회원 탈퇴 시까지</td></tr>
+          <tr><td><strong>이용 기록</strong></td><td>시험 응시 기록, 제출 답안, 채점 점수, 감사 로그</td><td>시험 결과 제공 및 보안 / 5년 후 파기</td></tr>
+        </tbody>
+      </table>
+      <p>※ 비밀번호는 원문을 보관하지 않으며, 복호화가 불가능한 방식으로 암호화하여 저장합니다.</p>
+
+      <div className="mr-pp-note">
+        <div className="mr-pp-note-tag">비회원 IP 주소 처리 안내</div>
+        <p>비회원의 중복 제출 및 정답률 조작을 방지하기 위해 시스템적으로 방문자의 IP 주소를 참조합니다. 다만 수집 즉시 암호화 해시 함수(MD5)로 변환해 중복 체크 용도로만 사용하며, 원본 IP 주소는 데이터베이스에 저장되지 않아 개인을 식별할 수 없습니다.</p>
+      </div>
+
+      <h2 className="mr-pp-h2">3. 개인정보의 보유 및 이용 기간</h2>
+      <p>회원 정보는 원칙적으로 회원 탈퇴 시 지체 없이 파기합니다. 다만 시험 응시·채점 등 이용 기록은 서비스 운영 및 분쟁 대응을 위해 수집일로부터 5년간 보관 후 파기합니다.</p>
+
+      <h2 className="mr-pp-h2">4. 만 14세 미만 아동의 개인정보</h2>
+      <p>서비스는 만 14세 미만 아동의 개인정보를 수집할 경우 법정대리인의 동의를 받아 처리합니다. 회원가입 시 만 14세 미만 아동은 법정대리인의 동의 후 가입해야 하며, 법정대리인은 아동의 개인정보에 대한 열람·정정·삭제·처리정지를 요구할 수 있습니다.</p>
+
+      <h2 className="mr-pp-h2">5. 개인정보의 처리위탁 및 국외 이전</h2>
+      <p>서비스는 안정적인 데이터 관리를 위해 아래와 같이 개인정보 처리를 위탁하며, 그 과정에서 데이터가 국외 서버에 저장·이전됩니다.</p>
+      <table className="mr-pp-table">
+        <thead>
+          <tr><th>수탁업체</th><th>위탁 업무 / 이전 국가</th><th>이전 일시·방법 / 보유 기간</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Supabase, Inc.</strong> (미국)</td><td>클라우드 데이터베이스 인프라 제공 및 데이터 보관</td><td>서비스 이용 시 네트워크를 통해 수시 전송 / 회원 탈퇴 또는 위탁 계약 종료 시까지</td></tr>
+        </tbody>
+      </table>
+
+      <h2 className="mr-pp-h2">6. 정보주체의 권리·의무 및 행사 방법</h2>
+      <p>이용자(법정대리인 포함)는 언제든지 본인의 개인정보에 대해 아래 권리를 행사할 수 있습니다.</p>
+      <ul className="mr-pp-ul">
+        <li>개인정보 열람 요구</li>
+        <li>오류 등이 있을 경우 정정 요구</li>
+        <li>삭제 요구</li>
+        <li>처리정지 요구</li>
+      </ul>
+      <p>권리 행사는 아래 개인정보 보호책임자에게 카카오톡으로 요청할 수 있으며, 서비스는 지체 없이 조치합니다.</p>
+
+      <h2 className="mr-pp-h2">7. 개인정보의 안전성 확보 조치</h2>
+      <ul className="mr-pp-ul">
+        <li>비밀번호 암호화 저장 및 전송 구간 암호화(HTTPS)</li>
+        <li>접근 권한 관리: 데이터 조회·수정 권한을 관리자에 한해 부여(행 수준 보안, RLS)</li>
+        <li>비회원 IP는 해시 처리하여 원문 미보관</li>
+      </ul>
+
+      <h2 className="mr-pp-h2">8. 개인정보의 파기 절차 및 방법</h2>
+      <ul className="mr-pp-ul">
+        <li><strong>절차:</strong> 파기 사유가 발생한 개인정보(회원탈퇴 등)를 선정하고, 관리자의 승인을 받아 안전하게 파기합니다.</li>
+        <li><strong>방법:</strong> 데이터베이스에 저장된 레코드는 복구·재생할 수 없는 기술적 방법(DB 삭제 명령)으로 완전히 삭제합니다.</li>
+      </ul>
+
+      <h2 className="mr-pp-h2">9. 개인정보 보호책임자</h2>
+      <ul className="mr-pp-ul">
+        <li><strong>개인정보 보호책임자:</strong> 의비간</li>
+        <li><strong>연락처(카카오톡):</strong> <a href="https://open.kakao.com/o/sOTbsdyi" target="_blank" rel="noopener noreferrer">수학질문방 카카오톡 문의하기</a></li>
+      </ul>
+
+      <h2 className="mr-pp-h2">10. 권익침해 구제 방법</h2>
+      <p>개인정보 침해로 인한 상담·신고가 필요하면 아래 기관에 문의할 수 있습니다.</p>
+      <ul className="mr-pp-ul">
+        <li>개인정보분쟁조정위원회: 1833-6972 (www.kopico.go.kr)</li>
+        <li>개인정보침해신고센터: 118 (privacy.kisa.or.kr)</li>
+        <li>대검찰청 사이버수사과: 1301</li>
+        <li>경찰청 사이버수사국: 182</li>
+      </ul>
+
+      <h2 className="mr-pp-h2">11. 시행일자</h2>
+      <p>본 방침은 시행일로부터 적용되며, 변경 시 시행 7일 전부터 공지사항을 통해 안내합니다.</p>
+      <ul className="mr-pp-ul">
+        <li><strong>공고 및 시행일자:</strong> 2026년 6월 1일</li>
+      </ul>
+    </section>
+  );
+}
+
 function Privacy({ onBack }) {
   return (
     <div className="mr-col mr-pp">
       <button className="mr-btn-text" onClick={onBack}>← 홈</button>
-      <section className="mr-card">
-        <h1 className="mr-pp-title">개인정보 처리방침</h1>
-        <p className="mr-pp-intro">
-          <strong>수학질문방</strong>(이하 '서비스')은(는) 「개인정보 보호법」 제30조에 따라 정보주체의 개인정보를 보호하고 이와 관련한 고충을 신속하고 원활하게 처리할 수 있도록 하기 위하여 다음과 같이 개인정보 처리방침을 수립·공개합니다.
-        </p>
+      <PrivacyBody />
+    </div>
+  );
+}
 
-        <h2 className="mr-pp-h2">1. 개인정보의 처리 목적</h2>
-        <p>서비스는 다음의 목적을 위하여 개인정보를 처리합니다. 처리하고 있는 개인정보는 다음의 목적 이외의 용도로는 이용되지 않으며, 이용 목적이 변경되는 경우에는 별도의 동의를 받는 등 필요한 조치를 이행할 예정입니다.</p>
-        <ul className="mr-pp-ul">
-          <li><strong>회원 가입 및 관리:</strong> 회원 가입 의사 확인, 로그인 및 본인 식별, 부정이용 방지, 고지사항 전달</li>
-          <li><strong>서비스 제공:</strong> 수학 시험(레벨테스트/오늘의 문제) 응시, 답안 채점 및 점수 기록 관리, 칼럼 게시글 작성 및 관리, 관리자 기능(감사 로그 기록) 수행</li>
-        </ul>
-
-        <h2 className="mr-pp-h2">2. 처리하는 개인정보의 항목</h2>
-        <table className="mr-pp-table">
-          <thead>
-            <tr><th>구분</th><th>수집 항목</th><th>목적 및 보유 기간</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><strong>회원 필수</strong></td><td>아이디(Username), 비밀번호</td><td>회원 식별 및 로그인 / 회원 탈퇴 시까지</td></tr>
-            <tr><td><strong>회원 선택</strong></td><td>카카오톡 방 닉네임</td><td>출제자 및 칼럼 작성자 이름 표시 / 회원 탈퇴 시까지</td></tr>
-            <tr><td><strong>서비스 이용 기록</strong></td><td>시험 응시 기록, 제출 답안, 채점 점수, 감사 로그(Audit Log)</td><td>시험 결과 제공 및 서비스 보안 / 회원 탈퇴 또는 보유기간(5년) 후 파기</td></tr>
-          </tbody>
-        </table>
-
-        <div className="mr-pp-note">
-          <div className="mr-pp-note-tag">비회원 IP 주소 처리 안내</div>
-          <p>비회원의 중복 제출 및 정답률 조작을 방지하기 위해 시스템적으로 방문자의 IP 주소를 참조합니다. 다만 수집 즉시 암호화 해시 함수(MD5)로 변환해 중복 체크 용도로만 사용하며, 원본 IP 주소는 데이터베이스에 저장되지 않아 개인을 식별할 수 없습니다.</p>
+function PolicyModal({ onClose }) {
+  return (
+    <div className="mr-modal-overlay" onClick={onClose} style={{ zIndex: 50 }}>
+      <div className="mr-policy-modal mr-pp" onClick={(e) => e.stopPropagation()}>
+        <div className="mr-policy-head">
+          <span className="mr-modal-title">개인정보 처리방침</span>
+          <button className="mr-modal-x" onClick={onClose}>×</button>
         </div>
-
-        <h2 className="mr-pp-h2">3. 개인정보의 처리 위탁 (해외 이전)</h2>
-        <p>서비스는 안정적인 데이터 관리를 위하여 다음과 같이 개인정보 처리 업무를 외부에 위탁하고 있습니다.</p>
-        <table className="mr-pp-table">
-          <thead>
-            <tr><th>수탁업체</th><th>위탁 업무 내용</th><th>보유 및 이용 기간</th></tr>
-          </thead>
-          <tbody>
-            <tr><td><strong>Supabase, Inc.</strong></td><td>클라우드 데이터베이스 인프라 제공 및 데이터 보관</td><td>회원 탈퇴 시 또는 위탁 계약 종료 시까지</td></tr>
-          </tbody>
-        </table>
-
-        <h2 className="mr-pp-h2">4. 개인정보의 파기절차 및 방법</h2>
-        <ul className="mr-pp-ul">
-          <li><strong>파기절차:</strong> 파기 사유가 발생한 개인정보(회원탈퇴 등)를 선정하고, 관리자의 승인을 받아 안전하게 파기합니다.</li>
-          <li><strong>파기방법:</strong> 데이터베이스에 저장된 레코드는 복구·재생할 수 없는 기술적 방법(DB 삭제 명령)으로 완전히 삭제합니다.</li>
-        </ul>
-
-        <h2 className="mr-pp-h2">5. 개인정보 보호책임자</h2>
-        <p>서비스는 개인정보 처리에 관한 업무를 총괄해서 책임지고, 이용자의 고충처리를 위하여 아래와 같이 개인정보 보호책임자를 지정하고 있습니다.</p>
-        <ul className="mr-pp-ul">
-          <li><strong>개인정보 보호책임자:</strong> 의비간</li>
-          <li><strong>연락처(카카오톡):</strong> <a href="https://open.kakao.com/o/sOTbsdyi" target="_blank" rel="noopener noreferrer">수학질문방 카카오톡 문의하기</a></li>
-        </ul>
-
-        <h2 className="mr-pp-h2">6. 변경 동의 및 시행일자</h2>
-        <p>본 방침은 시행일로부터 적용되며, 변경사항이 있을 경우 시행 7일 전부터 공지사항을 통해 안내합니다.</p>
-        <ul className="mr-pp-ul">
-          <li><strong>공고 및 시행일자:</strong> 2026년 6월 1일</li>
-        </ul>
-      </section>
+        <div className="mr-policy-scroll">
+          <PrivacyBody />
+        </div>
+      </div>
     </div>
   );
 }
@@ -2267,6 +2374,8 @@ const CSS = `
 .mr-detail-actions{display:flex; gap:8px; margin-top:14px}
 .mr-record{display:flex; align-items:center; gap:12px; padding:15px 18px; border-bottom:1px solid var(--line-soft); animation:rise .35s cubic-bezier(.2,.7,.3,1) both}
 .mr-record:last-child{border-bottom:0}
+.mr-record-btn{width:100%; text-align:left; background:none; border:0; border-bottom:1px solid var(--line-soft); font-family:inherit; cursor:pointer; transition:background .12s}
+.mr-record-btn:hover{background:var(--bg)}
 .mr-record-info{flex:1; min-width:0}
 .mr-record-title{font-size:15px; font-weight:700; color:var(--t1); letter-spacing:-0.3px}
 .mr-record-meta{font-size:12.5px; color:var(--t3); font-weight:600; margin-top:3px}
@@ -2613,6 +2722,13 @@ const CSS = `
 .mr-pp-note-tag{display:inline-block; font-size:11px; font-weight:800; color:var(--blue); background:var(--blue-bg); padding:4px 10px; border-radius:8px; margin-bottom:9px; letter-spacing:-0.2px}
 .mr-pp-note p{font-size:13px; color:var(--t2); line-height:1.7; margin:0}
 .mr-pp a{color:var(--blue); font-weight:700; text-decoration:underline}
+.mr-consent{display:flex; align-items:flex-start; gap:9px; margin:4px 2px 2px; font-size:13px; color:var(--t2); line-height:1.5; cursor:pointer}
+.mr-consent input{margin-top:2px; flex:none; width:16px; height:16px; accent-color:var(--blue)}
+.mr-consent-link{background:none; border:0; padding:0; font:inherit; color:var(--blue); font-weight:700; text-decoration:underline; cursor:pointer}
+.mr-policy-modal{background:var(--card); border-radius:20px; width:100%; max-width:560px; max-height:84vh; display:flex; flex-direction:column; overflow:hidden}
+.mr-policy-head{display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-bottom:1px solid var(--line-soft); flex:none}
+.mr-policy-scroll{overflow-y:auto; padding:16px}
+.mr-policy-scroll .mr-card{box-shadow:none; padding:0}
 `;
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
