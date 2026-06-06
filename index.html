@@ -299,12 +299,14 @@ function App() {
   const onAddExam = async (exam) => {
     const id = await currentId();
     const author = auth ? ((auth.kakaoId || "").trim() || auth.username || "") : "";
-    await sb.from("exams").insert({ title: exam.title, questions: exam.questions, author_id: id, author });
+    const { error } = await sb.from("exams").insert({ title: exam.title, questions: exam.questions, author_id: id, author });
+    if (error) { alert("시험 저장에 실패했어요: " + error.message); return; }
     await logAction("시험 출제", exam.title);
     await refresh();
   };
   const onEditExam = async (id, exam) => {
-    await sb.from("exams").update({ title: exam.title, questions: exam.questions }).eq("id", id);
+    const { error } = await sb.from("exams").update({ title: exam.title, questions: exam.questions }).eq("id", id);
+    if (error) { alert("시험 수정에 실패했어요: " + error.message); return; }
     await logAction("시험 수정", exam.title);
     await refresh();
   };
