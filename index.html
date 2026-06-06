@@ -288,6 +288,16 @@ function App() {
     await refresh();
     return {};
   };
+  const onDeleteMe = async (pw) => {
+    if (!auth) return { error: "로그인이 필요해요." };
+    const check = await sb.auth.signInWithPassword({ email: emailOf(auth.username), password: padPw(pw) });
+    if (check.error) return { error: "비밀번호가 올바르지 않아요." };
+    const { error } = await sb.rpc("delete_my_account");
+    if (error) return { error: error.message };
+    await sb.auth.signOut();
+    setAuth(null);
+    return {};
+  };
 
   /* ---- 데이터 ---- */
   const logAction = async (action, target) => {
@@ -304,16 +314,18 @@ function App() {
   };
   const onAddColumn = async (post) => {
     const id = await currentId();
-    const { data } = await sb.from("columns")
+    const { data, error } = await sb.from("columns")
       .insert({ title: post.title, body: post.body, author: post.author, author_id: id, is_draft: !!post.isDraft, category: post.category || "elem" })
       .select().maybeSingle();
+    if (error) { alert("칼럼 저장에 실패했어요: " + error.message); return null; }
     await logAction(post.isDraft ? "칼럼 임시저장" : "칼럼 작성", post.title);
     await refresh();
     return data ? data.id : null;
   };
   const onDeleteColumn = async (id) => {
     const n = notices.find((x) => x.id === id);
-    await sb.from("columns").delete().eq("id", id);
+    const { error } = await sb.from("columns").delete().eq("id", id);
+    if (error) { alert("칼럼 삭제에 실패했어요: " + error.message); return; }
     await logAction("칼럼 삭제", n ? n.title : id);
     await refresh();
   };
@@ -321,12 +333,15 @@ function App() {
     const patch = { title, body };
     if (typeof isDraft === "boolean") patch.is_draft = isDraft;
     if (category) patch.category = category;
-    await sb.from("columns").update(patch).eq("id", id);
+    const { error } = await sb.from("columns").update(patch).eq("id", id);
+    if (error) { alert("칼럼 수정에 실패했어요: " + error.message); return; }
     await logAction(isDraft ? "칼럼 임시저장" : "칼럼 수정", title);
     await refresh();
   };
   const onReorderColumns = async (ids) => {
-    await Promise.all(ids.map((cid, i) => sb.from("columns").update({ sort_order: i + 1 }).eq("id", cid)));
+    const results = await Promise.all(ids.map((cid, i) => sb.from("columns").update({ sort_order: i + 1 }).eq("id", cid)));
+    const failed = results.find((r) => r && r.error);
+    if (failed) { alert("순서 변경에 실패했어요: " + failed.error.message); await refresh(); return; }
     await logAction("칼럼 순서변경", "");
     await refresh();
   };
@@ -346,12 +361,14 @@ function App() {
   };
   const onDeleteExam = async (id) => {
     const ex = exams.find((e) => e.id === id);
-    await sb.from("exams").delete().eq("id", id);
+    const { error } = await sb.from("exams").delete().eq("id", id);
+    if (error) { alert("시험 삭제에 실패했어요: " + error.message); return; }
     await logAction("시험 삭제", ex ? ex.title : id);
     await refresh();
   };
   const onGradeSub = async (sub) => {
-    await sb.from("submissions").update({ manual_scores: sub.manualScores || {}, graded: true }).eq("id", sub.id);
+    const { error } = await sb.from("submissions").update({ manual_scores: sub.manualScores || {}, graded: true }).eq("id", sub.id);
+    if (error) { alert("채점 저장에 실패했어요: " + error.message); return; }
     await logAction("채점 수정", sub.student);
     await refresh();
   };
@@ -374,7 +391,8 @@ function App() {
     }
   };
   const onToggleAdmin = async (username, next) => {
-    await sb.from("profiles").update({ is_admin: next }).eq("username", username);
+    const { error } = await sb.from("profiles").update({ is_admin: next }).eq("username", username);
+    if (error) { alert("권한 변경에 실패했어요: " + error.message); return; }
     await logAction(next ? "관리자 지정" : "관리자 해제", username);
     await refresh();
   };
@@ -443,7 +461,7 @@ function App() {
             homeView
           )
         ) : tab === "account" ? (
-          loggedIn ? <Account auth={auth} onChangePassword={onChangePassword} onUpdateKakao={onUpdateKakao} onLogout={onLogout} /> : homeView
+          loggedIn ? <Account auth={auth} onChangePassword={onChangePassword} onUpdateKakao={onUpdateKakao} onDeleteMe={onDeleteMe} onLogout={onLogout} /> : homeView
         ) : tab === "notices" ? (
           <Notices role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} notices={notices} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} />
         ) : tab === "privacy" ? (
@@ -493,12 +511,14 @@ function PersonIcon() {
 }
 
 /* ===================== 회원정보 ===================== */
-function Account({ auth, onChangePassword, onUpdateKakao, onLogout }) {
+function Account({ auth, onChangePassword, onUpdateKakao, onDeleteMe, onLogout }) {
   const [curPw, setCurPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [done, setDone] = useState(false);
   const [kakao, setKakao] = useState(auth.kakaoId || "");
   const [kakaoDone, setKakaoDone] = useState(false);
+  const [withdraw, setWithdraw] = useState(false);
+  const [delPw, setDelPw] = useState("");
 
   const changePw = async () => {
     if (!curPw || !newPw) return alert("현재 비밀번호와 새 비밀번호를 입력하세요.");
@@ -513,6 +533,14 @@ function Account({ auth, onChangePassword, onUpdateKakao, onLogout }) {
     const { error } = await onUpdateKakao(kakao.trim());
     if (error) return alert(error);
     setKakaoDone(true);
+  };
+
+  const deleteMe = async () => {
+    if (!delPw) return alert("비밀번호를 입력하세요.");
+    if (!confirm("정말 탈퇴할까요? 계정과 기록이 삭제되며 되돌릴 수 없어요.")) return;
+    const { error } = await onDeleteMe(delPw);
+    if (error) return alert(error);
+    alert("탈퇴가 완료됐어요. 그동안 이용해주셔서 감사합니다.");
   };
 
   return (
@@ -533,7 +561,7 @@ function Account({ auth, onChangePassword, onUpdateKakao, onLogout }) {
         <div className="mr-cat-label">채팅방 닉네임</div>
         <input
           className="mr-input"
-          placeholder="채팅방 닉네임"
+          placeholder="채팅방에서 쓰는 이름"
           value={kakao}
           onChange={(e) => { setKakao(e.target.value); setKakaoDone(false); }}
         />
@@ -576,6 +604,32 @@ function Account({ auth, onChangePassword, onUpdateKakao, onLogout }) {
       <button className="mr-logout-full" onClick={onLogout}>
         로그아웃
       </button>
+
+      {!withdraw ? (
+        <button className="mr-withdraw-link" onClick={() => setWithdraw(true)}>
+          회원 탈퇴
+        </button>
+      ) : (
+        <section className="mr-card mr-withdraw-card">
+          <div className="mr-card-tag">회원 탈퇴</div>
+          <p className="mr-withdraw-warn">탈퇴하면 계정과 시험 기록이 삭제되며 되돌릴 수 없어요. 계속하려면 비밀번호를 입력하세요.</p>
+          <input
+            className="mr-input"
+            type="password"
+            placeholder="비밀번호 확인"
+            value={delPw}
+            onChange={(e) => setDelPw(e.target.value)}
+          />
+          <div className="mr-row-end" style={{ marginTop: "14px", gap: "8px" }}>
+            <button className="mr-btn-ghost" onClick={() => { setWithdraw(false); setDelPw(""); }}>
+              취소
+            </button>
+            <button className="mr-btn mr-btn-danger" onClick={deleteMe}>
+              탈퇴하기
+            </button>
+          </div>
+        </section>
+      )}
     </div>
   );
 }
@@ -2440,6 +2494,11 @@ const CSS = `
   box-shadow:0 1px 2px rgba(0,0,0,.03); transition:background .15s;
 }
 .mr-logout-full:hover{background:var(--red-bg)}
+.mr-withdraw-link{display:block; margin:6px auto 0; background:none; border:0; color:var(--t3); font-family:inherit; font-size:13px; font-weight:600; text-decoration:underline; cursor:pointer; padding:8px}
+.mr-withdraw-link:hover{color:var(--red)}
+.mr-withdraw-warn{font-size:13px; color:var(--t2); line-height:1.6; margin:4px 0 12px}
+.mr-btn-danger{background:var(--red)}
+.mr-btn-danger:hover{filter:brightness(.95)}
 
 /* 관리자 페이지 */
 .mr-subtabs{display:flex; gap:6px; background:var(--bg); border-radius:13px; padding:4px}
