@@ -98,6 +98,12 @@ function isQCorrect(q, sub) {
   if (ov !== undefined && ov !== null && ov !== "") return Number(ov) >= (Number(q.points) || 0) && (Number(q.points) || 0) > 0;
   return isShortCorrect(q, sub.answers[q.id]);
 }
+// 표시용 이름: 현재 회원 목록에 없으면 '탈퇴한 회원 (원래아이디)'
+function studentName(name, users) {
+  if (!name) return "익명";
+  if (users && users.some((u) => u.username === name)) return name;
+  return "탈퇴한 회원 (" + name + ")";
+}
 // 정답률 구간별 색
 function rateColor(rate) {
   if (rate === null || rate === undefined) return "#8B95A1"; // 데이터 없음(회색)
@@ -427,6 +433,7 @@ function App() {
             role={role}
             student={student}
             myId={auth ? auth.id : null}
+            users={users}
             loggedIn={loggedIn}
             requireLogin={requireLogin}
             exams={exams}
@@ -1367,7 +1374,7 @@ function Exams(props) {
 }
 
 /* ---------- 관리자: 시험 목록 / 출제 / 채점 / (남의 시험) 응시 ---------- */
-function ExamsAdmin({ exams, onAddExam, onEditExam, onDeleteExam, subs, onGradeSub, onAddSub, myId, student, loggedIn, guestSubs, examType, onBackToChooser }) {
+function ExamsAdmin({ exams, onAddExam, onEditExam, onDeleteExam, subs, onGradeSub, onAddSub, myId, student, loggedIn, guestSubs, examType, onBackToChooser, users }) {
   const [mode, setMode] = useState("list");
   const [activeExam, setActiveExam] = useState(null);
   const [taking, setTaking] = useState(null);
@@ -1428,6 +1435,7 @@ function ExamsAdmin({ exams, onAddExam, onEditExam, onDeleteExam, subs, onGradeS
         exam={activeExam}
         subs={subs.filter((s) => s.examId === activeExam.id)}
         guestSubs={(guestSubs || []).filter((g) => g.exam_id === activeExam.id)}
+        users={users}
         onBack={() => setMode("list")}
         onSaveGrade={async (updated) => {
           await onGradeSub(updated);
@@ -1671,7 +1679,7 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
 }
 
 /* ---------- 관리자: 채점 패널 ---------- */
-function GradePanel({ exam, subs, guestSubs, onBack, onSaveGrade }) {
+function GradePanel({ exam, subs, guestSubs, users, onBack, onSaveGrade }) {
   const [openId, setOpenId] = useState(null);
   const guests = guestSubs || [];
 
@@ -1719,6 +1727,7 @@ function GradePanel({ exam, subs, guestSubs, onBack, onSaveGrade }) {
             key={s.id}
             exam={exam}
             sub={s}
+            users={users}
             open={openId === s.id}
             onToggle={() => setOpenId(openId === s.id ? null : s.id)}
             onSaveGrade={onSaveGrade}
@@ -1729,7 +1738,7 @@ function GradePanel({ exam, subs, guestSubs, onBack, onSaveGrade }) {
   );
 }
 
-function SubmissionRow({ exam, sub, open, onToggle, onSaveGrade }) {
+function SubmissionRow({ exam, sub, users, open, onToggle, onSaveGrade }) {
   const [manual, setManual] = useState(sub.manualScores || {});
   useEffect(() => setManual(sub.manualScores || {}), [sub]);
 
@@ -1754,7 +1763,7 @@ function SubmissionRow({ exam, sub, open, onToggle, onSaveGrade }) {
         <div className="mr-sub-name">
           <span className="mr-avatar">{(sub.student || "?")[0]}</span>
           <div>
-            <div className="mr-strong">{sub.student || "익명"}</div>
+            <div className="mr-strong">{studentName(sub.student, users)}</div>
             <div className="mr-date">{fmtDate(sub.submittedAt)}</div>
           </div>
         </div>
