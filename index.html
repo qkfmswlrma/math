@@ -339,10 +339,10 @@ function App() {
     });
     await refresh();
   };
-  // 비회원: 개인정보 없이 익명 집계만 저장 (참여수·오답률 계산용)
+  // 비회원: IP 기준 24시간 중복 방지 함수로 보냄 (개인정보 없이 익명 집계)
   const onGuestSubmit = async (examId, answers) => {
     try {
-      await sb.from("guest_submissions").insert({ exam_id: examId, answers });
+      await sb.rpc("submit_guest_attempt", { p_exam_id: examId, p_answers: answers });
     } catch (e) {
       console.warn("비회원 집계 실패:", e);
     }
