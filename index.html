@@ -109,6 +109,7 @@ function App() {
   const [exams, setExams] = useState([]);
   const [subs, setSubs] = useState([]);
   const [auditLog, setAuditLog] = useState([]);
+  const [guestSubs, setGuestSubs] = useState([]);
 
   const role = auth && auth.isAdmin ? "admin" : "student";
   const student = auth ? auth.username : "";
@@ -152,6 +153,13 @@ function App() {
       setAuditLog(l.data || []);
     } catch (err) {
       setAuditLog([]);
+    }
+    // 비회원 익명 집계(관리자만 읽힘)
+    try {
+      const g = await sb.from("guest_submissions").select("*").order("created_at", { ascending: false }).limit(5000);
+      setGuestSubs(g.data || []);
+    } catch (err) {
+      setGuestSubs([]);
     }
   }, []);
 
@@ -295,6 +303,11 @@ function App() {
     await logAction("시험 출제", exam.title);
     await refresh();
   };
+  const onEditExam = async (id, exam) => {
+    await sb.from("exams").update({ title: exam.title, questions: exam.questions }).eq("id", id);
+    await logAction("시험 수정", exam.title);
+    await refresh();
+  };
   const onGradeSub = async (sub) => {
     await sb.from("submissions").update({ manual_scores: sub.manualScores || {}, graded: true }).eq("id", sub.id);
     await logAction("채점 수정", sub.student);
@@ -307,6 +320,14 @@ function App() {
       answers: sub.answers, manual_scores: sub.manualScores || {}, graded: sub.graded,
     });
     await refresh();
+  };
+  // 비회원: 개인정보 없이 익명 집계만 저장 (참여수·오답률 계산용)
+  const onGuestSubmit = async (examId, answers) => {
+    try {
+      await sb.from("guest_submissions").insert({ exam_id: examId, answers });
+    } catch (e) {
+      console.warn("비회원 집계 실패:", e);
+    }
   };
   const onToggleAdmin = async (username, next) => {
     await sb.from("profiles").update({ is_admin: next }).eq("username", username);
@@ -379,8 +400,11 @@ function App() {
             exams={exams}
             subs={subs}
             onAddExam={onAddExam}
+            onEditExam={onEditExam}
             onGradeSub={onGradeSub}
             onAddSub={onAddSub}
+            onGuestSubmit={onGuestSubmit}
+            guestSubs={guestSubs}
           />
         )}
       </main>
@@ -1227,7 +1251,7 @@ function Exams(props) {
 }
 
 /* ---------- 관리자: 시험 목록 / 출제 / 채점 / (남의 시험) 응시 ---------- */
-function ExamsAdmin({ exams, onAddExam, subs, onGradeSub, onAddSub, myId, student, loggedIn }) {
+function ExamsAdmin({ exams, onAddExam, onEditExam, subs, onGradeSub, onAddSub, myId, student, loggedIn, guestSubs }) {
   const [mode, setMode] = useState("list");
   const [activeExam, setActiveExam] = useState(null);
   const [taking, setTaking] = useState(null);
@@ -1235,6 +1259,10 @@ function ExamsAdmin({ exams, onAddExam, subs, onGradeSub, onAddSub, myId, studen
   const openGrade = (exam) => {
     setActiveExam(exam);
     setMode("grade");
+  };
+  const openEdit = (exam) => {
+    setActiveExam(exam);
+    setMode("edit");
   };
 
   if (taking)
@@ -1262,11 +1290,24 @@ function ExamsAdmin({ exams, onAddExam, subs, onGradeSub, onAddSub, myId, studen
       />
     );
 
+  if (mode === "edit" && activeExam)
+    return (
+      <ExamEditor
+        initial={activeExam}
+        onCancel={() => setMode("list")}
+        onSave={async (exam) => {
+          await onEditExam(activeExam.id, exam);
+          setMode("list");
+        }}
+      />
+    );
+
   if (mode === "grade" && activeExam)
     return (
       <GradePanel
         exam={activeExam}
         subs={subs.filter((s) => s.examId === activeExam.id)}
+        guestSubs={(guestSubs || []).filter((g) => g.exam_id === activeExam.id)}
         onBack={() => setMode("list")}
         onSaveGrade={async (updated) => {
           await onGradeSub(updated);
@@ -1288,6 +1329,7 @@ function ExamsAdmin({ exams, onAddExam, subs, onGradeSub, onAddSub, myId, studen
           const exSubs = subs.filter((s) => s.examId === ex.id);
           const pending = exSubs.filter((s) => !s.graded).length;
           const isMine = ex.authorId && myId && ex.authorId === myId;
+          const canEdit = isMine || !ex.authorId;
           const myTake = subs.find((s) => s.examId === ex.id && s.student === student && student);
           return (
             <article className="mr-card" key={ex.id} style={{ animationDelay: `${i * 40}ms` }}>
@@ -1317,9 +1359,16 @@ function ExamsAdmin({ exams, onAddExam, subs, onGradeSub, onAddSub, myId, studen
                     </button>
                   ))}
                 </div>
-                <button className="mr-btn-ghost" onClick={() => openGrade(ex)}>
-                  제출/채점 보기
-                </button>
+                <div className="mr-gap">
+                  {canEdit && (
+                    <button className="mr-btn-ghost" onClick={() => openEdit(ex)}>
+                      수정
+                    </button>
+                  )}
+                  <button className="mr-btn-ghost" onClick={() => openGrade(ex)}>
+                    제출/채점 보기
+                  </button>
+                </div>
               </div>
             </article>
           );
@@ -1329,14 +1378,17 @@ function ExamsAdmin({ exams, onAddExam, subs, onGradeSub, onAddSub, myId, studen
   );
 }
 
-/* ---------- 시험 출제 에디터 ---------- */
-function ExamEditor({ onCancel, onSave }) {
-  const [title, setTitle] = useState("");
-  const [questions, setQuestions] = useState([blankQ()]);
-
+/* ---------- 시험 출제/수정 에디터 ---------- */
+function ExamEditor({ initial, onCancel, onSave }) {
   function blankQ() {
     return { id: uid(), type: "mc", text: "", image: "", points: 10, options: ["", ""], answer: 0, accept: "" };
   }
+  const [title, setTitle] = useState(initial ? initial.title : "");
+  const [questions, setQuestions] = useState(
+    initial && initial.questions && initial.questions.length
+      ? initial.questions.map((q) => ({ options: ["", ""], accept: "", answer: 0, ...q }))
+      : [blankQ()]
+  );
   const update = (id, patch) => setQuestions((qs) => qs.map((q) => (q.id === id ? { ...q, ...patch } : q)));
   const addQ = () => setQuestions((qs) => [...qs, blankQ()]);
   const delQ = (id) => setQuestions((qs) => (qs.length > 1 ? qs.filter((q) => q.id !== id) : qs));
@@ -1368,9 +1420,7 @@ function ExamEditor({ onCancel, onSave }) {
         return alert("주관식 문항의 정답을 입력하세요. (자동 채점에 사용됩니다)");
     }
     onSave({
-      id: uid(),
       title: title.trim(),
-      createdAt: Date.now(),
       questions: questions.map((q) => ({ ...q, points: Number(q.points) || 0 })),
     });
   };
@@ -1378,7 +1428,7 @@ function ExamEditor({ onCancel, onSave }) {
   return (
     <div className="mr-col">
       <section className="mr-card mr-writer">
-        <div className="mr-card-tag">시험 출제</div>
+        <div className="mr-card-tag">{initial ? "시험 수정" : "시험 출제"}</div>
         <input
           className="mr-input"
           placeholder="시험 제목"
@@ -1476,7 +1526,7 @@ function ExamEditor({ onCancel, onSave }) {
             취소
           </button>
           <button className="mr-btn" onClick={save}>
-            시험 저장
+            {initial ? "수정 완료" : "시험 저장"}
           </button>
         </div>
       </div>
@@ -1485,8 +1535,9 @@ function ExamEditor({ onCancel, onSave }) {
 }
 
 /* ---------- 관리자: 채점 패널 ---------- */
-function GradePanel({ exam, subs, onBack, onSaveGrade }) {
+function GradePanel({ exam, subs, guestSubs, onBack, onSaveGrade }) {
   const [openId, setOpenId] = useState(null);
+  const guests = guestSubs || [];
 
   return (
     <div className="mr-col">
@@ -1501,17 +1552,23 @@ function GradePanel({ exam, subs, onBack, onSaveGrade }) {
       </section>
 
       <section className="mr-card">
-        <div className="mr-card-tag">문항별 회원정답률</div>
+        <div className="mr-card-tag">문항별 통계</div>
+        <div className="mr-qrate-sub" style={{ marginBottom: "10px" }}>
+          회원 응시 {subs.length}명 · 비회원 참여 {guests.length}명
+        </div>
         <div className="mr-qrate-list">
           {exam.questions.map((q, qi) => {
-            const total = subs.length;
-            const correct = subs.filter((s) => isQCorrect(q, s)).length;
-            const rate = total ? Math.round((100 * correct) / total) : null;
+            const mTotal = subs.length;
+            const mCorrect = subs.filter((s) => isQCorrect(q, s)).length;
+            const mRate = mTotal ? Math.round((100 * mCorrect) / mTotal) : null;
+            const gTotal = guests.length;
+            const gWrong = guests.filter((s) => !isQCorrect(q, s)).length;
+            const gWrongRate = gTotal ? Math.round((100 * gWrong) / gTotal) : null;
             return (
               <div className="mr-qrate-row" key={q.id}>
                 <span className="mr-qnum-sm">Q{qi + 1}</span>
-                <span className="mr-qrate-val">회원정답률: {total ? rate + "%" : "—"}</span>
-                {total > 0 && <span className="mr-qrate-sub">{total}명 중 {correct}명</span>}
+                <span className="mr-qrate-val">회원정답률 {mTotal ? mRate + "%" : "—"}</span>
+                <span className="mr-qrate-wrong">비회원 오답률 {gTotal ? gWrongRate + "%" : "—"}</span>
               </div>
             );
           })}
@@ -1667,7 +1724,7 @@ function SubmissionRow({ exam, sub, open, onToggle, onSaveGrade }) {
 }
 
 /* ---------- 참여자: 시험 목록 / 응시 / 결과 ---------- */
-function ExamsStudent({ student, loggedIn, requireLogin, exams, subs, onAddSub }) {
+function ExamsStudent({ student, loggedIn, requireLogin, exams, subs, onAddSub, onGuestSubmit }) {
   const [taking, setTaking] = useState(null);
 
   if (taking)
@@ -1676,6 +1733,7 @@ function ExamsStudent({ student, loggedIn, requireLogin, exams, subs, onAddSub }
         exam={taking}
         student={student}
         loggedIn={loggedIn}
+        onGuestSubmit={onGuestSubmit}
         onCancel={() => setTaking(null)}
         onSubmit={async (sub) => {
           await onAddSub(sub);
@@ -1728,7 +1786,7 @@ function ExamsStudent({ student, loggedIn, requireLogin, exams, subs, onAddSub }
   );
 }
 
-function TakeExam({ exam, student, loggedIn, onCancel, onSubmit }) {
+function TakeExam({ exam, student, loggedIn, onGuestSubmit, onCancel, onSubmit }) {
   const [answers, setAnswers] = useState({});
   const [result, setResult] = useState(null);
   const [rates, setRates] = useState({});
@@ -1766,7 +1824,8 @@ function TakeExam({ exam, student, loggedIn, onCancel, onSubmit }) {
     if (loggedIn && student.trim()) {
       onSubmit(sub); // 회원: 기록 저장
     } else {
-      setResult({ score: totalScore(exam, sub), max: maxScore(exam) }); // 비회원: 저장 안 함
+      if (onGuestSubmit) onGuestSubmit(exam.id, answers); // 비회원: 익명 집계만
+      setResult({ score: totalScore(exam, sub), max: maxScore(exam) }); // 비회원: 개인 기록 저장 안 함
     }
   };
 
@@ -2234,6 +2293,7 @@ const CSS = `
 .mr-qrate-row:last-child{border-bottom:0}
 .mr-qrate-val{font-size:14px; font-weight:800; color:var(--blue)}
 .mr-qrate-sub{font-size:12.5px; color:var(--t3); font-weight:600; margin-left:auto}
+.mr-qrate-wrong{font-size:13px; font-weight:700; color:var(--red); margin-left:auto}
 
 /* 칼럼 상세 */
 .mr-post-title{font-size:23px; font-weight:800; line-height:1.4; letter-spacing:-0.5px}
