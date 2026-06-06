@@ -408,6 +408,8 @@ function App() {
           loggedIn ? <Account auth={auth} onChangePassword={onChangePassword} onLogout={onLogout} /> : homeView
         ) : tab === "notices" ? (
           <Notices role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} notices={notices} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} />
+        ) : tab === "privacy" ? (
+          <Privacy onBack={() => setTab("home")} />
         ) : (
           <Exams
             role={role}
@@ -428,7 +430,10 @@ function App() {
         )}
       </main>
 
-      <footer className="mr-foot">© suhakjilmoon</footer>
+      <footer className="mr-foot">
+        <button className="mr-foot-link" onClick={() => setTab("privacy")}>개인정보 처리방침</button>
+        <div className="mr-foot-copy">© suhakjilmoon</div>
+      </footer>
 
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onLogin={onLogin} onSignup={onSignup} />}
     </div>
@@ -2052,6 +2057,75 @@ function Empty({ text }) {
   return <div className="mr-empty">{text}</div>;
 }
 
+function Privacy({ onBack }) {
+  return (
+    <div className="mr-col mr-pp">
+      <button className="mr-btn-text" onClick={onBack}>← 홈</button>
+      <section className="mr-card">
+        <h1 className="mr-pp-title">개인정보 처리방침</h1>
+        <p className="mr-pp-intro">
+          <strong>수학질문방</strong>(이하 '서비스')은(는) 「개인정보 보호법」 제30조에 따라 정보주체의 개인정보를 보호하고 이와 관련한 고충을 신속하고 원활하게 처리할 수 있도록 하기 위하여 다음과 같이 개인정보 처리방침을 수립·공개합니다.
+        </p>
+
+        <h2 className="mr-pp-h2">1. 개인정보의 처리 목적</h2>
+        <p>서비스는 다음의 목적을 위하여 개인정보를 처리합니다. 처리하고 있는 개인정보는 다음의 목적 이외의 용도로는 이용되지 않으며, 이용 목적이 변경되는 경우에는 별도의 동의를 받는 등 필요한 조치를 이행할 예정입니다.</p>
+        <ul className="mr-pp-ul">
+          <li><strong>회원 가입 및 관리:</strong> 회원 가입 의사 확인, 로그인 및 본인 식별, 부정이용 방지, 고지사항 전달</li>
+          <li><strong>서비스 제공:</strong> 수학 시험(레벨테스트/오늘의 문제) 응시, 답안 채점 및 점수 기록 관리, 칼럼 게시글 작성 및 관리, 관리자 기능(감사 로그 기록) 수행</li>
+        </ul>
+
+        <h2 className="mr-pp-h2">2. 처리하는 개인정보의 항목</h2>
+        <table className="mr-pp-table">
+          <thead>
+            <tr><th>구분</th><th>수집 항목</th><th>목적 및 보유 기간</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>회원 필수</strong></td><td>아이디(Username), 비밀번호</td><td>회원 식별 및 로그인 / 회원 탈퇴 시까지</td></tr>
+            <tr><td><strong>회원 선택</strong></td><td>카카오톡 방 닉네임</td><td>출제자 및 칼럼 작성자 이름 표시 / 회원 탈퇴 시까지</td></tr>
+            <tr><td><strong>서비스 이용 기록</strong></td><td>시험 응시 기록, 제출 답안, 채점 점수, 감사 로그(Audit Log)</td><td>시험 결과 제공 및 서비스 보안 / 회원 탈퇴 또는 보유기간(5년) 후 파기</td></tr>
+          </tbody>
+        </table>
+
+        <div className="mr-pp-note">
+          <strong>💡 비회원(익명) 이용자의 IP 주소 처리에 관한 안내</strong>
+          <br />
+          비회원의 중복 제출 및 정답률 조작을 방지하기 위해 시스템적으로 방문자의 IP 주소를 참조합니다. 하지만 수집 즉시 암호화 해시 함수(MD5)로 변환하여 중복 체크 용도로만 사용할 뿐, <strong>원본 IP 주소는 데이터베이스에 저장되지 않으며 개인을 식별할 수 없습니다.</strong>
+        </div>
+
+        <h2 className="mr-pp-h2">3. 개인정보의 처리 위탁 (해외 이전)</h2>
+        <p>서비스는 안정적인 데이터 관리를 위하여 다음과 같이 개인정보 처리 업무를 외부에 위탁하고 있습니다.</p>
+        <table className="mr-pp-table">
+          <thead>
+            <tr><th>수탁업체</th><th>위탁 업무 내용</th><th>보유 및 이용 기간</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Supabase, Inc.</strong></td><td>클라우드 데이터베이스 인프라 제공 및 데이터 보관</td><td>회원 탈퇴 시 또는 위탁 계약 종료 시까지</td></tr>
+          </tbody>
+        </table>
+
+        <h2 className="mr-pp-h2">4. 개인정보의 파기절차 및 방법</h2>
+        <ul className="mr-pp-ul">
+          <li><strong>파기절차:</strong> 파기 사유가 발생한 개인정보(회원탈퇴 등)를 선정하고, 관리자의 승인을 받아 안전하게 파기합니다.</li>
+          <li><strong>파기방법:</strong> 데이터베이스에 저장된 레코드는 복구·재생할 수 없는 기술적 방법(DB 삭제 명령)으로 완전히 삭제합니다.</li>
+        </ul>
+
+        <h2 className="mr-pp-h2">5. 개인정보 보호책임자</h2>
+        <p>서비스는 개인정보 처리에 관한 업무를 총괄해서 책임지고, 이용자의 고충처리를 위하여 아래와 같이 개인정보 보호책임자를 지정하고 있습니다.</p>
+        <ul className="mr-pp-ul">
+          <li><strong>개인정보 보호책임자:</strong> 의비간</li>
+          <li><strong>연락처(카카오톡):</strong> <a href="https://open.kakao.com/o/sOTbsdyi" target="_blank" rel="noopener noreferrer">수학질문방 카카오톡 문의하기</a></li>
+        </ul>
+
+        <h2 className="mr-pp-h2">6. 변경 동의 및 시행일자</h2>
+        <p>본 방침은 시행일로부터 적용되며, 변경사항이 있을 경우 시행 7일 전부터 공지사항을 통해 안내합니다.</p>
+        <ul className="mr-pp-ul">
+          <li><strong>공고 및 시행일자:</strong> 2026년 6월 1일</li>
+        </ul>
+      </section>
+    </div>
+  );
+}
+
 function QuestionImage({ value, onChange }) {
   const onFile = (e) => {
     const file = e.target.files && e.target.files[0];
@@ -2521,6 +2595,20 @@ const CSS = `
   max-width:680px; margin:28px auto 0; padding:0 22px; text-align:center;
   font-size:12px; color:var(--t3); line-height:1.6; font-weight:500;
 }
+.mr-foot-link{background:none; border:0; color:var(--t2); font-family:inherit; font-size:12px; font-weight:700; cursor:pointer; text-decoration:underline; padding:4px}
+.mr-foot-link:hover{color:var(--blue)}
+.mr-foot-copy{margin-top:4px}
+.mr-pp-title{font-size:21px; font-weight:800; color:var(--t1); letter-spacing:-0.5px; padding-bottom:12px; border-bottom:2px solid var(--t1); margin:0 0 14px}
+.mr-pp-intro{font-size:13.5px; color:var(--t2); line-height:1.7; margin:0}
+.mr-pp-h2{font-size:16px; font-weight:800; color:var(--blue); margin:26px 0 9px; letter-spacing:-0.3px}
+.mr-pp p{font-size:13.5px; color:var(--t2); line-height:1.7; margin:0 0 6px}
+.mr-pp-ul{margin:6px 0 4px; padding-left:18px}
+.mr-pp-ul li{font-size:13.5px; color:var(--t2); line-height:1.65; margin:6px 0}
+.mr-pp-table{width:100%; border-collapse:collapse; margin:12px 0; font-size:12.5px}
+.mr-pp-table th,.mr-pp-table td{border:1px solid var(--line); padding:9px 10px; text-align:left; vertical-align:top; color:var(--t2); line-height:1.5}
+.mr-pp-table th{background:var(--bg); color:var(--t1); font-weight:700}
+.mr-pp-note{background:#FFF8EC; border-left:4px solid #F5A300; border-radius:8px; padding:12px 14px; margin:14px 0; font-size:13px; color:var(--t2); line-height:1.7}
+.mr-pp a{color:var(--blue); font-weight:700; text-decoration:underline}
 `;
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
