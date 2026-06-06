@@ -353,7 +353,12 @@ function App() {
     await refresh();
   };
   const onDeleteUser = async (username) => {
-    await sb.from("profiles").delete().eq("username", username);
+    const { error } = await sb.rpc("admin_delete_user", { p_username: username });
+    if (error) {
+      // 함수가 아직 없거나 실패하면, 최소한 프로필이라도 제거
+      await sb.from("profiles").delete().eq("username", username);
+      alert("인증 계정 삭제에 실패했어요(프로필만 제거됨): " + error.message);
+    }
     await logAction("회원 삭제", username);
     await refresh();
   };
