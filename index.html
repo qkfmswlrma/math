@@ -2242,80 +2242,73 @@ function Empty({ text }) {
 
 /* ---------- 스피드 연산 게임 (무한 모드 · 콤보 지수 배율) ---------- */
 function SpeedGame({ onBack }) {
-  const START = 30;
-  const BONUS = 2; // 정답 +2초
-  const PENALTY = 5; // 오답 -5초
+  const START = 40;
+  const BONUS = 2.5; // 정답 +2.5초
+  const PENALTY = 4; // 오답 -4초
   const rand = (lo, hi) => Math.floor(Math.random() * (hi - lo + 1)) + lo;
 
-  // 연산자 우선순위를 지켜 정수로 평가 (×,÷ 먼저). 나눗셈은 항상 떨어지게 생성하므로 정수 보장.
+  // 우선순위 계산 (×,÷ 먼저). 나눗셈은 떨어지게 생성하므로 정수 보장.
   const evalExpr = (nums, ops) => {
-    const n = nums.slice();
-    const o = ops.slice();
+    const n = nums.slice(), o = ops.slice();
     for (let i = 0; i < o.length; ) {
       if (o[i] === "×" || o[i] === "÷") {
         const v = o[i] === "×" ? n[i] * n[i + 1] : n[i] / n[i + 1];
-        n.splice(i, 2, v);
-        o.splice(i, 1);
+        n.splice(i, 2, v); o.splice(i, 1);
       } else i++;
     }
     let r = n[0];
     for (let i = 0; i < o.length; i++) r = o[i] === "+" ? r + n[i + 1] : r - n[i + 1];
     return r;
   };
+  // 자릿수 사다리 (○ = 사칙연산 아무거나). 콤보 오를수록 단계 상승.
+  const STAGES = [
+    [1, 1],       // 한자리 ○ 한자리
+    [1, 2],       // 한자리 ○ 두자리
+    [2, 2],       // 두자리 ○ 두자리
+    [2, 1, 1],    // 두자리 ○ 한자리 ○ 한자리
+    [2, 2, 1],    // 두자리 ○ 두자리 ○ 한자리
+    [2, 3],       // 두자리 ○ 세자리
+    [2, 2, 2],    // 두자리 ○ 두자리 ○ 두자리
+  ];
+  const numOfDigits = (d) => (d <= 1 ? rand(2, 9) : rand(Math.pow(10, d - 1), Math.pow(10, d) - 1));
 
   const makeQ = (combo) => {
-    const level = Math.floor(combo / 3); // 3콤보마다 레벨업
-    const cap = 9 + level * 6;
-    // 항 개수: 레벨 오를수록 2개 → 3개 → 4개
-    let terms = 2;
-    if (level >= 9) terms = 4;
-    else if (level >= 5) terms = 3;
-    // 연산자 풀: 레벨 오를수록 ×,÷ 비중↑
-    let pool;
-    if (level <= 1) pool = ["+", "−", "+", "−", "×"];
-    else if (level <= 3) pool = ["+", "−", "×", "÷", "×"];
-    else pool = ["×", "÷", "×", "÷", "−", "+"];
+    const stage = Math.min(STAGES.length - 1, Math.floor(combo / 6)); // 6콤보마다 단계 상승
+    const digits = STAGES[stage];
 
     let nums, ops, ans, guard = 0;
     do {
       guard++;
-      nums = [];
+      nums = [numOfDigits(digits[0])];
       ops = [];
-      for (let i = 0; i < terms; i++) {
-        if (i === 0) {
-          nums.push(rand(2, cap));
+      for (let i = 1; i < digits.length; i++) {
+        const op = ["+", "−", "×", "÷"][rand(0, 3)];
+        ops.push(op);
+        if (op === "÷") {
+          // 직전 항을 (이번 항 × 몫)으로 다시 맞춰 정수 나눗셈 보장
+          const divisor = numOfDigits(digits[i]);
+          const quotient = rand(2, 9);
+          nums[i - 1] = divisor * quotient;
+          nums.push(divisor);
         } else {
-          const op = pool[rand(0, pool.length - 1)];
-          if (op === "÷") {
-            // 나눗셈은 직전 수를 나누어떨어지게: 직전 수를 b의 배수로 다시 맞춤
-            const b = rand(2, Math.max(3, Math.floor(cap / 2)));
-            const q = rand(2, Math.max(3, Math.floor(cap / 2)));
-            nums[i - 1] = b * q; // 앞 항을 나눠떨어지는 값으로 교체
-            nums.push(b);
-          } else if (op === "×") {
-            nums.push(rand(2, Math.max(3, Math.floor(cap / 2))));
-          } else {
-            nums.push(rand(2, cap));
-          }
-          ops.push(op);
+          nums.push(numOfDigits(digits[i]));
         }
       }
       ans = evalExpr(nums, ops);
     } while ((ans < 0 || !Number.isInteger(ans)) && guard < 40);
-    if (ans < 0 || !Number.isInteger(ans)) { nums = [rand(2, cap), rand(2, cap)]; ops = ["+"]; ans = nums[0] + nums[1]; }
+    if (ans < 0 || !Number.isInteger(ans)) { nums = [numOfDigits(digits[0]), numOfDigits(digits[digits.length - 1])]; ops = ["+"]; ans = nums[0] + nums[1]; }
 
-    // 문제 텍스트
     let text = String(nums[0]);
     for (let i = 0; i < ops.length; i++) text += " " + ops[i] + " " + nums[i + 1];
 
-    // 보기: 정답 + 정답에 촘촘히 붙는 오답 3개 (찍기 어렵게)
+    // 보기: 정답 + 정답 근처 오답 3개
     const opts = new Set([ans]);
     let g2 = 0;
-    while (opts.size < 4 && g2 < 60) {
+    while (opts.size < 4 && g2 < 80) {
       g2++;
-      const spread = Math.max(1, Math.round(Math.abs(ans) * 0.12) + 1);
+      const spread = Math.max(2, Math.round(Math.abs(ans) * 0.08) + 1);
       let cand = ans + rand(-spread, spread);
-      if (cand === ans || cand < 0) cand = ans + (rand(0, 1) ? 1 : -1) * rand(1, spread + 1);
+      if (cand === ans || cand < 0) cand = ans + (rand(0, 1) ? 1 : -1) * rand(1, spread + 2);
       if (cand !== ans && cand >= 0) opts.add(cand);
     }
     const options = Array.from(opts).sort(() => Math.random() - 0.5);
@@ -3132,7 +3125,7 @@ const CSS = `
 .mr-game-best{font-size:13px; font-weight:700; color:var(--t3); margin-bottom:18px}
 .mr-game-start{width:100%; padding:15px; font-size:16px}
 .mr-game-final{font-size:52px; font-weight:800; color:var(--blue); letter-spacing:-1.5px; line-height:1.1; margin:6px 0}
-.mr-game-final span{font-size:20px; color:var(--t3); font-weight:700; margin-left:4px}
+.mr-game-final span{font-size:20px; color:var(--t3); font-weight:700; margin-left:8px; letter-spacing:0}
 .mr-game-stats2{display:flex; justify-content:center; gap:8px; font-size:13.5px; color:var(--t3); font-weight:600; margin-top:6px}
 .mr-game-new{margin-top:14px; font-size:15px; font-weight:800; color:var(--green)}
 .mr-game-play{transition:background .1s}
@@ -3192,4 +3185,3 @@ root.render(<App />);
 </script>
 </body>
 </html>
-
