@@ -1595,7 +1595,7 @@ function ExamsAdmin({ exams, onAddExam, onEditExam, onDeleteExam, subs, onGradeS
                 <span className="mr-date">{fmtDate(ex.createdAt)}</span>
               </div>
               {!isPublished(ex) && (
-                <div className="mr-sched-tag">⏰ 예약됨 · {fmtDate(ex.publishAt)} 공개</div>
+                <div className="mr-sched-tag">⏰ 예약됨 · {new Date(ex.publishAt).getMonth() + 1}월 {new Date(ex.publishAt).getDate()}일 공개</div>
               )}
               <div className="mr-exam-meta">
                 <span>출제자 {ex.author || "관리자"}{isMine ? " (나)" : ""}</span>
@@ -1653,7 +1653,7 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
   const toLocalInput = (ts) => {
     const d = new Date(ts);
     const p = (n) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
   };
   const [scheduled, setScheduled] = useState(initial ? !!initial.publishAt : false);
   const [publishStr, setPublishStr] = useState(initial && initial.publishAt ? toLocalInput(initial.publishAt) : "");
@@ -1694,9 +1694,10 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
     }
     let publishAt = null;
     if (scheduled) {
-      if (!publishStr) return alert("공개 시각을 선택하세요.");
-      publishAt = new Date(publishStr).getTime();
-      if (isNaN(publishAt)) return alert("공개 시각이 올바르지 않아요.");
+      if (!publishStr) return alert("공개 날짜를 선택하세요.");
+      const [y, m, d] = publishStr.split("-").map(Number);
+      publishAt = new Date(y, m - 1, d, 0, 0, 0, 0).getTime(); // 그 날 자정(00:00)에 공개
+      if (isNaN(publishAt)) return alert("공개 날짜가 올바르지 않아요.");
     }
     onSave({
       title: title.trim(),
@@ -1730,11 +1731,11 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
           <>
             <input
               className="mr-input"
-              type="datetime-local"
+              type="date"
               value={publishStr}
               onChange={(e) => setPublishStr(e.target.value)}
             />
-            <p className="mr-sched-hint">이 시각이 지나면 학생·비회원에게 자동으로 공개돼요. 그 전까지는 관리자에게만 보여요.</p>
+            <p className="mr-sched-hint">선택한 날짜의 자정(00:00)부터 학생·비회원에게 공개돼요. 그 전까지는 관리자에게만 보여요.</p>
           </>
         )}
       </section>
