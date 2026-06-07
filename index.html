@@ -467,7 +467,7 @@ function App() {
         ) : tab === "privacy" ? (
           <Privacy onBack={() => setTab("home")} />
         ) : tab === "game" ? (
-          <SpeedGame onBack={() => setTab("home")} auth={auth} onGoAccount={() => setTab("account")} />
+          <SpeedGame onBack={() => setTab("home")} auth={auth} onGoAccount={() => setTab("account")} onLogin={() => setAuthOpen(true)} />
         ) : (
           <Exams
             role={role}
@@ -2241,7 +2241,7 @@ function Empty({ text }) {
 }
 
 /* ---------- 스피드 연산 게임 (무한 모드 · 콤보 지수 배율) ---------- */
-function SpeedGame({ onBack, auth, onGoAccount }) {
+function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
   const loggedIn = !!auth;
   const nickname = auth && auth.kakaoId ? auth.kakaoId.trim() : "";
   const canRank = loggedIn && !!nickname;
@@ -2332,15 +2332,17 @@ function SpeedGame({ onBack, auth, onGoAccount }) {
   const [best, setBest] = useState(0);
   const [picked, setPicked] = useState(null); // 방금 누른 보기(잠깐 표시)
   const [ranking, setRanking] = useState(null); // 랭킹 목록 (null=로딩전/미로드)
-  const [hideGuestWarn, setHideGuestWarn] = useState(() => {
+  const [showGuestPopup, setShowGuestPopup] = useState(false);
+  const guestWarnHidden = () => {
     try {
       const t = Number(localStorage.getItem("mrspeedguestwarn") || 0);
       return Date.now() - t < 24 * 60 * 60 * 1000; // 24시간 이내면 숨김
     } catch (e) { return false; }
-  });
-  const dismissGuestWarn = () => {
+  };
+  const dontShowGuestWarn = () => {
     try { localStorage.setItem("mrspeedguestwarn", String(Date.now())); } catch (e) {}
-    setHideGuestWarn(true);
+    setShowGuestPopup(false);
+    doStart();
   };
   const loadRanking = async () => {
     setRanking(null);
@@ -2388,9 +2390,13 @@ function SpeedGame({ onBack, auth, onGoAccount }) {
     }
   }, [timeLeft, phase, score]);
 
-  const start = () => {
+  const doStart = () => {
     setScore(0); setCombo(0); setComboMax(0); setTimeLeft(START);
     setPicked(null); setFlash(""); setRanking(null); setQ(makeQ(0)); setPhase("playing");
+  };
+  const start = () => {
+    if (!canRank && !guestWarnHidden()) { setShowGuestPopup(true); return; } // 비회원/닉네임無 → 경고 팝업
+    doStart();
   };
 
   const flashFor = (kind) => {
@@ -2424,6 +2430,27 @@ function SpeedGame({ onBack, auth, onGoAccount }) {
   const mult = Math.pow(1.15, combo);
   const timePct = Math.max(0, Math.min(100, (timeLeft / START) * 100));
 
+  const guestPopup = showGuestPopup ? (
+    <div className="mr-popup-back" onClick={() => setShowGuestPopup(false)}>
+      <div className="mr-popup" onClick={(e) => e.stopPropagation()}>
+        <p className="mr-popup-warn">
+          {loggedIn
+            ? "채팅방 닉네임을 저장해야 랭킹에 등록돼요!"
+            : "비회원은 랭킹에 등록되지 않아요!"}
+        </p>
+        <p className="mr-popup-sub">기록을 랭킹에 올리려면 로그인하고 채팅방 닉네임을 저장하세요.</p>
+        <div className="mr-popup-btns">
+          {!loggedIn && (
+            <button className="mr-btn" onClick={() => { setShowGuestPopup(false); onLogin(); }}>로그인</button>
+          )}
+          <button className="mr-btn" onClick={() => { setShowGuestPopup(false); loggedIn ? onGoAccount() : onLogin(); }}>닉네임 등록</button>
+          <button className="mr-popup-ghost" onClick={() => { setShowGuestPopup(false); doStart(); }}>확인하고 시작</button>
+          <button className="mr-popup-ghost" onClick={dontShowGuestWarn}>1일 동안 다시 보지 않기</button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   if (phase === "rank")
     return (
       <div className="mr-col">
@@ -2450,6 +2477,7 @@ function SpeedGame({ onBack, auth, onGoAccount }) {
           )}
         </section>
         <button className="mr-btn mr-game-start" onClick={start}>게임 시작</button>
+        {guestPopup}
       </div>
     );
 
@@ -2469,13 +2497,7 @@ function SpeedGame({ onBack, auth, onGoAccount }) {
           <button className="mr-btn mr-game-start" onClick={start}>시작하기</button>
           <button className="mr-game-rankbtn" onClick={openRanking}>🏆 랭킹 보기</button>
         </section>
-
-        {!loggedIn && !hideGuestWarn && (
-          <section className="mr-card mr-guest-warn">
-            <p className="mr-guest-warn-txt">비회원은 랭킹에 등록되지 않아요. 로그인하고 채팅방 닉네임을 저장하면 최고점이 랭킹에 올라가요.</p>
-            <button className="mr-guest-warn-dismiss" onClick={dismissGuestWarn}>1일 동안 다시 보지 않기</button>
-          </section>
-        )}
+        {guestPopup}
       </div>
     );
 
