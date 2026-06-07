@@ -2325,7 +2325,10 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
     return { text, ans, options };
   };
 
-  const [phase, setPhase] = useState("ready"); // ready | playing | over
+  const [phase, setPhase] = useState("ready"); // ready | playing | over | rank
+  useEffect(() => {
+    try { window.scrollTo(0, 0); } catch (e) {}
+  }, [phase]);
   const [q, setQ] = useState(null);
   const [score, setScore] = useState(0);
   const [combo, setCombo] = useState(0);
