@@ -2280,7 +2280,7 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
 
   const makeQ = (combo) => {
     // 단계별 등장 콤보 기준 (뒤 어려운 단계는 한참 뒤에)
-    const THRESH = [0, 6, 12, 18, 24, 40, 55];
+    const THRESH = [0, 9, 18, 27, 36, 45, 54];
     let stage = 0;
     for (let i = 0; i < THRESH.length; i++) if (combo >= THRESH[i]) stage = i;
     const digits = STAGES[stage];
