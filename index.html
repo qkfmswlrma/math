@@ -1475,6 +1475,20 @@ function ExamChooser({ onPick }) {
   );
 }
 
+/* 시험 응시 래퍼 (관리자/학생 공용 - TakeExam 연결을 한 곳에서 관리) */
+function ExamTaker({ taking, setTaking, student, loggedIn, onAddSub, onGuestSubmit }) {
+  return (
+    <TakeExam
+      exam={taking}
+      student={student}
+      loggedIn={loggedIn}
+      onGuestSubmit={onGuestSubmit}
+      onCancel={() => setTaking(null)}
+      onSubmit={onAddSub}
+    />
+  );
+}
+
 function Exams(props) {
   const [examType, setExamType] = useState(null); // null=선택화면, 'level' | 'today'
   if (!examType) return <ExamChooser onPick={setExamType} />;
@@ -1504,15 +1518,7 @@ function ExamsAdmin({ exams, onAddExam, onEditExam, onDeleteExam, subs, onGradeS
 
   if (taking)
     return (
-      <TakeExam
-        exam={taking}
-        student={student}
-        loggedIn={loggedIn}
-        onCancel={() => setTaking(null)}
-        onSubmit={async (sub) => {
-          return await onAddSub(sub);
-        }}
-      />
+      <ExamTaker taking={taking} setTaking={setTaking} student={student} loggedIn={loggedIn} onAddSub={onAddSub} />
     );
 
   if (mode === "create")
@@ -1984,16 +1990,7 @@ function ExamsStudent({ student, loggedIn, requireLogin, exams, subs, onAddSub, 
 
   if (taking)
     return (
-      <TakeExam
-        exam={taking}
-        student={student}
-        loggedIn={loggedIn}
-        onGuestSubmit={onGuestSubmit}
-        onCancel={() => setTaking(null)}
-        onSubmit={async (sub) => {
-          return await onAddSub(sub);
-        }}
-      />
+      <ExamTaker taking={taking} setTaking={setTaking} student={student} loggedIn={loggedIn} onAddSub={onAddSub} onGuestSubmit={onGuestSubmit} />
     );
 
   return (
@@ -2059,6 +2056,8 @@ function TakeExam({ exam, student, loggedIn, onGuestSubmit, onCancel, onSubmit }
   const [result, setResult] = useState(null);
   const [rates, setRates] = useState({});
   const [restored, setRestored] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const submitLock = React.useRef(false);
   const set = (qid, val) => setAnswers((a) => ({ ...a, [qid]: val }));
 
   // 마운트 시 임시저장된 답안이 있었는지 표시
@@ -2106,12 +2105,16 @@ function TakeExam({ exam, student, loggedIn, onGuestSubmit, onCancel, onSubmit }
   };
 
   const submit = async () => {
+    if (submitLock.current) return; // 이미 제출 처리 중이면 무시 (중복 제출 방지)
     const unanswered = exam.questions.filter((q) => {
       const a = answers[q.id];
       if (q.type === "mc") return a === undefined || a === null;
       return !a || !String(a).trim();
     }).length;
     if (unanswered > 0 && !confirm(`아직 풀지 않은 문항이 ${unanswered}개 있어요. 그래도 제출할까요?`)) return;
+
+    submitLock.current = true;
+    setSubmitting(true);
 
     const sub = {
       id: uid(),
@@ -2126,6 +2129,8 @@ function TakeExam({ exam, student, loggedIn, onGuestSubmit, onCancel, onSubmit }
       const res = await onSubmit(sub); // 회원: 기록 저장 (목록 이동은 리뷰 화면에서)
       if (res && res.error) {
         alert("제출 저장에 실패했어요: " + res.error + "\n네트워크를 확인하고 다시 시도해주세요.");
+        submitLock.current = false;
+        setSubmitting(false);
         return;
       }
     } else {
@@ -2230,8 +2235,8 @@ function TakeExam({ exam, student, loggedIn, onGuestSubmit, onCancel, onSubmit }
       ))}
 
       <div className="mr-row-end">
-        <button className="mr-btn" onClick={submit}>
-          제출하기
+        <button className="mr-btn" onClick={submit} disabled={submitting}>
+          {submitting ? "제출 중…" : "제출하기"}
         </button>
       </div>
     </div>
@@ -2244,6 +2249,34 @@ function Empty({ text }) {
 }
 
 /* ---------- 스피드 연산 게임 (무한 모드 · 콤보 지수 배율) ---------- */
+/* 랭킹 카드 (랭킹 화면 + 게임 결과 화면 공용) */
+function RankingCard({ ranking, myRankBar, canRank, nickname, showGuestNote }) {
+  return (
+    <section className="mr-card">
+      <div className="mr-card-tag">🏆 랭킹 TOP 50</div>
+      {myRankBar}
+      {showGuestNote && (
+        <div className="mr-rank-empty">로그인하면 랭킹에 참여할 수 있어요.</div>
+      )}
+      {ranking === null ? (
+        <div className="mr-rank-empty">불러오는 중…</div>
+      ) : ranking.length === 0 ? (
+        <div className="mr-rank-empty">아직 랭킹이 없어요. 첫 주인공이 되어보세요!</div>
+      ) : (
+        <ol className="mr-rank-list">
+          {ranking.map((r, i) => (
+            <li key={i} className={"mr-rank-row" + (canRank && r.nickname === nickname ? " me" : "")}>
+              <span className="mr-rank-no">{i + 1}</span>
+              <span className="mr-rank-nick">{r.nickname}</span>
+              <span className="mr-rank-score">{Number(r.best_score).toLocaleString()}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
 function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
   const loggedIn = !!auth;
   const nickname = auth && auth.kakaoId ? auth.kakaoId.trim() : "";
@@ -2478,28 +2511,7 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
     return (
       <div className="mr-col">
         <button className="mr-btn-text" onClick={() => setPhase("ready")}>← 게임으로</button>
-        <section className="mr-card">
-          <div className="mr-card-tag">🏆 랭킹 TOP 50</div>
-          {myRankBar}
-          {!loggedIn && (
-            <div className="mr-rank-empty">로그인하면 랭킹에 참여할 수 있어요.</div>
-          )}
-          {ranking === null ? (
-            <div className="mr-rank-empty">불러오는 중…</div>
-          ) : ranking.length === 0 ? (
-            <div className="mr-rank-empty">아직 랭킹이 없어요. 첫 주인공이 되어보세요!</div>
-          ) : (
-            <ol className="mr-rank-list">
-              {ranking.map((r, i) => (
-                <li key={i} className={"mr-rank-row" + (canRank && r.nickname === nickname ? " me" : "")}>
-                  <span className="mr-rank-no">{i + 1}</span>
-                  <span className="mr-rank-nick">{r.nickname}</span>
-                  <span className="mr-rank-score">{Number(r.best_score).toLocaleString()}</span>
-                </li>
-              ))}
-            </ol>
-          )}
-        </section>
+        <RankingCard ranking={ranking} myRankBar={myRankBar} canRank={canRank} nickname={nickname} showGuestNote={!loggedIn} />
         <button className="mr-btn mr-game-start" onClick={start}>게임 시작</button>
         {guestPopup}
       </div>
@@ -2550,25 +2562,7 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
         )}
 
         {loggedIn && (
-          <section className="mr-card">
-            <div className="mr-card-tag">🏆 랭킹 TOP 50</div>
-            {myRankBar}
-            {ranking === null ? (
-              <div className="mr-rank-empty">불러오는 중…</div>
-            ) : ranking.length === 0 ? (
-              <div className="mr-rank-empty">아직 랭킹이 없어요. 첫 주인공이 되어보세요!</div>
-            ) : (
-              <ol className="mr-rank-list">
-                {ranking.map((r, i) => (
-                  <li key={i} className={"mr-rank-row" + (canRank && r.nickname === nickname ? " me" : "")}>
-                    <span className="mr-rank-no">{i + 1}</span>
-                    <span className="mr-rank-nick">{r.nickname}</span>
-                    <span className="mr-rank-score">{Number(r.best_score).toLocaleString()}</span>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
+          <RankingCard ranking={ranking} myRankBar={myRankBar} canRank={canRank} nickname={nickname} showGuestNote={false} />
         )}
       </div>
     );
