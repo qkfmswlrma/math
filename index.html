@@ -2431,22 +2431,22 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
   const timePct = Math.max(0, Math.min(100, (timeLeft / START) * 100));
 
   const guestPopup = showGuestPopup ? (
-    <div className="mr-popup-back" onClick={() => setShowGuestPopup(false)}>
-      <div className="mr-popup" onClick={(e) => e.stopPropagation()}>
+    <div className="mr-modal-overlay" onClick={() => setShowGuestPopup(false)}>
+      <div className="mr-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="mr-modal-head">
+          <span className="mr-modal-title" style={{ color: "var(--red)" }}>⚠️ 랭킹 미등록 안내</span>
+          <button className="mr-modal-x" onClick={() => setShowGuestPopup(false)}>×</button>
+        </div>
         <p className="mr-popup-warn">
-          {loggedIn
-            ? "채팅방 닉네임을 저장해야 랭킹에 등록돼요!"
-            : "비회원은 랭킹에 등록되지 않아요!"}
+          {loggedIn ? "채팅방 닉네임을 저장해야 랭킹에 등록돼요!" : "비회원은 랭킹에 등록되지 않아요!"}
         </p>
         <p className="mr-popup-sub">기록을 랭킹에 올리려면 로그인하고 채팅방 닉네임을 저장하세요.</p>
-        <div className="mr-popup-btns">
-          {!loggedIn && (
-            <button className="mr-btn" onClick={() => { setShowGuestPopup(false); onLogin(); }}>로그인</button>
-          )}
-          <button className="mr-btn" onClick={() => { setShowGuestPopup(false); loggedIn ? onGoAccount() : onLogin(); }}>닉네임 등록</button>
-          <button className="mr-popup-ghost" onClick={() => { setShowGuestPopup(false); doStart(); }}>확인하고 시작</button>
-          <button className="mr-popup-ghost" onClick={dontShowGuestWarn}>1일 동안 다시 보지 않기</button>
-        </div>
+        {!loggedIn && (
+          <button className="mr-btn mr-modal-submit" onClick={() => { setShowGuestPopup(false); onLogin(); }}>로그인</button>
+        )}
+        <button className="mr-btn mr-modal-submit" onClick={() => { setShowGuestPopup(false); loggedIn ? onGoAccount() : onLogin(); }}>닉네임 등록</button>
+        <button className="mr-popup-ghost" onClick={() => { setShowGuestPopup(false); doStart(); }}>확인하고 시작</button>
+        <button className="mr-popup-ghost" onClick={dontShowGuestWarn}>1일 동안 다시 보지 않기</button>
       </div>
     </div>
   ) : null;
@@ -3274,12 +3274,12 @@ const CSS = `
 .mr-game-opt.wrong{background:var(--red-bg); border-color:var(--red); color:var(--red)}
 .mr-game-opt:disabled{cursor:default}
 .mr-rank-warn{text-align:center}
-.mr-guest-warn{text-align:center}
 .mr-game-rankbtn{width:100%; margin-top:10px; background:var(--bg); border:0; color:var(--t2); font-family:inherit; font-weight:700; font-size:15px; padding:13px; border-radius:12px; cursor:pointer}
 .mr-game-rankbtn:hover{background:var(--line-soft)}
-.mr-guest-warn-txt{font-size:13.5px; color:var(--t2); line-height:1.6; margin:0 0 14px}
-.mr-guest-warn-dismiss{background:var(--bg); border:0; color:var(--t3); font-family:inherit; font-weight:700; font-size:13px; padding:10px 16px; border-radius:10px; cursor:pointer}
-.mr-guest-warn-dismiss:hover{color:var(--t2)}
+.mr-popup-warn{font-size:17px; font-weight:800; color:var(--red); line-height:1.5; margin:2px 0 4px; text-align:center}
+.mr-popup-sub{font-size:13.5px; color:var(--t2); line-height:1.6; margin:0 0 6px; text-align:center}
+.mr-popup-ghost{width:100%; background:var(--bg); border:0; color:var(--t3); font-family:inherit; font-weight:700; font-size:14px; padding:12px; border-radius:11px; cursor:pointer}
+.mr-popup-ghost:hover{color:var(--t2)}
 .mr-rank-empty{text-align:center; color:var(--t3); font-size:14px; padding:14px 0}
 .mr-rank-list{list-style:none; margin:6px 0 0; padding:0}
 .mr-rank-row{display:flex; align-items:center; gap:12px; padding:11px 6px; border-bottom:1px solid var(--line-soft); font-size:15px}
