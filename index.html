@@ -128,6 +128,9 @@ function rateColor(rate) {
 function App() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("home");
+  useEffect(() => {
+    try { window.scrollTo(0, 0); } catch (e) {}
+  }, [tab]);
   const [auth, setAuth] = useState(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [users, setUsers] = useState([]);
