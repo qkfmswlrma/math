@@ -2249,8 +2249,8 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
   const nickname = auth && auth.kakaoId ? auth.kakaoId.trim() : "";
   const canRank = loggedIn && !!nickname;
   const START = 40;
-  const BONUS = 2.5; // 정답 +2.5초
-  const PENALTY = 3; // 오답 -3초 (4지선다 찍기 기댓값: 0.25*2.5 - 0.75*3 = -1.625초, 음수 유지)
+  const BONUS = 2; // 정답 +2초
+  const PENALTY = 5; // 오답 -5초 (4지선다 찍기 기댓값: 0.25*2 - 0.75*5 = -3.25초, 음수 유지)
   const rand = (lo, hi) => Math.floor(Math.random() * (hi - lo + 1)) + lo;
 
   // 우선순위 계산 (×,÷ 먼저). 나눗셈은 떨어지게 생성하므로 정수 보장.
