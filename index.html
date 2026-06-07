@@ -2338,6 +2338,7 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
   const [best, setBest] = useState(0);
   const [picked, setPicked] = useState(null); // 방금 누른 보기(잠깐 표시)
   const [ranking, setRanking] = useState(null); // 랭킹 목록 (null=로딩전/미로드)
+  const [myRank, setMyRank] = useState(null); // {my_rank, best_score, total} | null
   const [showGuestPopup, setShowGuestPopup] = useState(false);
   const guestWarnHidden = () => {
     try {
@@ -2352,10 +2353,17 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
   };
   const loadRanking = async () => {
     setRanking(null);
+    setMyRank(null);
     try {
       const { data } = await sb.rpc("speed_ranking", { p_limit: 50 });
       setRanking(data || []);
     } catch (e) { setRanking([]); }
+    if (canRank) {
+      try {
+        const { data } = await sb.rpc("my_speed_rank");
+        if (data && data.length) setMyRank(data[0]);
+      } catch (e) {}
+    }
   };
   const openRanking = () => { setPhase("rank"); loadRanking(); };
 
@@ -2386,12 +2394,7 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
         try {
           if (canRank && score > 0) await sb.rpc("submit_speed_score", { p_score: score });
         } catch (e) {}
-        if (loggedIn) {
-          try {
-            const { data } = await sb.rpc("speed_ranking", { p_limit: 50 });
-            setRanking(data || []);
-          } catch (e) { setRanking([]); }
-        }
+        if (loggedIn) await loadRanking();
       })();
     }
   }, [timeLeft, phase, score]);
@@ -2461,12 +2464,23 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
     </div>
   ) : null;
 
+  const myRankBar = canRank && myRank ? (
+    <div className="mr-myrank">
+      <span className="mr-myrank-label">내 순위</span>
+      <span className="mr-myrank-rank">{myRank.my_rank}등</span>
+      <span className="mr-myrank-sep">·</span>
+      <span className="mr-myrank-score">{Number(myRank.best_score).toLocaleString()}점</span>
+      <span className="mr-myrank-total">/ {myRank.total}명</span>
+    </div>
+  ) : null;
+
   if (phase === "rank")
     return (
       <div className="mr-col">
         <button className="mr-btn-text" onClick={() => setPhase("ready")}>← 게임으로</button>
         <section className="mr-card">
           <div className="mr-card-tag">🏆 랭킹 TOP 50</div>
+          {myRankBar}
           {!loggedIn && (
             <div className="mr-rank-empty">로그인하면 랭킹에 참여할 수 있어요.</div>
           )}
@@ -2538,6 +2552,7 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
         {loggedIn && (
           <section className="mr-card">
             <div className="mr-card-tag">🏆 랭킹 TOP 50</div>
+            {myRankBar}
             {ranking === null ? (
               <div className="mr-rank-empty">불러오는 중…</div>
             ) : ranking.length === 0 ? (
@@ -3284,6 +3299,12 @@ const CSS = `
 .mr-game-opt.wrong{background:var(--red-bg); border-color:var(--red); color:var(--red)}
 .mr-game-opt:disabled{cursor:default}
 .mr-rank-warn{text-align:center}
+.mr-myrank{display:flex; align-items:center; gap:7px; background:var(--blue-bg); border-radius:12px; padding:12px 14px; margin:6px 0 4px; font-size:14px}
+.mr-myrank-label{font-weight:700; color:var(--blue)}
+.mr-myrank-rank{font-weight:800; color:var(--blue); font-size:16px}
+.mr-myrank-sep{color:var(--blue); opacity:.5}
+.mr-myrank-score{font-weight:800; color:var(--t1)}
+.mr-myrank-total{margin-left:auto; font-size:12.5px; color:var(--t3); font-weight:600}
 .mr-game-rankbtn{width:100%; margin-top:10px; background:var(--bg); border:0; color:var(--t2); font-family:inherit; font-weight:700; font-size:15px; padding:13px; border-radius:12px; cursor:pointer}
 .mr-game-rankbtn:hover{background:var(--line-soft)}
 .mr-warnpop{align-items:stretch; text-align:center; padding:28px 24px 22px; gap:0}
