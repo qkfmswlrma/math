@@ -467,7 +467,7 @@ function App() {
         ) : tab === "privacy" ? (
           <Privacy onBack={() => setTab("home")} />
         ) : tab === "game" ? (
-          <SpeedGame onBack={() => setTab("home")} />
+          <SpeedGame onBack={() => setTab("home")} auth={auth} onGoAccount={() => setTab("account")} />
         ) : (
           <Exams
             role={role}
@@ -1056,7 +1056,7 @@ function Home({ role, student, loggedIn, noticeCount, examCount, onGo }) {
       key: "game",
       icon: "⚡",
       title: "스피드 연산",
-      desc: "스피드 사칙연산",
+      desc: "무한 모드 · 콤보로 점수 폭발",
       meta: "지금 도전하기",
       tone: "blue",
     },
@@ -2241,81 +2241,81 @@ function Empty({ text }) {
 }
 
 /* ---------- 스피드 연산 게임 (무한 모드 · 콤보 지수 배율) ---------- */
-function SpeedGame({ onBack }) {
-  const START = 30;
-  const BONUS = 2; // 정답 +2초
-  const PENALTY = 5; // 오답 -5초
+function SpeedGame({ onBack, auth, onGoAccount }) {
+  const loggedIn = !!auth;
+  const nickname = auth && auth.kakaoId ? auth.kakaoId.trim() : "";
+  const canRank = loggedIn && !!nickname;
+  const START = 40;
+  const BONUS = 2.5; // 정답 +2.5초
+  const PENALTY = 1.5; // 오답 -1.5초 (4지선다 찍기 기댓값: 0.25*2.5 - 0.75*1.5 = -0.5초, 음수 유지)
   const rand = (lo, hi) => Math.floor(Math.random() * (hi - lo + 1)) + lo;
 
-  // 연산자 우선순위를 지켜 정수로 평가 (×,÷ 먼저). 나눗셈은 항상 떨어지게 생성하므로 정수 보장.
+  // 우선순위 계산 (×,÷ 먼저). 나눗셈은 떨어지게 생성하므로 정수 보장.
   const evalExpr = (nums, ops) => {
-    const n = nums.slice();
-    const o = ops.slice();
+    const n = nums.slice(), o = ops.slice();
     for (let i = 0; i < o.length; ) {
       if (o[i] === "×" || o[i] === "÷") {
         const v = o[i] === "×" ? n[i] * n[i + 1] : n[i] / n[i + 1];
-        n.splice(i, 2, v);
-        o.splice(i, 1);
+        n.splice(i, 2, v); o.splice(i, 1);
       } else i++;
     }
     let r = n[0];
     for (let i = 0; i < o.length; i++) r = o[i] === "+" ? r + n[i + 1] : r - n[i + 1];
     return r;
   };
+  // 자릿수 사다리 (○ = 사칙연산 아무거나). 콤보 오를수록 단계 상승.
+  const STAGES = [
+    [1, 1],       // 한자리 ○ 한자리
+    [1, 2],       // 한자리 ○ 두자리
+    [2, 2],       // 두자리 ○ 두자리
+    [2, 1, 1],    // 두자리 ○ 한자리 ○ 한자리
+    [2, 2, 1],    // 두자리 ○ 두자리 ○ 한자리
+    [2, 3],       // 두자리 ○ 세자리
+    [2, 2, 2],    // 두자리 ○ 두자리 ○ 두자리
+  ];
+  const numOfDigits = (d) => (d <= 1 ? rand(2, 9) : rand(Math.pow(10, d - 1), Math.pow(10, d) - 1));
 
   const makeQ = (combo) => {
-    const level = Math.floor(combo / 3); // 3콤보마다 레벨업
-    const cap = 9 + level * 6;
-    // 항 개수: 레벨 오를수록 2개 → 3개 → 4개
-    let terms = 2;
-    if (level >= 9) terms = 4;
-    else if (level >= 5) terms = 3;
-    // 연산자 풀: 레벨 오를수록 ×,÷ 비중↑
-    let pool;
-    if (level <= 1) pool = ["+", "−", "+", "−", "×"];
-    else if (level <= 3) pool = ["+", "−", "×", "÷", "×"];
-    else pool = ["×", "÷", "×", "÷", "−", "+"];
+    // 단계별 등장 콤보 기준 (뒤 어려운 단계는 한참 뒤에)
+    const THRESH = [0, 6, 12, 18, 24, 40, 55];
+    let stage = 0;
+    for (let i = 0; i < THRESH.length; i++) if (combo >= THRESH[i]) stage = i;
+    const digits = STAGES[stage];
 
     let nums, ops, ans, guard = 0;
     do {
       guard++;
-      nums = [];
+      nums = [numOfDigits(digits[0])];
       ops = [];
-      for (let i = 0; i < terms; i++) {
-        if (i === 0) {
-          nums.push(rand(2, cap));
+      for (let i = 1; i < digits.length; i++) {
+        const pool = stage >= 3 ? ["+", "−", "×", "÷"] : ["+", "−", "×"]; // 나눗셈은 후반(단계4~)부터
+        const op = pool[rand(0, pool.length - 1)];
+        ops.push(op);
+        if (op === "÷") {
+          // 직전 항을 (이번 항 × 몫)으로 다시 맞춰 정수 나눗셈 보장
+          const divisor = numOfDigits(digits[i]);
+          const quotient = rand(2, 9);
+          nums[i - 1] = divisor * quotient;
+          nums.push(divisor);
         } else {
-          const op = pool[rand(0, pool.length - 1)];
-          if (op === "÷") {
-            // 나눗셈은 직전 수를 나누어떨어지게: 직전 수를 b의 배수로 다시 맞춤
-            const b = rand(2, Math.max(3, Math.floor(cap / 2)));
-            const q = rand(2, Math.max(3, Math.floor(cap / 2)));
-            nums[i - 1] = b * q; // 앞 항을 나눠떨어지는 값으로 교체
-            nums.push(b);
-          } else if (op === "×") {
-            nums.push(rand(2, Math.max(3, Math.floor(cap / 2))));
-          } else {
-            nums.push(rand(2, cap));
-          }
-          ops.push(op);
+          nums.push(numOfDigits(digits[i]));
         }
       }
       ans = evalExpr(nums, ops);
     } while ((ans < 0 || !Number.isInteger(ans)) && guard < 40);
-    if (ans < 0 || !Number.isInteger(ans)) { nums = [rand(2, cap), rand(2, cap)]; ops = ["+"]; ans = nums[0] + nums[1]; }
+    if (ans < 0 || !Number.isInteger(ans)) { nums = [numOfDigits(digits[0]), numOfDigits(digits[digits.length - 1])]; ops = ["+"]; ans = nums[0] + nums[1]; }
 
-    // 문제 텍스트
     let text = String(nums[0]);
     for (let i = 0; i < ops.length; i++) text += " " + ops[i] + " " + nums[i + 1];
 
-    // 보기: 정답 + 정답에 촘촘히 붙는 오답 3개 (찍기 어렵게)
+    // 보기: 정답 + 정답 근처 오답 3개
     const opts = new Set([ans]);
     let g2 = 0;
-    while (opts.size < 4 && g2 < 60) {
+    while (opts.size < 4 && g2 < 80) {
       g2++;
-      const spread = Math.max(1, Math.round(Math.abs(ans) * 0.12) + 1);
+      const spread = Math.max(2, Math.round(Math.abs(ans) * 0.08) + 1);
       let cand = ans + rand(-spread, spread);
-      if (cand === ans || cand < 0) cand = ans + (rand(0, 1) ? 1 : -1) * rand(1, spread + 1);
+      if (cand === ans || cand < 0) cand = ans + (rand(0, 1) ? 1 : -1) * rand(1, spread + 2);
       if (cand !== ans && cand >= 0) opts.add(cand);
     }
     const options = Array.from(opts).sort(() => Math.random() - 0.5);
@@ -2331,6 +2331,7 @@ function SpeedGame({ onBack }) {
   const [flash, setFlash] = useState(""); // "" | "good" | "bad" | "crit"
   const [best, setBest] = useState(0);
   const [picked, setPicked] = useState(null); // 방금 누른 보기(잠깐 표시)
+  const [ranking, setRanking] = useState(null); // 랭킹 목록 (null=로딩전/미로드)
 
   useEffect(() => {
     try { setBest(Number(localStorage.getItem("mrspeedbest") || 0)); } catch (e) {}
@@ -2354,12 +2355,24 @@ function SpeedGame({ onBack }) {
         try { localStorage.setItem("mrspeedbest", String(nb)); } catch (e) {}
         return nb;
       });
+      // 랭킹 등록(닉네임 있는 회원만) 후 랭킹 불러오기
+      (async () => {
+        try {
+          if (canRank && score > 0) await sb.rpc("submit_speed_score", { p_score: score });
+        } catch (e) {}
+        if (loggedIn) {
+          try {
+            const { data } = await sb.rpc("speed_ranking", { p_limit: 50 });
+            setRanking(data || []);
+          } catch (e) { setRanking([]); }
+        }
+      })();
     }
   }, [timeLeft, phase, score]);
 
   const start = () => {
     setScore(0); setCombo(0); setComboMax(0); setTimeLeft(START);
-    setPicked(null); setFlash(""); setQ(makeQ(0)); setPhase("playing");
+    setPicked(null); setFlash(""); setRanking(null); setQ(makeQ(0)); setPhase("playing");
   };
 
   const flashFor = (kind) => {
@@ -2403,7 +2416,7 @@ function SpeedGame({ onBack }) {
           <p className="mr-game-rules">
             무한 모드예요. 시작 시간은 {START}초.<br />
             맞히면 <b className="mr-c-good">+{BONUS}초</b>, 틀리면 <b className="mr-c-bad">−{PENALTY}초</b>.<br />
-            연속으로 맞힐수록 콤보 배율이 <b>폭발해요</b> 🔥
+            연속으로 맞힐수록 콤보 배율이 <b>지수함수처럼</b> 폭발해요 🔥
           </p>
           <div className="mr-game-best">최고 점수 {best.toLocaleString()}</div>
           <button className="mr-btn mr-game-start" onClick={start}>시작하기</button>
@@ -2427,6 +2440,37 @@ function SpeedGame({ onBack }) {
           {score >= best && score > 0 && <div className="mr-game-new">🎉 신기록 달성!</div>}
           <button className="mr-btn mr-game-start" onClick={start}>다시 도전</button>
         </section>
+
+        {!loggedIn && (
+          <div className="mr-guest-note">비회원은 랭킹에 등록되지 않아요. 로그인하면 최고점이 랭킹에 올라가요.</div>
+        )}
+        {loggedIn && !nickname && (
+          <section className="mr-card mr-rank-warn">
+            <p className="mr-withdraw-warn" style={{ margin: "0 0 12px" }}>채팅방 닉네임을 저장해야 랭킹에 등록돼요.</p>
+            <button className="mr-btn" onClick={onGoAccount}>닉네임 저장하러 가기</button>
+          </section>
+        )}
+
+        {loggedIn && (
+          <section className="mr-card">
+            <div className="mr-card-tag">🏆 랭킹 TOP 50</div>
+            {ranking === null ? (
+              <div className="mr-rank-empty">불러오는 중…</div>
+            ) : ranking.length === 0 ? (
+              <div className="mr-rank-empty">아직 랭킹이 없어요. 첫 주인공이 되어보세요!</div>
+            ) : (
+              <ol className="mr-rank-list">
+                {ranking.map((r, i) => (
+                  <li key={i} className={"mr-rank-row" + (canRank && r.nickname === nickname ? " me" : "")}>
+                    <span className="mr-rank-no">{i + 1}</span>
+                    <span className="mr-rank-nick">{r.nickname}</span>
+                    <span className="mr-rank-score">{Number(r.best_score).toLocaleString()}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
+        )}
       </div>
     );
 
@@ -2466,7 +2510,7 @@ function SpeedGame({ onBack }) {
         })}
       </div>
 
-      <button className="mr-btn-text" onClick={() => setPhase("over")}>그만하기</button>
+      <button className="mr-btn-text" onClick={() => setTimeLeft(0)}>그만하기</button>
     </div>
   );
 }
@@ -3132,7 +3176,7 @@ const CSS = `
 .mr-game-best{font-size:13px; font-weight:700; color:var(--t3); margin-bottom:18px}
 .mr-game-start{width:100%; padding:15px; font-size:16px}
 .mr-game-final{font-size:52px; font-weight:800; color:var(--blue); letter-spacing:-1.5px; line-height:1.1; margin:6px 0}
-.mr-game-final span{font-size:20px; color:var(--t3); font-weight:700; margin-left:4px}
+.mr-game-final span{font-size:20px; color:var(--t3); font-weight:700; margin-left:8px; letter-spacing:0}
 .mr-game-stats2{display:flex; justify-content:center; gap:8px; font-size:13.5px; color:var(--t3); font-weight:600; margin-top:6px}
 .mr-game-new{margin-top:14px; font-size:15px; font-weight:800; color:var(--green)}
 .mr-game-play{transition:background .1s}
@@ -3155,6 +3199,17 @@ const CSS = `
 .mr-game-opt.correct{background:var(--green-bg); border-color:var(--green); color:var(--green)}
 .mr-game-opt.wrong{background:var(--red-bg); border-color:var(--red); color:var(--red)}
 .mr-game-opt:disabled{cursor:default}
+.mr-rank-warn{text-align:center}
+.mr-rank-empty{text-align:center; color:var(--t3); font-size:14px; padding:14px 0}
+.mr-rank-list{list-style:none; margin:6px 0 0; padding:0}
+.mr-rank-row{display:flex; align-items:center; gap:12px; padding:11px 6px; border-bottom:1px solid var(--line-soft); font-size:15px}
+.mr-rank-row:last-child{border-bottom:0}
+.mr-rank-row.me{background:var(--blue-bg); border-radius:10px; border-bottom:0; font-weight:800}
+.mr-rank-no{width:24px; text-align:center; font-weight:800; color:var(--t3)}
+.mr-rank-row.me .mr-rank-no{color:var(--blue)}
+.mr-rank-row:nth-child(1) .mr-rank-no,.mr-rank-row:nth-child(2) .mr-rank-no,.mr-rank-row:nth-child(3) .mr-rank-no{color:#F97316}
+.mr-rank-nick{flex:1; color:var(--t1); font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mr-rank-score{font-weight:800; color:var(--t1); font-variant-numeric:tabular-nums}
 
 .mr-foot{
   max-width:680px; margin:28px auto 0; padding:0 22px;
@@ -3192,4 +3247,3 @@ root.render(<App />);
 </script>
 </body>
 </html>
-
