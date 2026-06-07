@@ -55,6 +55,7 @@ const mapExam = (r) => ({
   id: r.id, title: r.title, questions: r.questions || [],
   author: r.author || "", authorId: r.author_id || null,
   examType: r.exam_type || "level",
+  publishAt: r.publish_at ? Date.parse(r.publish_at) : null,
   createdAt: r.created_at ? Date.parse(r.created_at) : 0,
 });
 const mapSub = (r) => ({
@@ -351,13 +352,13 @@ function App() {
   const onAddExam = async (exam) => {
     const id = await currentId();
     const author = auth ? ((auth.kakaoId || "").trim() || auth.username || "") : "";
-    const { error } = await sb.from("exams").insert({ title: exam.title, questions: exam.questions, author_id: id, author, exam_type: exam.examType || "level" });
+    const { error } = await sb.from("exams").insert({ title: exam.title, questions: exam.questions, author_id: id, author, exam_type: exam.examType || "level", publish_at: exam.publishAt ? new Date(exam.publishAt).toISOString() : null });
     if (error) { alert("시험 저장에 실패했어요: " + error.message); return; }
     await logAction("시험 출제", exam.title);
     await refresh();
   };
   const onEditExam = async (id, exam) => {
-    const { error } = await sb.from("exams").update({ title: exam.title, questions: exam.questions, exam_type: exam.examType || "level" }).eq("id", id);
+    const { error } = await sb.from("exams").update({ title: exam.title, questions: exam.questions, exam_type: exam.examType || "level", publish_at: exam.publishAt ? new Date(exam.publishAt).toISOString() : null }).eq("id", id);
     if (error) { alert("시험 수정에 실패했어요: " + error.message); return; }
     await logAction("시험 수정", exam.title);
     await refresh();
@@ -418,7 +419,7 @@ function App() {
   };
 
   const homeView = (
-    <Home role={role} student={student} loggedIn={loggedIn} noticeCount={notices.length} examCount={exams.length} onGo={setTab} />
+    <Home role={role} student={student} loggedIn={loggedIn} noticeCount={notices.length} examCount={role === "admin" ? exams.length : exams.filter(isPublished).length} onGo={setTab} />
   );
 
   return (
@@ -1489,12 +1490,20 @@ function ExamTaker({ taking, setTaking, student, loggedIn, onAddSub, onGuestSubm
   );
 }
 
+function isPublished(exam) {
+  return !exam.publishAt || exam.publishAt <= Date.now();
+}
+
 function Exams(props) {
   const [examType, setExamType] = useState(null); // null=선택화면, 'level' | 'today'
   if (!examType) return <ExamChooser onPick={setExamType} />;
   const filtered = (props.exams || []).filter((e) => (e.examType || "level") === examType);
-  const common = { ...props, exams: filtered, examType, onBackToChooser: () => setExamType(null) };
-  return props.role === "admin" ? <ExamsAdmin {...common} /> : <ExamsStudent {...common} />;
+  const onBackToChooser = () => setExamType(null);
+  if (props.role === "admin")
+    return <ExamsAdmin {...props} exams={filtered} examType={examType} onBackToChooser={onBackToChooser} />;
+  // 학생/비회원: 공개 시각이 지난 시험만 노출
+  const visible = filtered.filter(isPublished);
+  return <ExamsStudent {...props} exams={visible} examType={examType} onBackToChooser={onBackToChooser} />;
 }
 
 /* ---------- 관리자: 시험 목록 / 출제 / 채점 / (남의 시험) 응시 ---------- */
@@ -1585,6 +1594,9 @@ function ExamsAdmin({ exams, onAddExam, onEditExam, onDeleteExam, subs, onGradeS
                 <h3>{ex.title}</h3>
                 <span className="mr-date">{fmtDate(ex.createdAt)}</span>
               </div>
+              {!isPublished(ex) && (
+                <div className="mr-sched-tag">⏰ 예약됨 · {fmtDate(ex.publishAt)} 공개</div>
+              )}
               <div className="mr-exam-meta">
                 <span>출제자 {ex.author || "관리자"}{isMine ? " (나)" : ""}</span>
                 <span>·</span>
@@ -1638,6 +1650,13 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
   }
   const [title, setTitle] = useState(initial ? initial.title : "");
   const [examType, setExamType] = useState(initial ? (initial.examType || "level") : (defaultType || "level"));
+  const toLocalInput = (ts) => {
+    const d = new Date(ts);
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+  const [scheduled, setScheduled] = useState(initial ? !!initial.publishAt : false);
+  const [publishStr, setPublishStr] = useState(initial && initial.publishAt ? toLocalInput(initial.publishAt) : "");
   const [questions, setQuestions] = useState(
     initial && initial.questions && initial.questions.length
       ? initial.questions.map((q) => ({ options: ["", ""], accept: "", answer: 0, ...q }))
@@ -1673,9 +1692,16 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
       if (q.type === "short" && !String(q.accept || "").trim())
         return alert("주관식 문항의 정답을 입력하세요. (자동 채점에 사용됩니다)");
     }
+    let publishAt = null;
+    if (scheduled) {
+      if (!publishStr) return alert("공개 시각을 선택하세요.");
+      publishAt = new Date(publishStr).getTime();
+      if (isNaN(publishAt)) return alert("공개 시각이 올바르지 않아요.");
+    }
     onSave({
       title: title.trim(),
       examType,
+      publishAt,
       questions: questions.map((q) => ({ ...q, points: Number(q.points) || 0 })),
     });
   };
@@ -1695,6 +1721,22 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
           <button className={examType === "level" ? "on" : ""} onClick={() => setExamType("level")}>레벨테스트</button>
           <button className={examType === "today" ? "on" : ""} onClick={() => setExamType("today")}>오늘의 문제</button>
         </div>
+        <div className="mr-cat-label">공개 시점</div>
+        <div className="mr-cat-seg">
+          <button className={!scheduled ? "on" : ""} onClick={() => setScheduled(false)}>즉시 공개</button>
+          <button className={scheduled ? "on" : ""} onClick={() => setScheduled(true)}>예약 공개</button>
+        </div>
+        {scheduled && (
+          <>
+            <input
+              className="mr-input"
+              type="datetime-local"
+              value={publishStr}
+              onChange={(e) => setPublishStr(e.target.value)}
+            />
+            <p className="mr-sched-hint">이 시각이 지나면 학생·비회원에게 자동으로 공개돼요. 그 전까지는 관리자에게만 보여요.</p>
+          </>
+        )}
       </section>
 
       {questions.map((q, qi) => (
@@ -3065,6 +3107,8 @@ const CSS = `
 .mr-link-del{margin-top:12px; border:0; background:none; color:var(--t3); cursor:pointer; font-size:13px; font-family:inherit; font-weight:700}
 .mr-link-del:hover{color:var(--red)}
 .mr-exam-meta{display:flex; gap:7px; align-items:center; flex-wrap:wrap; margin-top:9px; font-size:13.5px; color:var(--t2); font-weight:600}
+.mr-sched-tag{display:inline-block; margin-top:8px; background:#FFF4E5; color:#C2540A; font-size:12.5px; font-weight:800; padding:5px 11px; border-radius:8px}
+.mr-sched-hint{font-size:12.5px; color:var(--t3); line-height:1.6; margin:8px 2px 0}
 .mr-exam-meta span:nth-child(even){color:var(--line)}
 
 /* inputs */
