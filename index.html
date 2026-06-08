@@ -129,10 +129,43 @@ function rateColor(rate) {
 function App() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("home");
+  const [readColIds, setReadColIds] = useState(() => getReadColIds());
+  const markColumnRead = (id) => {
+    setReadColIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      saveReadColIds(next);
+      return next;
+    });
+    // 회원이면 서버에도 조용히 기록 (표시는 위에서 즉시 반영됨)
+    if (auth) {
+      sb.from("column_reads")
+        .upsert({ user_id: auth.id, column_id: id }, { onConflict: "user_id,column_id" })
+        .then(() => {}, () => {});
+    }
+  };
   useEffect(() => {
     try { window.scrollTo(0, 0); } catch (e) {}
   }, [tab]);
   const [auth, setAuth] = useState(null);
+  // 로그인하면 서버의 칼럼 읽음 기록을 불러와 로컬과 합침 (기기 간 동기화)
+  useEffect(() => {
+    if (!auth) return;
+    (async () => {
+      try {
+        const { data } = await sb.from("column_reads").select("column_id").eq("user_id", auth.id);
+        if (data && data.length) {
+          setReadColIds((prev) => {
+            const next = new Set(prev);
+            data.forEach((r) => next.add(r.column_id));
+            saveReadColIds(next);
+            return next;
+          });
+        }
+      } catch (e) {}
+    })();
+  }, [auth]);
   const [authOpen, setAuthOpen] = useState(false);
   const [users, setUsers] = useState([]);
   const [notices, setNotices] = useState([]);
@@ -419,7 +452,7 @@ function App() {
   };
 
   const homeView = (
-    <Home role={role} student={student} loggedIn={loggedIn} noticeCount={notices.length} examCount={role === "admin" ? exams.length : exams.filter(isPublished).length} onGo={setTab} />
+    <Home role={role} student={student} loggedIn={loggedIn} noticeCount={role === "admin" ? notices.length : notices.filter((n) => !n.isDraft).length} columnUnread={columnUnreadCount(notices, readColIds)} examCount={role === "admin" ? exams.length : exams.filter(isPublished).length} onGo={setTab} />
   );
 
   return (
@@ -467,7 +500,7 @@ function App() {
         ) : tab === "account" ? (
           loggedIn ? <Account auth={auth} onChangePassword={onChangePassword} onUpdateKakao={onUpdateKakao} onDeleteMe={onDeleteMe} onLogout={onLogout} /> : homeView
         ) : tab === "notices" ? (
-          <Notices role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} notices={notices} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} />
+          <Notices role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} notices={notices} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} readIds={readColIds} onRead={markColumnRead} />
         ) : tab === "privacy" ? (
           <Privacy onBack={() => setTab("home")} />
         ) : tab === "game" ? (
@@ -1032,7 +1065,7 @@ function AuthModal({ onClose, onLogin, onSignup }) {
 }
 
 /* ===================== 홈 ===================== */
-function Home({ role, student, loggedIn, noticeCount, examCount, onGo }) {
+function Home({ role, student, loggedIn, noticeCount, columnUnread, examCount, onGo }) {
   const greet = !loggedIn
     ? "로그인하고 함께 시작해요"
     : role === "admin"
@@ -1047,6 +1080,7 @@ function Home({ role, student, loggedIn, noticeCount, examCount, onGo }) {
       desc: "수학 이야기와 공부 팁",
       meta: `${noticeCount}개의 글`,
       tone: "blue",
+      dot: columnUnread > 0,
     },
     {
       key: "exams",
@@ -1105,7 +1139,10 @@ function Home({ role, student, loggedIn, noticeCount, examCount, onGo }) {
             style={{ animationDelay: `${i * 60}ms` }}
             onClick={() => onGo(s.key)}
           >
-            <span className={"mr-sector-icon " + s.tone}>{s.icon}</span>
+            <span className={"mr-sector-icon " + s.tone}>
+              {s.icon}
+              {s.dot && <span className="mr-sector-dot" />}
+            </span>
             <span className="mr-sector-text">
               <span className="mr-sector-title">{s.title}</span>
               <span className="mr-sector-desc">{s.desc}</span>
@@ -1120,7 +1157,7 @@ function Home({ role, student, loggedIn, noticeCount, examCount, onGo }) {
 }
 
 /* ===================== 칼럼 ===================== */
-function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onReorder }) {
+function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onReorder, readIds, onRead }) {
   const CAT = { elem: "초등학교", mid: "중학교", high: "고등학교" };
   const CATS = ["elem", "mid", "high"];
   const [view, setView] = useState("list"); // list | write | read | edit
@@ -1362,16 +1399,22 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onR
         <Empty text="아직 발행된 칼럼이 없어요." />
       ) : (
         <div className="mr-postlist">
-          {published.map((n, i) => (
+          {published.map((n, i) => {
+            const unread = readIds && !readIds.has(n.id);
+            return (
             <div className="mr-post-item" key={n.id}>
               <button
                 className="mr-post-row"
                 onClick={() => {
+                  if (onRead) onRead(n.id);
                   setOpenId(n.id);
                   setView("read");
                 }}
               >
-                <span className="mr-post-row-title">{n.title}</span>
+                <span className="mr-post-row-title">
+                  {unread && <span className="mr-unread-dot" />}
+                  {n.title}
+                </span>
                 <span className="mr-post-row-meta">
                   {n.author || "익명"} · {fmtDate(n.createdAt)}
                 </span>
@@ -1383,7 +1426,8 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onR
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -1492,6 +1536,18 @@ function ExamTaker({ taking, setTaking, student, loggedIn, onAddSub, onGuestSubm
 
 function isPublished(exam) {
   return !exam.publishAt || exam.publishAt <= Date.now();
+}
+
+/* 칼럼 읽음 추적 (기기에 저장) */
+const COL_READ_KEY = "mrreadcols";
+function getReadColIds() {
+  try { return new Set(JSON.parse(localStorage.getItem(COL_READ_KEY) || "[]")); } catch (e) { return new Set(); }
+}
+function saveReadColIds(set) {
+  try { localStorage.setItem(COL_READ_KEY, JSON.stringify([...set])); } catch (e) {}
+}
+function columnUnreadCount(notices, readIds) {
+  return (notices || []).filter((n) => !n.isDraft && !readIds.has(n.id)).length;
 }
 
 function Exams(props) {
@@ -2409,6 +2465,8 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
   const [score, setScore] = useState(0);
   const [combo, setCombo] = useState(0);
   const [comboMax, setComboMax] = useState(0);
+  const [correctCount, setCorrectCount] = useState(0);
+  const startRef = React.useRef(0);
   const [timeLeft, setTimeLeft] = useState(START);
   const [flash, setFlash] = useState(""); // "" | "good" | "bad" | "crit"
   const [best, setBest] = useState(0);
@@ -2468,7 +2526,15 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
       // 랭킹 등록(닉네임 있는 회원만) 후 랭킹 불러오기
       (async () => {
         try {
-          if (canRank && score > 0) await sb.rpc("submit_speed_score", { p_score: score });
+          if (canRank && score > 0) {
+            const seconds = startRef.current ? (Date.now() - startRef.current) / 1000 : 0;
+            await sb.rpc("submit_speed_score", {
+              p_score: score,
+              p_correct: correctCount,
+              p_combo: comboMax,
+              p_seconds: Math.round(seconds),
+            });
+          }
         } catch (e) {}
         if (loggedIn) await loadRanking();
       })();
@@ -2476,7 +2542,8 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
   }, [timeLeft, phase, score]);
 
   const doStart = () => {
-    setScore(0); setCombo(0); setComboMax(0); setTimeLeft(START);
+    setScore(0); setCombo(0); setComboMax(0); setCorrectCount(0); setTimeLeft(START);
+    startRef.current = Date.now();
     setPicked(null); setFlash(""); setRanking(null); setQ(makeQ(0)); setPhase("playing");
   };
   const start = () => {
@@ -2499,6 +2566,7 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
       setScore((s) => s + Math.round(10 * mult));
       setCombo(nc);
       setComboMax((x) => Math.max(x, nc));
+      setCorrectCount((x) => x + 1);
       setTimeLeft((t) => +(t + BONUS).toFixed(1));
       flashFor(nc % 5 === 0 ? "crit" : "good");
     } else {
@@ -3080,8 +3148,9 @@ const CSS = `
 .mr-sector.soon:hover{box-shadow:0 1px 2px rgba(0,0,0,.03)}
 .mr-sector-icon{
   width:54px; height:54px; border-radius:16px; display:grid; place-items:center;
-  font-size:26px; flex:none;
+  font-size:26px; flex:none; position:relative;
 }
+.mr-sector-dot{position:absolute; top:-2px; right:-2px; width:12px; height:12px; border-radius:50%; background:var(--red); border:2.5px solid var(--card)}
 .mr-sector-icon.blue{background:var(--blue-bg)}
 .mr-sector-icon.green{background:var(--green-bg)}
 .mr-sector-icon.gray{background:var(--bg)}
@@ -3205,6 +3274,7 @@ const CSS = `
 .mr-post-row:hover{background:var(--bg)}
 .mr-post-row:active{background:var(--bg)}
 .mr-post-row-title{font-size:15.5px; font-weight:700; color:var(--t1); letter-spacing:-0.3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mr-unread-dot{display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--red); margin-right:7px; vertical-align:middle}
 .mr-post-row-meta{font-size:12.5px; color:var(--t3); font-weight:600}
 .mr-draft-head{font-size:13px; font-weight:800; color:var(--t3); padding:2px 2px 0}
 .mr-draft-badge{font-size:11px; font-weight:700; color:#B26A00; background:#FFF4E0; padding:2px 7px; border-radius:6px; margin-left:8px; vertical-align:middle}
