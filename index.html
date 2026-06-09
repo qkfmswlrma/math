@@ -198,6 +198,11 @@ function App() {
       } catch (e) {}
     })();
   }, [auth]);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [notices, setNotices] = useState([]);
+  const [exams, setExams] = useState([]);
+  const [subs, setSubs] = useState([]);
   // 이미 제출한 시험은 '확인함'으로 간주 (빨간 점 제거)
   useEffect(() => {
     if (!auth || !auth.username) return;
@@ -205,11 +210,6 @@ function App() {
       if (s.student === auth.username && !readExamIds.has(s.examId)) markExamRead(s.examId);
     });
   }, [subs, auth]);
-  const [authOpen, setAuthOpen] = useState(false);
-  const [users, setUsers] = useState([]);
-  const [notices, setNotices] = useState([]);
-  const [exams, setExams] = useState([]);
-  const [subs, setSubs] = useState([]);
   const [auditLog, setAuditLog] = useState([]);
   const [guestSubs, setGuestSubs] = useState([]);
 
