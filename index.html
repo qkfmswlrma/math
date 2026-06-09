@@ -25,6 +25,8 @@
 <script defer crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script defer crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <script defer src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body>
@@ -1540,7 +1542,7 @@ function RichEditor({ value, onChange, placeholder }) {
 /* ===================== 시험 ===================== */
 const EXAM_TYPES = { level: "레벨테스트", today: "오늘의 문제" };
 
-function ExamChooser({ onPick }) {
+function ExamChooser({ onPick, todayUnread }) {
   return (
     <div className="mr-col">
       <div className="mr-list-top">
@@ -1553,7 +1555,7 @@ function ExamChooser({ onPick }) {
           <span className="mr-pick-desc">내 실력 진단</span>
         </button>
         <button className="mr-pick-card" onClick={() => onPick("today")}>
-          <span className="mr-pick-icon green">📅</span>
+          <span className="mr-pick-icon green">📅{todayUnread > 0 && <span className="mr-sector-dot" />}</span>
           <span className="mr-pick-title">오늘의 문제</span>
           <span className="mr-pick-desc">매일 풀어보기</span>
         </button>
@@ -1612,7 +1614,7 @@ function todayUnreadCount(exams, readIds) {
 
 function Exams(props) {
   const [examType, setExamType] = useState(null); // null=선택화면, 'level' | 'today'
-  if (!examType) return <ExamChooser onPick={setExamType} />;
+  if (!examType) return <ExamChooser onPick={setExamType} todayUnread={todayUnreadCount((props.exams || []).filter(isPublished), props.readIds || new Set())} />;
   const filtered = (props.exams || []).filter((e) => (e.examType || "level") === examType);
   const onBackToChooser = () => setExamType(null);
   if (props.role === "admin")
@@ -1763,7 +1765,7 @@ function ExamsAdmin({ exams, onAddExam, onEditExam, onDeleteExam, subs, onGradeS
 /* ---------- 시험 출제/수정 에디터 ---------- */
 function ExamEditor({ initial, defaultType, onCancel, onSave }) {
   function blankQ() {
-    return { id: uid(), type: "mc", text: "", image: "", points: 10, options: ["", ""], answer: 0, accept: "" };
+    return { id: uid(), type: "mc", text: "", image: "", latex: "", points: 10, options: ["", ""], answer: 0, accept: "" };
   }
   const [title, setTitle] = useState(initial ? initial.title : "");
   const [examType, setExamType] = useState(initial ? (initial.examType || "level") : (defaultType || "level"));
@@ -1776,7 +1778,7 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
   const [publishStr, setPublishStr] = useState(initial && initial.publishAt ? toLocalInput(initial.publishAt) : "");
   const [questions, setQuestions] = useState(
     initial && initial.questions && initial.questions.length
-      ? initial.questions.map((q) => ({ options: ["", ""], accept: "", answer: 0, ...q }))
+      ? initial.questions.map((q) => ({ options: ["", ""], accept: "", answer: 0, latex: "", ...q }))
       : [blankQ()]
   );
   const update = (id, patch) => setQuestions((qs) => qs.map((q) => (q.id === id ? { ...q, ...patch } : q)));
@@ -1803,7 +1805,8 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
   const save = () => {
     if (!title.trim()) return alert("시험 제목을 입력하세요.");
     for (const q of questions) {
-      if (!q.image) return alert("모든 문항에 문제 사진을 올려주세요.");
+      if (!q.image && !(q.latex && q.latex.trim()) && !(q.text && q.text.trim()))
+        return alert("각 문항에 문제 사진 · 수식 · 설명 중 하나는 넣어주세요.");
       if (q.type === "mc" && q.options.some((o) => !o.trim()))
         return alert("객관식 보기를 모두 입력하세요.");
       if (q.type === "short" && !String(q.accept || "").trim())
@@ -1887,6 +1890,8 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
           </div>
 
           <QuestionImage value={q.image} onChange={(img) => update(q.id, { image: img })} />
+          <div className="mr-cat-label">수식 (선택)</div>
+          <MathField value={q.latex} onChange={(v) => update(q.id, { latex: v })} />
           <input
             className="mr-input"
             placeholder="문제 보충 설명 (선택)"
@@ -2068,6 +2073,7 @@ function SubmissionRow({ exam, sub, users, open, onToggle, onSaveGrade }) {
                     {q.text}
                   </div>
                   {q.image && <img className="mr-q-img sm" src={q.image} alt="문제" />}
+                  {q.latex && <MathView latex={q.latex} block />}
                   <div className="mr-mc-review">
                     {q.options.map((opt, oi) => (
                       <div
@@ -2099,6 +2105,7 @@ function SubmissionRow({ exam, sub, users, open, onToggle, onSaveGrade }) {
                   {q.text}
                 </div>
                 {q.image && <img className="mr-q-img sm" src={q.image} alt="문제" />}
+                  {q.latex && <MathView latex={q.latex} block />}
                 <div className="mr-answer-box">
                   <span className="mr-ans-label">학생 답안</span>
                   {a ? a : <em className="mr-muted">미응답</em>}
@@ -2365,6 +2372,7 @@ function TakeExam({ exam, student, loggedIn, onGuestSubmit, onCancel, onSubmit }
             <span className="mr-rate-tag" style={{ color: rateColor(guestRate(q.id)) }}>비회원정답률 {guestRate(q.id) === null ? "—" : guestRate(q.id) + "%"}</span>
           </div>
           {q.image && <img className="mr-q-img" src={q.image} alt={"문제 " + (qi + 1)} />}
+          {q.latex && <MathView latex={q.latex} block />}
           {q.text && <div className="mr-q-cap">{q.text}</div>}
           {q.type === "mc" ? (
             <div className="mr-take-options">
@@ -2797,6 +2805,7 @@ function ReviewList({ exam, sub }) {
               <span className={"mr-ox " + (correct ? "o" : "x")}>{correct ? "O 정답" : "X 오답"}</span>
             </div>
             {q.image && <img className="mr-q-img" src={q.image} alt={"문제 " + (qi + 1)} />}
+          {q.latex && <MathView latex={q.latex} block />}
             {q.text && <div className="mr-q-cap">{q.text}</div>}
             {q.type === "mc" ? (
               <div className="mr-take-options">
@@ -2953,6 +2962,105 @@ function PolicyModal({ onClose }) {
           <PrivacyBody />
         </div>
       </div>
+    </div>
+  );
+}
+
+function MathView({ latex, block }) {
+  if (!latex) return null;
+  let html = "";
+  try {
+    html = window.katex ? window.katex.renderToString(latex, { displayMode: !!block, throwOnError: false }) : latex;
+  } catch (e) {
+    html = "";
+  }
+  return <span className={block ? "mr-math-block" : "mr-math"} dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+const MATH_BTNS = [
+  { l: "분수", s: "\\frac{}{}", c: 6 },
+  { l: "x²", s: "^{}", c: 2 },
+  { l: "x₊", s: "_{}", c: 2 },
+  { l: "√", s: "\\sqrt{}", c: 6 },
+  { l: "ⁿ√", s: "\\sqrt[]{}", c: 6 },
+  { l: "( )", s: "\\left(\\right)", c: 6 },
+  { l: "[ ]", s: "\\left[\\right]", c: 6 },
+  { l: "| |", s: "\\left|\\right|", c: 6 },
+  { l: "×", s: "\\times ", c: null },
+  { l: "÷", s: "\\div ", c: null },
+  { l: "·", s: "\\cdot ", c: null },
+  { l: "±", s: "\\pm ", c: null },
+  { l: "≤", s: "\\leq ", c: null },
+  { l: "≥", s: "\\geq ", c: null },
+  { l: "≠", s: "\\neq ", c: null },
+  { l: "≈", s: "\\approx ", c: null },
+  { l: "∞", s: "\\infty ", c: null },
+  { l: "∫", s: "\\int ", c: null },
+  { l: "정적분", s: "\\int_{}^{}", c: 6 },
+  { l: "∑", s: "\\sum_{}^{}", c: 6 },
+  { l: "∏", s: "\\prod_{}^{}", c: 7 },
+  { l: "lim", s: "\\lim_{x \\to }", c: 12 },
+  { l: "d/dx", s: "\\frac{d}{dx}", c: null },
+  { l: "벡터", s: "\\vec{}", c: 5 },
+  { l: "x̄", s: "\\overline{}", c: 10 },
+  { l: "조합", s: "\\binom{}{}", c: 7 },
+  { l: "log", s: "\\log_{}", c: 6 },
+  { l: "ln", s: "\\ln ", c: null },
+  { l: "sin", s: "\\sin ", c: null },
+  { l: "cos", s: "\\cos ", c: null },
+  { l: "tan", s: "\\tan ", c: null },
+  { l: "π", s: "\\pi ", c: null },
+  { l: "θ", s: "\\theta ", c: null },
+  { l: "α", s: "\\alpha ", c: null },
+  { l: "β", s: "\\beta ", c: null },
+  { l: "γ", s: "\\gamma ", c: null },
+  { l: "Δ", s: "\\Delta ", c: null },
+  { l: "→", s: "\\to ", c: null },
+  { l: "∈", s: "\\in ", c: null },
+  { l: "⊂", s: "\\subset ", c: null },
+  { l: "∪", s: "\\cup ", c: null },
+  { l: "∩", s: "\\cap ", c: null },
+];
+
+function MathField({ value, onChange }) {
+  const ref = React.useRef(null);
+  const insert = (snip, caret) => {
+    const ta = ref.current;
+    const v = value || "";
+    const start = ta ? ta.selectionStart : v.length;
+    const end = ta ? ta.selectionEnd : v.length;
+    const next = v.slice(0, start) + snip + v.slice(end);
+    onChange(next);
+    setTimeout(() => {
+      if (!ta) return;
+      const pos = start + (caret != null ? caret : snip.length);
+      ta.focus();
+      ta.setSelectionRange(pos, pos);
+    }, 0);
+  };
+  return (
+    <div className="mr-mathfield">
+      <div className="mr-math-palette">
+        {MATH_BTNS.map((b, i) => (
+          <button key={i} type="button" className="mr-math-btn" onClick={() => insert(b.s, b.c)}>
+            {b.l}
+          </button>
+        ))}
+      </div>
+      <textarea
+        ref={ref}
+        className="mr-input mr-math-input"
+        placeholder="수식 입력 (LaTeX). 위 버튼으로 기호를 넣을 수 있어요."
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        rows={2}
+      />
+      {value ? (
+        <div className="mr-math-preview">
+          <span className="mr-math-preview-tag">미리보기</span>
+          <MathView latex={value} block />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -3194,7 +3302,16 @@ const CSS = `
 .mr-pick-card{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; text-align:center; background:var(--card); border:0; border-radius:20px; padding:30px 16px; box-shadow:0 1px 2px rgba(0,0,0,.03); cursor:pointer; font-family:inherit; transition:transform .1s, box-shadow .15s; animation:rise .4s cubic-bezier(.2,.7,.3,1) both}
 .mr-pick-card:hover{box-shadow:0 6px 18px rgba(0,0,0,.07)}
 .mr-pick-card:active{transform:scale(.98)}
-.mr-pick-icon{width:60px; height:60px; border-radius:18px; display:grid; place-items:center; font-size:30px}
+.mr-pick-icon{width:60px; height:60px; border-radius:18px; display:grid; place-items:center; font-size:30px; position:relative}
+.mr-mathfield{display:flex; flex-direction:column; gap:8px; margin-top:4px}
+.mr-math-palette{display:flex; flex-wrap:wrap; gap:5px}
+.mr-math-btn{border:1px solid var(--line); background:var(--card); color:var(--t1); font-family:inherit; font-size:13px; font-weight:600; padding:6px 9px; border-radius:8px; cursor:pointer; line-height:1.2}
+.mr-math-btn:hover{background:var(--bg)}
+.mr-math-input{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:14px; resize:vertical}
+.mr-math-preview{background:var(--bg); border-radius:12px; padding:14px; text-align:center; position:relative; overflow-x:auto}
+.mr-math-preview-tag{position:absolute; top:6px; left:10px; font-size:10.5px; font-weight:700; color:var(--t3)}
+.mr-math-block{display:block; margin:6px 0; overflow-x:auto}
+.mr-math{display:inline-block}
 .mr-pick-icon.blue{background:var(--blue-bg)}
 .mr-pick-icon.green{background:var(--green-bg)}
 .mr-pick-title{font-size:17px; font-weight:800; color:var(--t1); letter-spacing:-0.4px}
