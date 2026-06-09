@@ -130,6 +130,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("home");
   const [readColIds, setReadColIds] = useState(() => getReadColIds());
+  const [readExamIds, setReadExamIds] = useState(() => getReadExamIds());
   const markColumnRead = (id) => {
     setReadColIds((prev) => {
       if (prev.has(id)) return prev;
@@ -142,6 +143,20 @@ function App() {
     if (auth) {
       sb.from("column_reads")
         .upsert({ user_id: auth.id, column_id: id }, { onConflict: "user_id,column_id" })
+        .then(() => {}, () => {});
+    }
+  };
+  const markExamRead = (id) => {
+    setReadExamIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      saveReadExamIds(next);
+      return next;
+    });
+    if (auth) {
+      sb.from("exam_reads")
+        .upsert({ user_id: auth.id, exam_id: id }, { onConflict: "user_id,exam_id" })
         .then(() => {}, () => {});
     }
   };
@@ -166,6 +181,30 @@ function App() {
       } catch (e) {}
     })();
   }, [auth]);
+  // 로그인하면 서버의 시험 확인 기록도 불러와 합침
+  useEffect(() => {
+    if (!auth) return;
+    (async () => {
+      try {
+        const { data } = await sb.from("exam_reads").select("exam_id").eq("user_id", auth.id);
+        if (data && data.length) {
+          setReadExamIds((prev) => {
+            const next = new Set(prev);
+            data.forEach((r) => next.add(r.exam_id));
+            saveReadExamIds(next);
+            return next;
+          });
+        }
+      } catch (e) {}
+    })();
+  }, [auth]);
+  // 이미 제출한 시험은 '확인함'으로 간주 (빨간 점 제거)
+  useEffect(() => {
+    if (!auth || !auth.username) return;
+    subs.forEach((s) => {
+      if (s.student === auth.username && !readExamIds.has(s.examId)) markExamRead(s.examId);
+    });
+  }, [subs, auth]);
   const [authOpen, setAuthOpen] = useState(false);
   const [users, setUsers] = useState([]);
   const [notices, setNotices] = useState([]);
@@ -452,7 +491,7 @@ function App() {
   };
 
   const homeView = (
-    <Home role={role} student={student} loggedIn={loggedIn} noticeCount={role === "admin" ? notices.length : notices.filter((n) => !n.isDraft).length} columnUnread={columnUnreadCount(notices, readColIds)} examCount={role === "admin" ? exams.length : exams.filter(isPublished).length} onGo={setTab} />
+    <Home role={role} student={student} loggedIn={loggedIn} noticeCount={role === "admin" ? notices.length : notices.filter((n) => !n.isDraft).length} columnUnread={columnUnreadCount(notices, readColIds)} examUnread={todayUnreadCount(exams.filter(isPublished), readExamIds)} examCount={role === "admin" ? exams.length : exams.filter(isPublished).length} onGo={setTab} />
   );
 
   return (
@@ -522,6 +561,8 @@ function App() {
             onAddSub={onAddSub}
             onGuestSubmit={onGuestSubmit}
             guestSubs={guestSubs}
+            readIds={readExamIds}
+            onView={markExamRead}
           />
         )}
       </main>
@@ -1065,7 +1106,7 @@ function AuthModal({ onClose, onLogin, onSignup }) {
 }
 
 /* ===================== 홈 ===================== */
-function Home({ role, student, loggedIn, noticeCount, columnUnread, examCount, onGo }) {
+function Home({ role, student, loggedIn, noticeCount, columnUnread, examUnread, examCount, onGo }) {
   const greet = !loggedIn
     ? "로그인하고 함께 시작해요"
     : role === "admin"
@@ -1089,6 +1130,7 @@ function Home({ role, student, loggedIn, noticeCount, columnUnread, examCount, o
       desc: "수학질문방 레벨테스트",
       meta: `${examCount}개의 시험`,
       tone: "green",
+      dot: examUnread > 0,
     },
     {
       key: "game",
@@ -1546,8 +1588,26 @@ function getReadColIds() {
 function saveReadColIds(set) {
   try { localStorage.setItem(COL_READ_KEY, JSON.stringify([...set])); } catch (e) {}
 }
+/* 시험 확인 추적 (기기에 저장) */
+const EXAM_READ_KEY = "mrreadexams";
+function getReadExamIds() {
+  try { return new Set(JSON.parse(localStorage.getItem(EXAM_READ_KEY) || "[]")); } catch (e) { return new Set(); }
+}
+function saveReadExamIds(set) {
+  try { localStorage.setItem(EXAM_READ_KEY, JSON.stringify([...set])); } catch (e) {}
+}
 function columnUnreadCount(notices, readIds) {
   return (notices || []).filter((n) => !n.isDraft && !readIds.has(n.id)).length;
+}
+
+/* 오늘의 문제 안 본 것 추적: 칼럼 읽음과 동일하게 "확인(열어봄)" 기준 (readIds 공용) */
+function isExamViewed(exam, readIds) {
+  return readIds && readIds.has(exam.id);
+}
+function todayUnreadCount(exams, readIds) {
+  return (exams || []).filter(
+    (e) => (e.examType || "level") === "today" && isPublished(e) && !isExamViewed(e, readIds)
+  ).length;
 }
 
 function Exams(props) {
@@ -1563,7 +1623,7 @@ function Exams(props) {
 }
 
 /* ---------- 관리자: 시험 목록 / 출제 / 채점 / (남의 시험) 응시 ---------- */
-function ExamsAdmin({ exams, onAddExam, onEditExam, onDeleteExam, subs, onGradeSub, onAddSub, myId, student, loggedIn, guestSubs, examType, onBackToChooser, users }) {
+function ExamsAdmin({ exams, onAddExam, onEditExam, onDeleteExam, subs, onGradeSub, onAddSub, myId, student, loggedIn, guestSubs, examType, onBackToChooser, users, readIds, onView }) {
   const [mode, setMode] = useState("list");
   const [activeExam, setActiveExam] = useState(null);
   const [taking, setTaking] = useState(null);
@@ -1644,10 +1704,11 @@ function ExamsAdmin({ exams, onAddExam, onEditExam, onDeleteExam, subs, onGradeS
           const isMine = ex.authorId && myId && ex.authorId === myId;
           const canEdit = isMine || !ex.authorId;
           const myTake = subs.find((s) => s.examId === ex.id && s.student === student && student);
+          const unread = examType === "today" && !isExamViewed(ex, readIds);
           return (
             <article className="mr-card" key={ex.id} style={{ animationDelay: `${i * 40}ms` }}>
               <div className="mr-notice-head">
-                <h3>{ex.title}</h3>
+                <h3>{unread && <span className="mr-unread-dot" />}{ex.title}</h3>
                 <span className="mr-date">{fmtDate(ex.createdAt)}</span>
               </div>
               {!isPublished(ex) && (
@@ -1670,7 +1731,7 @@ function ExamsAdmin({ exams, onAddExam, onEditExam, onDeleteExam, subs, onGradeS
                       내 점수 {totalScore(ex, myTake)} / {maxScore(ex)}
                     </span>
                   ) : (
-                    <button className="mr-btn" onClick={() => setTaking(ex)}>
+                    <button className="mr-btn" onClick={() => { if (onView) onView(ex.id); setTaking(ex); }}>
                       응시하기
                     </button>
                   ))}
@@ -2084,8 +2145,9 @@ function SubmissionRow({ exam, sub, users, open, onToggle, onSaveGrade }) {
 }
 
 /* ---------- 참여자: 시험 목록 / 응시 / 결과 ---------- */
-function ExamsStudent({ student, loggedIn, requireLogin, exams, subs, onAddSub, onGuestSubmit, examType, onBackToChooser }) {
+function ExamsStudent({ student, loggedIn, requireLogin, exams, subs, onAddSub, onGuestSubmit, examType, onBackToChooser, readIds, onView }) {
   const [taking, setTaking] = useState(null);
+  const openExam = (ex) => { if (onView) onView(ex.id); setTaking(ex); };
 
   if (taking)
     return (
@@ -2105,10 +2167,11 @@ function ExamsStudent({ student, loggedIn, requireLogin, exams, subs, onAddSub, 
       ) : (
         exams.map((ex, i) => {
           const mine = subs.find((s) => s.examId === ex.id && s.student === student && student);
+          const unread = examType === "today" && !isExamViewed(ex, readIds);
           return (
             <article className="mr-card" key={ex.id} style={{ animationDelay: `${i * 40}ms` }}>
               <div className="mr-notice-head">
-                <h3>{ex.title}</h3>
+                <h3>{unread && <span className="mr-unread-dot" />}{ex.title}</h3>
                 <span className="mr-date">{fmtDate(ex.createdAt)}</span>
               </div>
               <div className="mr-exam-meta">
@@ -2128,7 +2191,7 @@ function ExamsStudent({ student, loggedIn, requireLogin, exams, subs, onAddSub, 
                 ) : (
                   <button
                     className="mr-btn"
-                    onClick={() => setTaking(ex)}
+                    onClick={() => openExam(ex)}
                   >
                     응시하기
                   </button>
