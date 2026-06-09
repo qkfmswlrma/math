@@ -3029,10 +3029,14 @@ function MathField({ value, onChange }) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    try { el.mathVirtualKeyboardPolicy = "manual"; } catch (e) {} // 자동 팝업 끄고 버튼으로 제어
     if (value && el.value !== value) el.value = value;
     const handler = () => onChange(el.value);
     el.addEventListener("input", handler);
-    return () => el.removeEventListener("input", handler);
+    // 포커스 잃으면 키보드 닫기
+    const blur = () => { try { window.mathVirtualKeyboard && window.mathVirtualKeyboard.hide(); } catch (e) {} };
+    el.addEventListener("blur", blur);
+    return () => { el.removeEventListener("input", handler); el.removeEventListener("blur", blur); };
   }, []);
   // 다른 문항으로 바뀌는 등 외부 값 변경 동기화
   useEffect(() => {
@@ -3047,9 +3051,20 @@ function MathField({ value, onChange }) {
     if (el.insert) el.insert(s, { focus: true });
     onChange(el.value);
   };
+  const toggleKbd = () => {
+    const el = ref.current;
+    if (el) el.focus();
+    try {
+      const vk = window.mathVirtualKeyboard;
+      if (!vk) return;
+      if (vk.visible) vk.hide();
+      else vk.show();
+    } catch (e) {}
+  };
   return (
     <div className="mr-mathfield">
       <div className="mr-math-palette">
+        <button type="button" className="mr-math-btn kbd" onClick={toggleKbd}>⌨ 키보드</button>
         {MATH_BTNS.map((b, i) => (
           <button key={i} type="button" className="mr-math-btn" onClick={() => ins(b.s)}>
             {b.l}
@@ -3057,7 +3072,7 @@ function MathField({ value, onChange }) {
         ))}
       </div>
       <math-field ref={ref} className="mr-mathlive"></math-field>
-      <p className="mr-math-hint">버튼을 누르면 네모 칸이 생겨요. 칸을 눌러 내용을 채우세요.</p>
+      <p className="mr-math-hint">버튼을 누르면 네모 칸이 생겨요. 칸을 눌러 채우면 돼요. 손으로 치려면 ⌨ 키보드.</p>
     </div>
   );
 }
@@ -3304,6 +3319,7 @@ const CSS = `
 .mr-math-palette{display:flex; flex-wrap:wrap; gap:5px}
 .mr-math-btn{border:1px solid var(--line); background:var(--card); color:var(--t1); font-family:inherit; font-size:13px; font-weight:600; padding:6px 9px; border-radius:8px; cursor:pointer; line-height:1.2}
 .mr-math-btn:hover{background:var(--bg)}
+.mr-math-btn.kbd{background:var(--blue-bg); border-color:var(--blue-bg); color:var(--blue); font-weight:700}
 .mr-math-input{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:14px; resize:vertical}
 .mr-mathlive{display:block; width:100%; border:1.5px solid var(--line); border-radius:12px; padding:12px; font-size:20px; background:var(--card)}
 .mr-mathlive:focus-within{border-color:var(--blue)}
