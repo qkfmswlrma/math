@@ -27,7 +27,6 @@
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/mathlive@0.100.0/dist/mathlive.min.js"></script>
 <script defer src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body>
@@ -1783,8 +1782,6 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
       : [blankQ()]
   );
   const update = (id, patch) => setQuestions((qs) => qs.map((q) => (q.id === id ? { ...q, ...patch } : q)));
-  // 수식 입력값은 타이핑 중 React 상태를 건드리지 않도록 ref에 보관 (모바일 입력 끊김 방지)
-  const latexRefs = React.useRef({});
   const addQ = () => setQuestions((qs) => [...qs, blankQ()]);
   const delQ = (id) => setQuestions((qs) => (qs.length > 1 ? qs.filter((q) => q.id !== id) : qs));
 
@@ -1807,12 +1804,7 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
 
   const save = () => {
     if (!title.trim()) return alert("시험 제목을 입력하세요.");
-    // 수식은 입력칸 ref에서 최신값을 읽어 합침 (타이핑 중 상태를 안 건드렸으므로)
-    const final = questions.map((q) => ({
-      ...q,
-      latex: q.id in latexRefs.current ? latexRefs.current[q.id] : (q.latex || ""),
-      points: Number(q.points) || 0,
-    }));
+    const final = questions.map((q) => ({ ...q, points: Number(q.points) || 0 }));
     for (const q of final) {
       if (!q.image && !(q.latex && q.latex.trim()) && !(q.text && q.text.trim()))
         return alert("각 문항에 문제 사진 · 수식 · 설명 중 하나는 넣어주세요.");
@@ -1895,10 +1887,7 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
 
           <QuestionImage value={q.image} onChange={(img) => update(q.id, { image: img })} />
           <div className="mr-cat-label">수식 (선택)</div>
-          <MathField
-            value={q.latex}
-            onChange={(v) => { latexRefs.current[q.id] = v; }}
-          />
+          <MathField value={q.latex} onChange={(v) => update(q.id, { latex: v })} />
           <input
             className="mr-input"
             placeholder="문제 보충 설명 (선택)"
@@ -2985,84 +2974,92 @@ function MathView({ latex, block }) {
 }
 
 const MATH_BTNS = [
-  { l: "분수", s: "\\frac{#?}{#?}" },
-  { l: "x²", s: "^{#?}" },
-  { l: "x₊", s: "_{#?}" },
-  { l: "√", s: "\\sqrt{#?}" },
-  { l: "ⁿ√", s: "\\sqrt[#?]{#?}" },
-  { l: "( )", s: "\\left(#?\\right)" },
-  { l: "[ ]", s: "\\left[#?\\right]" },
-  { l: "| |", s: "\\left|#?\\right|" },
-  { l: "×", s: "\\times" },
-  { l: "÷", s: "\\div" },
-  { l: "·", s: "\\cdot" },
-  { l: "±", s: "\\pm" },
-  { l: "≤", s: "\\leq" },
-  { l: "≥", s: "\\geq" },
-  { l: "≠", s: "\\neq" },
-  { l: "≈", s: "\\approx" },
-  { l: "∞", s: "\\infty" },
-  { l: "∫", s: "\\int" },
-  { l: "정적분", s: "\\int_{#?}^{#?}" },
-  { l: "∑", s: "\\sum_{#?}^{#?}" },
-  { l: "∏", s: "\\prod_{#?}^{#?}" },
-  { l: "lim", s: "\\lim_{#? \\to #?}" },
-  { l: "d/dx", s: "\\frac{d}{d#?}" },
-  { l: "벡터", s: "\\vec{#?}" },
-  { l: "x̄", s: "\\overline{#?}" },
-  { l: "조합", s: "\\binom{#?}{#?}" },
-  { l: "log", s: "\\log_{#?}" },
-  { l: "ln", s: "\\ln" },
-  { l: "sin", s: "\\sin" },
-  { l: "cos", s: "\\cos" },
-  { l: "tan", s: "\\tan" },
-  { l: "π", s: "\\pi" },
-  { l: "θ", s: "\\theta" },
-  { l: "α", s: "\\alpha" },
-  { l: "β", s: "\\beta" },
-  { l: "γ", s: "\\gamma" },
-  { l: "Δ", s: "\\Delta" },
-  { l: "→", s: "\\to" },
-  { l: "∈", s: "\\in" },
-  { l: "⊂", s: "\\subset" },
-  { l: "∪", s: "\\cup" },
-  { l: "∩", s: "\\cap" },
+  { l: "분수", s: "\\frac{}{}", c: 6 },
+  { l: "x²", s: "^{}", c: 2 },
+  { l: "x₊", s: "_{}", c: 2 },
+  { l: "√", s: "\\sqrt{}", c: 6 },
+  { l: "ⁿ√", s: "\\sqrt[]{}", c: 6 },
+  { l: "( )", s: "\\left(\\right)", c: 6 },
+  { l: "[ ]", s: "\\left[\\right]", c: 6 },
+  { l: "| |", s: "\\left|\\right|", c: 6 },
+  { l: "×", s: "\\times ", c: null },
+  { l: "÷", s: "\\div ", c: null },
+  { l: "·", s: "\\cdot ", c: null },
+  { l: "±", s: "\\pm ", c: null },
+  { l: "≤", s: "\\leq ", c: null },
+  { l: "≥", s: "\\geq ", c: null },
+  { l: "≠", s: "\\neq ", c: null },
+  { l: "≈", s: "\\approx ", c: null },
+  { l: "∞", s: "\\infty ", c: null },
+  { l: "∫", s: "\\int ", c: null },
+  { l: "정적분", s: "\\int_{}^{}", c: 6 },
+  { l: "∑", s: "\\sum_{}^{}", c: 6 },
+  { l: "∏", s: "\\prod_{}^{}", c: 7 },
+  { l: "lim", s: "\\lim_{x \\to }", c: null },
+  { l: "d/dx", s: "\\frac{d}{dx}", c: null },
+  { l: "벡터", s: "\\vec{}", c: 5 },
+  { l: "x̄", s: "\\overline{}", c: 10 },
+  { l: "조합", s: "\\binom{}{}", c: 7 },
+  { l: "log", s: "\\log_{}", c: 6 },
+  { l: "ln", s: "\\ln ", c: null },
+  { l: "sin", s: "\\sin ", c: null },
+  { l: "cos", s: "\\cos ", c: null },
+  { l: "tan", s: "\\tan ", c: null },
+  { l: "π", s: "\\pi ", c: null },
+  { l: "θ", s: "\\theta ", c: null },
+  { l: "α", s: "\\alpha ", c: null },
+  { l: "β", s: "\\beta ", c: null },
+  { l: "γ", s: "\\gamma ", c: null },
+  { l: "Δ", s: "\\Delta ", c: null },
+  { l: "→", s: "\\to ", c: null },
+  { l: "∈", s: "\\in ", c: null },
+  { l: "⊂", s: "\\subset ", c: null },
+  { l: "∪", s: "\\cup ", c: null },
+  { l: "∩", s: "\\cap ", c: null },
 ];
 
-const MathField = React.memo(function MathField({ value, onChange }) {
+function MathField({ value, onChange }) {
   const ref = React.useRef(null);
-  // 초기화 + 입력 이벤트 연결 (마운트 시 1회). 이후 리렌더로 칸이 초기화되지 않게 memo로 고정.
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    try { el.mathVirtualKeyboardPolicy = "auto"; } catch (e) {}
-    if (value && el.value !== value) el.value = value;
-    const handler = () => onChange(el.value);
-    el.addEventListener("input", handler);
-    return () => { el.removeEventListener("input", handler); };
-  }, []);
-
-  const ins = (s) => {
-    const el = ref.current;
-    if (!el) return;
-    el.focus();
-    if (el.insert) el.insert(s, { focus: true });
-    onChange(el.value);
+  const insert = (snip, caret) => {
+    const ta = ref.current;
+    const v = value || "";
+    const start = ta ? ta.selectionStart : v.length;
+    const end = ta ? ta.selectionEnd : v.length;
+    const next = v.slice(0, start) + snip + v.slice(end);
+    onChange(next);
+    setTimeout(() => {
+      if (!ta) return;
+      const pos = start + (caret != null ? caret : snip.length);
+      ta.focus();
+      ta.setSelectionRange(pos, pos);
+    }, 0);
   };
   return (
     <div className="mr-mathfield">
       <div className="mr-math-palette">
         {MATH_BTNS.map((b, i) => (
-          <button key={i} type="button" className="mr-math-btn" onClick={() => ins(b.s)}>
+          <button key={i} type="button" className="mr-math-btn" onClick={() => insert(b.s, b.c)}>
             {b.l}
           </button>
         ))}
       </div>
-      <math-field ref={ref} className="mr-mathlive"></math-field>
-      <p className="mr-math-hint">아래 칸을 누르면 수식 키보드가 떠요. 버튼을 누르면 네모 칸이 생기고, 그 칸을 눌러 채우면 돼요.</p>
+      <textarea
+        ref={ref}
+        className="mr-input mr-math-input"
+        placeholder="LaTeX 수식. 버튼을 누르면 { } 틀이 들어가요. 예: x^2 + \frac{1}{2}"
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        rows={2}
+      />
+      {value ? (
+        <div className="mr-math-preview">
+          <span className="mr-math-preview-tag">미리보기</span>
+          <MathView latex={value} block />
+        </div>
+      ) : null}
     </div>
   );
-}, () => true); // props가 바뀌어도 절대 리렌더 안 함 (입력칸이 스스로 값 관리)
+}
 
 function QuestionImage({ value, onChange }) {
   const [busy, setBusy] = useState(false);
@@ -3306,12 +3303,8 @@ const CSS = `
 .mr-math-palette{display:flex; flex-wrap:wrap; gap:5px}
 .mr-math-btn{border:1px solid var(--line); background:var(--card); color:var(--t1); font-family:inherit; font-size:13px; font-weight:600; padding:6px 9px; border-radius:8px; cursor:pointer; line-height:1.2}
 .mr-math-btn:hover{background:var(--bg)}
-.mr-math-btn.kbd{background:var(--blue-bg); border-color:var(--blue-bg); color:var(--blue); font-weight:700}
-.mr-math-input{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:14px; resize:vertical}
-.mr-mathlive{display:block; width:100%; border:1.5px solid var(--line); border-radius:12px; padding:12px; font-size:20px; background:var(--card)}
-.mr-mathlive:focus-within{border-color:var(--blue)}
-.mr-math-hint{font-size:12px; color:var(--t3); margin:2px 2px 0}
-.mr-math-preview{background:var(--bg); border-radius:12px; padding:14px; text-align:center; position:relative; overflow-x:auto}
+.mr-math-input{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:14px; resize:vertical; padding-top:9px; padding-bottom:9px}
+.mr-math-preview{background:var(--bg); border-radius:12px; padding:18px 14px 14px; text-align:center; position:relative; overflow-x:auto}
 .mr-math-preview-tag{position:absolute; top:6px; left:10px; font-size:10.5px; font-weight:700; color:var(--t3)}
 .mr-math-block{display:block; margin:6px 0; overflow-x:auto}
 .mr-math{display:inline-block}
