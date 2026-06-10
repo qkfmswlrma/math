@@ -1481,6 +1481,9 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onR
 /* ===================== 서식 입력기 (칼럼용) ===================== */
 function RichEditor({ value, onChange, placeholder }) {
   const ref = React.useRef(null);
+  const lastRange = React.useRef(null);
+  const draft = React.useRef({ latex: "", tree: null });
+  const [building, setBuilding] = useState(null);
   React.useEffect(() => {
     if (ref.current && (value || "") !== ref.current.innerHTML) {
       ref.current.innerHTML = value || "";
@@ -1498,6 +1501,54 @@ function RichEditor({ value, onChange, placeholder }) {
   const tool = (e, cmd, arg) => {
     e.preventDefault(); // 선택 영역 유지
     exec(cmd, arg);
+  };
+  const saveRange = () => {
+    const sel = document.getSelection();
+    if (sel && sel.rangeCount && ref.current && ref.current.contains(sel.anchorNode)) {
+      lastRange.current = sel.getRangeAt(0).cloneRange();
+    }
+  };
+  const openNewMath = (e) => { e.preventDefault(); saveRange(); draft.current = { latex: "", tree: null }; setBuilding({ mode: "new" }); };
+  const openEditMath = (chip) => {
+    let tree = null;
+    try { tree = JSON.parse(decodeURIComponent(chip.dataset.tree || "")); } catch (err) {}
+    draft.current = { latex: chip.dataset.latex || "", tree };
+    setBuilding({ mode: "edit", chip });
+  };
+  const onBoxClick = (e) => {
+    const chip = e.target && e.target.closest ? e.target.closest(".mchip") : null;
+    if (chip) { e.preventDefault(); openEditMath(chip); }
+  };
+  const finishMath = () => {
+    if (!building) return;
+    const { latex, tree } = draft.current;
+    if (building.mode === "edit" && building.chip) {
+      const chip = building.chip;
+      chip.dataset.latex = latex || "";
+      chip.dataset.tree = tree ? encodeURIComponent(JSON.stringify(tree)) : "";
+      chip.innerHTML = chipInnerHtml(latex);
+    } else {
+      const el = ref.current;
+      const tmp = document.createElement("div");
+      tmp.innerHTML = chipHtml(latex, tree);
+      const chip = tmp.firstChild;
+      const range = lastRange.current && el && el.contains(lastRange.current.commonAncestorContainer) ? lastRange.current : null;
+      if (range) {
+        range.collapse(false);
+        range.insertNode(chip);
+        const sp = document.createTextNode("\u00A0");
+        chip.parentNode.insertBefore(sp, chip.nextSibling);
+        const r2 = document.createRange();
+        r2.setStartAfter(sp); r2.collapse(true);
+        const sel = document.getSelection(); sel.removeAllRanges(); sel.addRange(r2);
+      } else if (el) {
+        el.appendChild(chip);
+        el.appendChild(document.createTextNode("\u00A0"));
+      }
+    }
+    setBuilding(null);
+    sync();
+    if (ref.current) ref.current.focus();
   };
   const colors = ["#191F28", "#F04452", "#3182F6", "#00B262", "#F59F00", "#7048E8"];
   return (
@@ -1525,7 +1576,18 @@ function RichEditor({ value, onChange, placeholder }) {
             onMouseDown={(e) => tool(e, "foreColor", c)}
           />
         ))}
+        <span className="mr-rte-div" />
+        <button type="button" className="mr-rte-btn sm mathbtn" title="수식 넣기" onMouseDown={openNewMath}>＋수식</button>
       </div>
+      {building && (
+        <div className="mr-rte-mathedit">
+          <MathField initialTree={draft.current.tree} onChange={(latex, tree) => { draft.current = { latex, tree }; }} />
+          <div className="mr-rich-mrow">
+            <button type="button" className="mr-btn" onClick={finishMath}>{building.mode === "edit" ? "수정 완료" : "이 수식 넣기"}</button>
+            <button type="button" className="mr-btn-text" onClick={() => setBuilding(null)}>취소</button>
+          </div>
+        </div>
+      )}
       <div
         ref={ref}
         className="mr-rte"
@@ -1533,7 +1595,10 @@ function RichEditor({ value, onChange, placeholder }) {
         suppressContentEditableWarning
         data-placeholder={placeholder || ""}
         onInput={sync}
-        onBlur={sync}
+        onBlur={() => { saveRange(); sync(); }}
+        onKeyUp={saveRange}
+        onMouseUp={saveRange}
+        onClick={onBoxClick}
       />
     </div>
   );
@@ -3736,8 +3801,11 @@ const CSS = `
 .mr-writer .mr-input:first-of-type{margin-top:0}
 
 /* 서식 입력기 */
-.mr-rte-wrap{margin-top:10px; border-radius:12px; background:#fff; box-shadow:inset 0 0 0 1px var(--line); overflow:hidden}
-.mr-rte-toolbar{display:flex; flex-wrap:wrap; align-items:center; gap:4px; padding:8px; background:#fff; border-bottom:1px solid var(--line-soft)}
+.mr-rte-wrap{margin-top:10px; border-radius:12px; background:#fff; box-shadow:inset 0 0 0 1px var(--line)}
+.mr-rte-toolbar{display:flex; flex-wrap:wrap; align-items:center; gap:4px; padding:8px; background:#fff; border-bottom:1px solid var(--line-soft); position:sticky; top:72px; z-index:9; border-radius:12px 12px 0 0; box-shadow:0 4px 12px rgba(0,0,0,0.05)}
+.mr-rte-btn.mathbtn{background:var(--blue-bg); color:var(--blue); font-weight:800}
+.mr-rte-mathedit{border:1.5px solid var(--blue); margin:8px; border-radius:12px; padding:10px; background:var(--blue-bg)}
+.mr-rte .mchip{display:inline-block; vertical-align:middle; margin:0 2px; padding:1px 5px; background:var(--blue-bg); border-radius:6px; cursor:pointer; font-size:16px}
 .mr-rte-btn{border:0; background:var(--bg); color:var(--t1); min-width:34px; height:34px; padding:0 9px; border-radius:8px; font-family:inherit; font-size:15px; cursor:pointer; transition:background .12s; line-height:1}
 .mr-rte-btn.sm{font-size:13px; font-weight:700}
 .mr-rte-btn:hover{background:var(--blue-bg); color:var(--blue)}
