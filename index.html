@@ -1765,7 +1765,7 @@ function ExamsAdmin({ exams, onAddExam, onEditExam, onDeleteExam, subs, onGradeS
 /* ---------- 시험 출제/수정 에디터 ---------- */
 function ExamEditor({ initial, defaultType, onCancel, onSave }) {
   function blankQ() {
-    return { id: uid(), type: "mc", text: "", image: "", latex: "", mathTree: null, points: 10, options: ["", ""], answer: 0, accept: "" };
+    return { id: uid(), type: "mc", text: "", image: "", latex: "", mathTree: null, body: [{ id: segId(), type: "text", v: "" }], points: 10, options: ["", ""], answer: 0, accept: "" };
   }
   const [title, setTitle] = useState(initial ? initial.title : "");
   const [examType, setExamType] = useState(initial ? (initial.examType || "level") : (defaultType || "level"));
@@ -1778,7 +1778,16 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
   const [publishStr, setPublishStr] = useState(initial && initial.publishAt ? toLocalInput(initial.publishAt) : "");
   const [questions, setQuestions] = useState(
     initial && initial.questions && initial.questions.length
-      ? initial.questions.map((q) => ({ options: ["", ""], accept: "", answer: 0, latex: "", mathTree: null, ...q }))
+      ? initial.questions.map((q) => {
+          const m = { options: ["", ""], accept: "", answer: 0, latex: "", mathTree: null, body: null, ...q };
+          if (!m.body || !m.body.length) {
+            const segs = [];
+            if (m.text) segs.push({ id: segId(), type: "text", v: m.text });
+            if (m.latex) segs.push({ id: segId(), type: "math", latex: m.latex, tree: m.mathTree || null });
+            m.body = segs.length ? segs : null;
+          }
+          return m;
+        })
       : [blankQ()]
   );
   const update = (id, patch) => setQuestions((qs) => qs.map((q) => (q.id === id ? { ...q, ...patch } : q)));
@@ -1806,8 +1815,9 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
     if (!title.trim()) return alert("시험 제목을 입력하세요.");
     const final = questions.map((q) => ({ ...q, points: Number(q.points) || 0 }));
     for (const q of final) {
-      if (!q.image && !(q.latex && q.latex.trim()) && !(q.text && q.text.trim()))
-        return alert("각 문항에 문제 사진 · 수식 · 설명 중 하나는 넣어주세요.");
+      const bodyText = (q.body || []).map((s) => (s.type === "text" ? s.v : s.latex || "")).join("");
+      if (!q.image && !bodyText.trim())
+        return alert("각 문항에 문제 본문(텍스트·수식) 또는 사진을 넣어주세요.");
       if (q.type === "mc" && q.options.some((o) => !o.trim()))
         return alert("객관식 보기를 모두 입력하세요.");
       if (q.type === "short" && !String(q.accept || "").trim())
@@ -1886,14 +1896,8 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
           </div>
 
           <QuestionImage value={q.image} onChange={(img) => update(q.id, { image: img })} />
-          <div className="mr-cat-label">수식 (선택)</div>
-          <MathField initialTree={q.mathTree} onChange={(latex, tree) => update(q.id, { latex, mathTree: tree })} />
-          <input
-            className="mr-input"
-            placeholder="문제 보충 설명 (선택)"
-            value={q.text}
-            onChange={(e) => update(q.id, { text: e.target.value })}
-          />
+          <div className="mr-cat-label">문제 본문 (텍스트 + 수식)</div>
+          <RichBody value={q.body} onChange={(body) => update(q.id, { body })} />
 
           {q.type === "mc" ? (
             <div className="mr-options">
@@ -2066,10 +2070,9 @@ function SubmissionRow({ exam, sub, users, open, onToggle, onSaveGrade }) {
                 <div className="mr-grade-q" key={q.id}>
                   <div className="mr-grade-qtext">
                     <span className="mr-qnum-sm">Q{qi + 1}</span>
-                    {q.text}
                   </div>
                   {q.image && <img className="mr-q-img sm" src={q.image} alt="문제" />}
-                  {q.latex && <MathView latex={q.latex} block />}
+                  <QBody q={q} />
                   <div className="mr-mc-review">
                     {q.options.map((opt, oi) => (
                       <div
@@ -2098,10 +2101,9 @@ function SubmissionRow({ exam, sub, users, open, onToggle, onSaveGrade }) {
               <div className="mr-grade-q" key={q.id}>
                 <div className="mr-grade-qtext">
                   <span className="mr-qnum-sm">Q{qi + 1}</span>
-                  {q.text}
                 </div>
                 {q.image && <img className="mr-q-img sm" src={q.image} alt="문제" />}
-                  {q.latex && <MathView latex={q.latex} block />}
+                <QBody q={q} />
                 <div className="mr-answer-box">
                   <span className="mr-ans-label">학생 답안</span>
                   {a ? a : <em className="mr-muted">미응답</em>}
@@ -2368,8 +2370,7 @@ function TakeExam({ exam, student, loggedIn, onGuestSubmit, onCancel, onSubmit }
             <span className="mr-rate-tag" style={{ color: rateColor(guestRate(q.id)) }}>비회원정답률 {guestRate(q.id) === null ? "—" : guestRate(q.id) + "%"}</span>
           </div>
           {q.image && <img className="mr-q-img" src={q.image} alt={"문제 " + (qi + 1)} />}
-          {q.latex && <MathView latex={q.latex} block />}
-          {q.text && <div className="mr-q-cap">{q.text}</div>}
+          <QBody q={q} />
           {q.type === "mc" ? (
             <div className="mr-take-options">
               {q.options.map((opt, oi) => (
@@ -2801,8 +2802,7 @@ function ReviewList({ exam, sub }) {
               <span className={"mr-ox " + (correct ? "o" : "x")}>{correct ? "O 정답" : "X 오답"}</span>
             </div>
             {q.image && <img className="mr-q-img" src={q.image} alt={"문제 " + (qi + 1)} />}
-          {q.latex && <MathView latex={q.latex} block />}
-            {q.text && <div className="mr-q-cap">{q.text}</div>}
+            <QBody q={q} />
             {q.type === "mc" ? (
               <div className="mr-take-options">
                 {q.options.map((opt, oi) => {
@@ -3130,7 +3130,7 @@ function MFItem({ it, activeId, onSelect }) {
 function MathField({ initialTree, onChange }) {
   const [root, setRoot] = useState(() => (initialTree ? cloneField(initialTree) : newField()));
   const [activeId, setActiveId] = useState(root.id);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [tab, setTab] = useState("num");
   const [shift, setShift] = useState(false);
   useEffect(() => { onChange(fieldToLatex(root), root); }, [root]);
@@ -3221,6 +3221,87 @@ function MathField({ initialTree, onChange }) {
         document.body
       )}
       <p className="mf-hint">네모 칸(▢)을 누른 뒤 키보드로 입력하세요. 분수·적분은 f(x) 탭에 있어요.</p>
+    </div>
+  );
+}
+
+// 본문 표시: 텍스트+수식 조각을 한 줄로 인라인 렌더
+function QuestionBody({ body }) {
+  if (!body || !body.length) return null;
+  return (
+    <div className="mr-qbody">
+      {body.map((s, i) =>
+        s.type === "text"
+          ? <span key={i} className="mr-qbody-t">{s.v}</span>
+          : <MathView key={i} latex={s.latex} />
+      )}
+    </div>
+  );
+}
+// 본문(신규 body) 우선, 없으면 옛 latex/text 폴백
+function QBody({ q }) {
+  if (q.body && q.body.length) return <QuestionBody body={q.body} />;
+  return (
+    <React.Fragment>
+      {q.latex ? <MathView latex={q.latex} block /> : null}
+      {q.text ? <div className="mr-q-cap">{q.text}</div> : null}
+    </React.Fragment>
+  );
+}
+
+let _segid = 0;
+const segId = () => "s" + ++_segid;
+// 편집기: 텍스트칸/수식칸을 순서대로 만드는 본문 작성기
+function RichBody({ value, onChange }) {
+  const segs = value && value.length ? value : [{ id: segId(), type: "text", v: "" }];
+  const [editing, setEditing] = useState(null);
+  const commit = (next) => onChange(next);
+  const updateSeg = (id, patch) => commit(segs.map((s) => (s.id === id ? { ...s, ...patch } : s)));
+  const addText = () => commit([...segs, { id: segId(), type: "text", v: "" }]);
+  const addMath = () => { const id = segId(); commit([...segs, { id, type: "math", latex: "", tree: null }]); setEditing(id); };
+  const delSeg = (id) => { commit(segs.filter((s) => s.id !== id)); if (editing === id) setEditing(null); };
+
+  return (
+    <div className="mr-rich">
+      <div className="mr-rich-segs">
+        {segs.map((s) =>
+          s.type === "text" ? (
+            <textarea
+              key={s.id}
+              className="mr-input mr-rich-text"
+              placeholder="문장 입력…"
+              rows={1}
+              value={s.v}
+              onFocus={() => setEditing(null)}
+              onChange={(e) => updateSeg(s.id, { v: e.target.value })}
+            />
+          ) : editing === s.id ? (
+            <div className="mr-rich-mathedit" key={s.id}>
+              <MathField initialTree={s.tree} onChange={(latex, tree) => updateSeg(s.id, { latex, tree })} />
+              <div className="mr-rich-mrow">
+                <button type="button" className="mr-btn" onClick={() => setEditing(null)}>수식 완료</button>
+                <button type="button" className="mr-btn-text" onClick={() => delSeg(s.id)}>삭제</button>
+              </div>
+            </div>
+          ) : (
+            <div className="mr-rich-chip" key={s.id}>
+              <span className="mr-rich-chip-math">{s.latex ? <MathView latex={s.latex} /> : <em className="mr-muted">빈 수식</em>}</span>
+              <button type="button" className="mr-rich-chip-b" onClick={() => setEditing(s.id)}>수정</button>
+              <button type="button" className="mr-rich-chip-b" onClick={() => delSeg(s.id)}>삭제</button>
+            </div>
+          )
+        )}
+      </div>
+      <div className="mr-rich-add">
+        <button type="button" className="mr-btn-soft" onClick={addText}>＋ 텍스트</button>
+        <button type="button" className="mr-btn-soft" onClick={addMath}>＋ 수식</button>
+      </div>
+      {segs.some((s) => (s.type === "text" ? s.v : s.latex)) && (
+        <div className="mr-math-preview">
+          <span className="mr-math-preview-tag">미리보기</span>
+          <QuestionBody body={segs} />
+        </div>
+      )}
     </div>
   );
 }
@@ -3464,6 +3545,20 @@ const CSS = `
 .mr-pick-card:active{transform:scale(.98)}
 .mr-pick-icon{width:60px; height:60px; border-radius:18px; display:grid; place-items:center; font-size:30px; position:relative}
 .mr-mathfield{display:flex; flex-direction:column; gap:8px; margin-top:4px}
+.mr-qbody{font-size:15.5px; line-height:1.9; color:var(--t1); white-space:pre-wrap; word-break:break-word}
+.mr-qbody-t{white-space:pre-wrap}
+.mr-qbody .mr-math{margin:0 2px; vertical-align:middle}
+.mr-rich{display:flex; flex-direction:column; gap:8px; margin-top:4px}
+.mr-rich-segs{display:flex; flex-direction:column; gap:8px}
+.mr-rich-text{resize:vertical; min-height:42px}
+.mr-rich-mathedit{border:1.5px solid var(--blue); border-radius:12px; padding:10px; background:var(--blue-bg)}
+.mr-rich-mrow{display:flex; gap:10px; align-items:center; margin-top:8px}
+.mr-rich-chip{display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:var(--card)}
+.mr-rich-chip-math{flex:1; font-size:18px; overflow-x:auto}
+.mr-rich-chip-b{border:none; background:none; color:var(--blue); font-weight:700; font-size:13.5px; cursor:pointer; padding:4px}
+.mr-rich-add{display:flex; gap:8px}
+.mr-btn-soft{flex:1; border:1px dashed var(--line); background:var(--bg); color:var(--t2); font-family:inherit; font-size:14px; font-weight:700; padding:11px; border-radius:10px; cursor:pointer}
+.mr-btn-soft:active{background:var(--blue-bg); color:var(--blue)}
 .mr-math-preview{background:var(--bg); border-radius:12px; padding:18px 14px 14px; text-align:center; position:relative; overflow-x:auto}
 .mf-canvas{min-height:54px; border:1.5px solid var(--line); border-radius:12px; padding:12px 14px; background:var(--card); font-size:22px; line-height:1.5; overflow-x:auto; display:flex; align-items:center; flex-wrap:wrap}
 .mf-field{display:inline-flex; align-items:center; min-width:18px; min-height:26px; padding:0 2px; border-radius:5px; vertical-align:middle}
@@ -3487,20 +3582,21 @@ const CSS = `
 .mf-lims{display:inline-flex; flex-direction:column; font-size:.6em; margin-left:1px}
 .mf-up{margin-bottom:1px}
 .mf-open{margin-top:4px; align-self:flex-start; border:1px solid var(--line); background:var(--blue-bg); color:var(--blue); font-weight:700; font-size:14px; padding:9px 14px; border-radius:10px; cursor:pointer}
-.mf-kb{position:fixed; left:0; right:0; bottom:0; z-index:1200; background:var(--card); border-top:1px solid var(--line); box-shadow:0 -6px 24px rgba(0,0,0,0.18); padding:8px 8px calc(8px + env(safe-area-inset-bottom)); animation:mfkbup .18s ease-out}
+.mf-kb{position:fixed; left:0; right:0; bottom:0; z-index:1200; background:#FFFFFF; border-top:1px solid #E5E8EB; box-shadow:0 -6px 24px rgba(0,0,0,0.18); padding:8px 8px calc(8px + env(safe-area-inset-bottom)); animation:mfkbup .18s ease-out; -webkit-tap-highlight-color:transparent}
+.mf-kb *{box-sizing:border-box}
 @keyframes mfkbup{from{transform:translateY(100%)}to{transform:translateY(0)}}
 .mf-kb-top{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px}
 .mf-kb-tabs{display:flex; gap:5px; flex-wrap:wrap}
-.mf-kb-tab{border:1px solid var(--line); background:var(--bg); color:var(--t2); font-family:inherit; font-size:14px; font-weight:700; padding:8px 13px; border-radius:9px; cursor:pointer}
-.mf-kb-tab.on{background:var(--blue); border-color:var(--blue); color:#fff}
+.mf-kb-tab{border:1px solid #E5E8EB; background:#F2F4F6; color:#4E5968; font-family:inherit; font-size:14px; font-weight:700; padding:8px 13px; border-radius:9px; cursor:pointer}
+.mf-kb-tab.on{background:#3182F6; border-color:#3182F6; color:#fff}
 .mf-kb-act{display:flex; gap:5px}
-.mf-kb-x{border:1px solid var(--line); background:var(--bg); color:var(--t1); font-size:17px; font-weight:700; width:46px; height:40px; border-radius:9px; cursor:pointer}
+.mf-kb-x{border:1px solid #E5E8EB; background:#F2F4F6; color:#191F28; font-size:17px; font-weight:700; width:46px; height:40px; border-radius:9px; cursor:pointer}
 .mf-kb-rows{display:flex; flex-direction:column; gap:6px; max-width:640px; margin:0 auto}
 .mf-kb-row{display:flex; gap:5px}
-.mf-key{flex:1; min-width:0; border:1px solid var(--line); background:var(--card); color:var(--t1); font-family:inherit; font-size:17px; font-weight:600; padding:14px 2px; border-radius:10px; cursor:pointer; text-align:center; white-space:nowrap}
-.mf-key:active{background:var(--blue-bg)}
-.mf-key.sp{flex:0.8; background:var(--bg); color:var(--t2); font-weight:700}
-.mf-key.on{background:var(--blue); color:#fff; border-color:var(--blue)}
+.mf-key{flex:1; min-width:0; border:1px solid #E5E8EB; background:#FFFFFF; color:#191F28; font-family:inherit; font-size:17px; font-weight:600; padding:14px 2px; border-radius:10px; cursor:pointer; text-align:center; white-space:nowrap}
+.mf-key:active{background:#E8F3FF}
+.mf-key.sp{flex:0.8; background:#F2F4F6; color:#4E5968; font-weight:700}
+.mf-key.on{background:#3182F6; color:#fff; border-color:#3182F6}
 .mf-dvar{display:inline-flex; align-items:center}
 .mf-hint{font-size:12px; color:var(--t3); margin:8px 2px 0; line-height:1.5}
 .mr-math-preview-tag{position:absolute; top:6px; left:10px; font-size:10.5px; font-weight:700; color:var(--t3)}
