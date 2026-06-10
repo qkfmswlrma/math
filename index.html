@@ -3029,14 +3029,10 @@ function MathField({ value, onChange }) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    try { el.mathVirtualKeyboardPolicy = "manual"; } catch (e) {} // 자동 팝업 끄고 버튼으로 제어
     if (value && el.value !== value) el.value = value;
     const handler = () => onChange(el.value);
     el.addEventListener("input", handler);
-    // 포커스 잃으면 키보드 닫기
-    const blur = () => { try { window.mathVirtualKeyboard && window.mathVirtualKeyboard.hide(); } catch (e) {} };
-    el.addEventListener("blur", blur);
-    return () => { el.removeEventListener("input", handler); el.removeEventListener("blur", blur); };
+    return () => { el.removeEventListener("input", handler); };
   }, []);
 
   const ins = (s) => {
@@ -3051,9 +3047,7 @@ function MathField({ value, onChange }) {
     if (el) el.focus();
     try {
       const vk = window.mathVirtualKeyboard;
-      if (!vk) return;
-      if (vk.visible) vk.hide();
-      else vk.show();
+      if (vk) vk.show();
     } catch (e) {}
   };
   return (
