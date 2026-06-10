@@ -2976,7 +2976,7 @@ function MathView({ latex, block }) {
 /* ===== 수식 입력기: LaTeX 몰라도 버튼으로 입력 ===== */
 let _mfid = 0;
 const newField = (items) => ({ id: "f" + ++_mfid, items: items || [] });
-const SUBS = { frac: ["a", "b"], sup: ["a"], sub: ["a"], sqrt: ["a"], nthroot: ["a", "b"], int: ["a", "b"], sum: ["a", "b"], lim: ["a"], paren: ["a"], abs: ["a"] };
+const SUBS = { frac: ["a", "b"], sup: ["a"], sub: ["a"], sqrt: ["a"], nthroot: ["a", "b"], int: ["c", "a", "b", "e"], sum: ["a", "b"], lim: ["a"], paren: ["a"], abs: ["a"] };
 
 function fieldToLatex(f) {
   return (f.items || []).map(itemToLatex).join("");
@@ -2984,6 +2984,8 @@ function fieldToLatex(f) {
 function itemToLatex(it) {
   const A = it.a ? fieldToLatex(it.a) : "";
   const B = it.b ? fieldToLatex(it.b) : "";
+  const C = it.c ? fieldToLatex(it.c) : "";
+  const E = it.e ? fieldToLatex(it.e) : "";
   switch (it.kind) {
     case "atom": return it.tex;
     case "frac": return "\\frac{" + A + "}{" + B + "}";
@@ -2991,7 +2993,7 @@ function itemToLatex(it) {
     case "sub": return "_{" + A + "}";
     case "sqrt": return "\\sqrt{" + A + "}";
     case "nthroot": return "\\sqrt[" + A + "]{" + B + "}";
-    case "int": return "\\int_{" + A + "}^{" + B + "}";
+    case "int": return "\\int_{" + A + "}^{" + B + "} " + C + " \\, d" + E;
     case "sum": return "\\sum_{" + A + "}^{" + B + "}";
     case "lim": return "\\lim_{" + A + "}";
     case "paren": return "\\left(" + A + "\\right)";
@@ -3055,10 +3057,18 @@ const KB = {
     { d: "sin", t: "\\sin" }, { d: "cos", t: "\\cos" }, { d: "tan", t: "\\tan" }, { d: "log", t: "\\log" }, { d: "ln", t: "\\ln" },
   ],
   abc: [
-    "x", "y", "z", "a", "b",
-    "c", "n", "t", "k", "m",
-    { d: "π", t: "\\pi" }, { d: "θ", t: "\\theta" }, { d: "α", t: "\\alpha" }, { d: "β", t: "\\beta" }, { d: "γ", t: "\\gamma" },
-    { d: "Δ", t: "\\Delta" }, { d: "λ", t: "\\lambda" }, { d: "μ", t: "\\mu" }, { d: "σ", t: "\\sigma" }, { d: "φ", t: "\\phi" },
+    "a", "b", "c", "d", "e", "f", "g",
+    "h", "i", "j", "k", "l", "m", "n",
+    "o", "p", "q", "r", "s", "t", "u",
+    "v", "w", "x", "y", "z", { shift: true },
+  ],
+  greek: [
+    { d: "α", t: "\\alpha" }, { d: "β", t: "\\beta" }, { d: "γ", t: "\\gamma" }, { d: "δ", t: "\\delta" }, { d: "ε", t: "\\epsilon" }, { d: "ζ", t: "\\zeta" },
+    { d: "η", t: "\\eta" }, { d: "θ", t: "\\theta" }, { d: "ι", t: "\\iota" }, { d: "κ", t: "\\kappa" }, { d: "λ", t: "\\lambda" }, { d: "μ", t: "\\mu" },
+    { d: "ν", t: "\\nu" }, { d: "ξ", t: "\\xi" }, { d: "π", t: "\\pi" }, { d: "ρ", t: "\\rho" }, { d: "σ", t: "\\sigma" }, { d: "τ", t: "\\tau" },
+    { d: "υ", t: "\\upsilon" }, { d: "φ", t: "\\phi" }, { d: "χ", t: "\\chi" }, { d: "ψ", t: "\\psi" }, { d: "ω", t: "\\omega" }, { d: "∂", t: "\\partial" },
+    { d: "Γ", t: "\\Gamma" }, { d: "Δ", t: "\\Delta" }, { d: "Θ", t: "\\Theta" }, { d: "Λ", t: "\\Lambda" }, { d: "Π", t: "\\Pi" }, { d: "Σ", t: "\\Sigma" },
+    { d: "Φ", t: "\\Phi" }, { d: "Ψ", t: "\\Psi" }, { d: "Ω", t: "\\Omega" },
   ],
   sym: [
     { d: "≤", t: "\\leq" }, { d: "≥", t: "\\geq" }, { d: "≠", t: "\\neq" }, { d: "≈", t: "\\approx" }, { d: "±", t: "\\pm" },
@@ -3066,7 +3076,7 @@ const KB = {
     { d: "⊂", t: "\\subset" }, { d: "∪", t: "\\cup" }, { d: "∩", t: "\\cap" }, { d: "∅", t: "\\emptyset" }, { d: "∴", t: "\\therefore" },
   ],
 };
-const KB_TABS = [["num", "123"], ["fx", "f(x)"], ["abc", "ABC"], ["sym", "#&≤"]];
+const KB_TABS = [["num", "123"], ["fx", "f(x)"], ["abc", "ABC"], ["greek", "αβγ"], ["sym", "#&≤"]];
 
 function MFField({ f, activeId, onSelect }) {
   const active = f.id === activeId;
@@ -3094,7 +3104,13 @@ function MFItem({ it, activeId, onSelect }) {
     case "sub": return <span className="mf-sub">{fld("a")}</span>;
     case "sqrt": return <span className="mf-sqrt"><span className="mf-radic">√</span><span className="mf-under">{fld("a")}</span></span>;
     case "nthroot": return <span className="mf-sqrt"><sup className="mf-nidx">{fld("a")}</sup><span className="mf-radic">√</span><span className="mf-under">{fld("b")}</span></span>;
-    case "int": return <span className="mf-bigop"><span className="mf-op">∫</span><span className="mf-lims"><span className="mf-up">{fld("b")}</span><span className="mf-lo">{fld("a")}</span></span></span>;
+    case "int": return (
+      <span className="mf-row">
+        <span className="mf-bigop"><span className="mf-op">∫</span><span className="mf-lims"><span className="mf-up">{fld("b")}</span><span className="mf-lo">{fld("a")}</span></span></span>
+        {fld("c")}
+        <span className="mf-dvar">&nbsp;d{fld("e")}</span>
+      </span>
+    );
     case "sum": return <span className="mf-bigop"><span className="mf-op">∑</span><span className="mf-lims"><span className="mf-up">{fld("b")}</span><span className="mf-lo">{fld("a")}</span></span></span>;
     case "lim": return <span className="mf-bigop"><span className="mf-op mf-lim">lim</span><span className="mf-lims"><span className="mf-lo">{fld("a")}</span></span></span>;
     case "paren": return <span className="mf-row"><span className="mf-fence">(</span>{fld("a")}<span className="mf-fence">)</span></span>;
@@ -3108,6 +3124,7 @@ function MathField({ initialTree, onChange }) {
   const [activeId, setActiveId] = useState(root.id);
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState("num");
+  const [shift, setShift] = useState(false);
   useEffect(() => { onChange(fieldToLatex(root), root); }, [root]);
 
   const addAtom = (tex, label) =>
@@ -3120,9 +3137,16 @@ function MathField({ initialTree, onChange }) {
   const backspace = () =>
     setRoot((r) => mapField(r, activeId, (f) => ({ ...f, items: f.items.slice(0, -1) })));
   const handleKey = (k) => {
-    if (typeof k === "string") addAtom(k, k);
-    else if (k.k) addStruct(k.k);
-    else addAtom(k.t, k.d);
+    if (typeof k === "string") {
+      const ch = shift && tab === "abc" ? k.toUpperCase() : k;
+      addAtom(ch, ch);
+    } else if (k.shift) {
+      setShift((v) => !v);
+    } else if (k.k) {
+      addStruct(k.k);
+    } else {
+      addAtom(k.t, k.d);
+    }
   };
   const select = (id) => { setActiveId(id); setOpen(true); };
 
@@ -3155,11 +3179,15 @@ function MathField({ initialTree, onChange }) {
             </div>
           </div>
           <div className="mf-kb-grid">
-            {KB[tab].map((k, i) => (
-              <button key={i} type="button" className="mf-key" onClick={() => handleKey(k)}>
-                {typeof k === "string" ? k : k.d}
-              </button>
-            ))}
+            {KB[tab].map((k, i) => {
+              const label = typeof k === "string" ? (shift && tab === "abc" ? k.toUpperCase() : k) : k.shift ? "⇧" : k.d;
+              const cls = "mf-key" + (k && k.shift && shift ? " on" : "");
+              return (
+                <button key={i} type="button" className={cls} onClick={() => handleKey(k)}>
+                  {label}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -3441,6 +3469,8 @@ const CSS = `
 .mf-kb-grid{display:grid; grid-template-columns:repeat(5,1fr); gap:6px; max-width:560px; margin:0 auto}
 .mf-key{border:1px solid var(--line); background:var(--card); color:var(--t1); font-family:inherit; font-size:18px; font-weight:600; padding:13px 0; border-radius:10px; cursor:pointer; text-align:center}
 .mf-key:active{background:var(--blue-bg)}
+.mf-key.on{background:var(--blue); color:#fff; border-color:var(--blue)}
+.mf-dvar{display:inline-flex; align-items:center}
 .mf-hint{font-size:12px; color:var(--t3); margin:8px 2px 0; line-height:1.5}
 .mr-math-preview-tag{position:absolute; top:6px; left:10px; font-size:10.5px; font-weight:700; color:var(--t3)}
 .mr-math-block{display:block; margin:6px 0; overflow-x:auto}
