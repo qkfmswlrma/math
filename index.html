@@ -3029,6 +3029,8 @@ function MathField({ value, onChange }) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    // 칸을 탭하면 수식 키보드가 자동으로 뜨고 입력까지 연결됨 (정석 동작)
+    try { el.mathVirtualKeyboardPolicy = "auto"; } catch (e) {}
     if (value && el.value !== value) el.value = value;
     const handler = () => onChange(el.value);
     el.addEventListener("input", handler);
@@ -3042,18 +3044,9 @@ function MathField({ value, onChange }) {
     if (el.insert) el.insert(s, { focus: true });
     onChange(el.value);
   };
-  const toggleKbd = () => {
-    const el = ref.current;
-    if (el) el.focus();
-    try {
-      const vk = window.mathVirtualKeyboard;
-      if (vk) vk.show();
-    } catch (e) {}
-  };
   return (
     <div className="mr-mathfield">
       <div className="mr-math-palette">
-        <button type="button" className="mr-math-btn kbd" onClick={toggleKbd}>⌨ 키보드</button>
         {MATH_BTNS.map((b, i) => (
           <button key={i} type="button" className="mr-math-btn" onClick={() => ins(b.s)}>
             {b.l}
@@ -3061,7 +3054,7 @@ function MathField({ value, onChange }) {
         ))}
       </div>
       <math-field ref={ref} className="mr-mathlive"></math-field>
-      <p className="mr-math-hint">버튼을 누르면 네모 칸이 생겨요. 칸을 눌러 채우면 돼요. 손으로 치려면 ⌨ 키보드.</p>
+      <p className="mr-math-hint">아래 칸을 누르면 수식 키보드가 떠요. 버튼을 누르면 네모 칸이 생기고, 그 칸을 눌러 채우면 돼요.</p>
     </div>
   );
 }
