@@ -3252,54 +3252,128 @@ function QBody({ q }) {
 let _segid = 0;
 const segId = () => "s" + ++_segid;
 // 편집기: 텍스트칸/수식칸을 순서대로 만드는 본문 작성기
+function escapeHtml(s) {
+  return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function chipInnerHtml(latex) {
+  try { return window.katex ? window.katex.renderToString(latex || "", { throwOnError: false }) : escapeHtml(latex); }
+  catch (e) { return escapeHtml(latex); }
+}
+function chipHtml(latex, tree) {
+  const t = tree ? encodeURIComponent(JSON.stringify(tree)) : "";
+  return '<span class="mchip" contenteditable="false" data-latex="' + escapeHtml(latex || "") + '" data-tree="' + t + '">' + chipInnerHtml(latex) + "</span>";
+}
+function bodyToHtml(body) {
+  if (!body || !body.length) return "";
+  return body.map((s) => (s.type === "text" ? escapeHtml(s.v) : chipHtml(s.latex, s.tree))).join("");
+}
+function htmlToBody(el) {
+  const out = [];
+  const pushText = (v) => {
+    if (!v) return;
+    if (out.length && out[out.length - 1].type === "text") out[out.length - 1].v += v;
+    else out.push({ type: "text", v });
+  };
+  el.childNodes.forEach((n) => {
+    if (n.nodeType === 3) pushText(n.textContent);
+    else if (n.nodeType === 1) {
+      if (n.classList && n.classList.contains("mchip")) {
+        let tree = null;
+        try { tree = JSON.parse(decodeURIComponent(n.dataset.tree || "")); } catch (e) {}
+        out.push({ type: "math", latex: n.dataset.latex || "", tree });
+      } else if (n.tagName === "BR") pushText("\n");
+      else pushText(n.textContent);
+    }
+  });
+  return out;
+}
+
 function RichBody({ value, onChange }) {
-  const segs = value && value.length ? value : [{ id: segId(), type: "text", v: "" }];
-  const [editing, setEditing] = useState(null);
-  const commit = (next) => onChange(next);
-  const updateSeg = (id, patch) => commit(segs.map((s) => (s.id === id ? { ...s, ...patch } : s)));
-  const addText = () => commit([...segs, { id: segId(), type: "text", v: "" }]);
-  const addMath = () => { const id = segId(); commit([...segs, { id, type: "math", latex: "", tree: null }]); setEditing(id); };
-  const delSeg = (id) => { commit(segs.filter((s) => s.id !== id)); if (editing === id) setEditing(null); };
+  const ref = React.useRef(null);
+  const lastRange = React.useRef(null);
+  const draft = React.useRef({ latex: "", tree: null });
+  const [building, setBuilding] = useState(null); // null | {mode:'new'} | {mode:'edit', chip}
+
+  useEffect(() => {
+    if (ref.current) ref.current.innerHTML = bodyToHtml(value);
+  }, []);
+
+  const saveRange = () => {
+    const sel = document.getSelection();
+    if (sel && sel.rangeCount && ref.current && ref.current.contains(sel.anchorNode)) {
+      lastRange.current = sel.getRangeAt(0).cloneRange();
+    }
+  };
+  const serialize = () => { if (ref.current) onChange(htmlToBody(ref.current)); };
+
+  const openNew = () => { saveRange(); draft.current = { latex: "", tree: null }; setBuilding({ mode: "new" }); };
+  const openEdit = (chip) => {
+    let tree = null;
+    try { tree = JSON.parse(decodeURIComponent(chip.dataset.tree || "")); } catch (e) {}
+    draft.current = { latex: chip.dataset.latex || "", tree };
+    setBuilding({ mode: "edit", chip });
+  };
+  const onBoxClick = (e) => {
+    const chip = e.target && e.target.closest ? e.target.closest(".mchip") : null;
+    if (chip) { e.preventDefault(); openEdit(chip); }
+  };
+  const finishMath = () => {
+    if (!building) return;
+    const { latex, tree } = draft.current;
+    if (building.mode === "edit" && building.chip) {
+      const chip = building.chip;
+      chip.dataset.latex = latex || "";
+      chip.dataset.tree = tree ? encodeURIComponent(JSON.stringify(tree)) : "";
+      chip.innerHTML = chipInnerHtml(latex);
+    } else {
+      const el = ref.current;
+      const tmp = document.createElement("div");
+      tmp.innerHTML = chipHtml(latex, tree);
+      const chip = tmp.firstChild;
+      const range = lastRange.current && el && el.contains(lastRange.current.commonAncestorContainer) ? lastRange.current : null;
+      if (range) {
+        range.collapse(false);
+        range.insertNode(chip);
+        const sp = document.createTextNode("\u00A0");
+        chip.parentNode.insertBefore(sp, chip.nextSibling);
+        const r2 = document.createRange();
+        r2.setStartAfter(sp); r2.collapse(true);
+        const sel = document.getSelection(); sel.removeAllRanges(); sel.addRange(r2);
+      } else if (el) {
+        el.appendChild(chip);
+        el.appendChild(document.createTextNode("\u00A0"));
+      }
+    }
+    setBuilding(null);
+    serialize();
+    if (ref.current) ref.current.focus();
+  };
 
   return (
     <div className="mr-rich">
-      <div className="mr-rich-segs">
-        {segs.map((s) =>
-          s.type === "text" ? (
-            <textarea
-              key={s.id}
-              className="mr-input mr-rich-text"
-              placeholder="문장 입력…"
-              rows={1}
-              value={s.v}
-              onFocus={() => setEditing(null)}
-              onChange={(e) => updateSeg(s.id, { v: e.target.value })}
-            />
-          ) : editing === s.id ? (
-            <div className="mr-rich-mathedit" key={s.id}>
-              <MathField initialTree={s.tree} onChange={(latex, tree) => updateSeg(s.id, { latex, tree })} />
-              <div className="mr-rich-mrow">
-                <button type="button" className="mr-btn" onClick={() => setEditing(null)}>수식 완료</button>
-                <button type="button" className="mr-btn-text" onClick={() => delSeg(s.id)}>삭제</button>
-              </div>
-            </div>
-          ) : (
-            <div className="mr-rich-chip" key={s.id}>
-              <span className="mr-rich-chip-math">{s.latex ? <MathView latex={s.latex} /> : <em className="mr-muted">빈 수식</em>}</span>
-              <button type="button" className="mr-rich-chip-b" onClick={() => setEditing(s.id)}>수정</button>
-              <button type="button" className="mr-rich-chip-b" onClick={() => delSeg(s.id)}>삭제</button>
-            </div>
-          )
-        )}
-      </div>
+      <div
+        ref={ref}
+        className="mr-rich-box"
+        contentEditable
+        suppressContentEditableWarning
+        onInput={serialize}
+        onBlur={() => { saveRange(); serialize(); }}
+        onKeyUp={saveRange}
+        onMouseUp={saveRange}
+        onClick={onBoxClick}
+        data-ph="문제 본문을 입력하세요. 수식은 아래 ＋수식 버튼으로 넣어요."
+      />
       <div className="mr-rich-add">
-        <button type="button" className="mr-btn-soft" onClick={addText}>＋ 텍스트</button>
-        <button type="button" className="mr-btn-soft" onClick={addMath}>＋ 수식</button>
+        <button type="button" className="mr-btn-soft" onClick={openNew}>＋ 수식 넣기</button>
+        <span className="mr-rich-tip">텍스트는 기본 키보드로, 수식은 ＋수식으로</span>
       </div>
-      {segs.some((s) => (s.type === "text" ? s.v : s.latex)) && (
-        <div className="mr-math-preview">
-          <span className="mr-math-preview-tag">미리보기</span>
-          <QuestionBody body={segs} />
+      {building && (
+        <div className="mr-rich-mathedit">
+          <MathField initialTree={draft.current.tree} onChange={(latex, tree) => { draft.current = { latex, tree }; }} />
+          <div className="mr-rich-mrow">
+            <button type="button" className="mr-btn" onClick={finishMath}>{building.mode === "edit" ? "수정 완료" : "이 수식 넣기"}</button>
+            <button type="button" className="mr-btn-text" onClick={() => setBuilding(null)}>취소</button>
+          </div>
         </div>
       )}
     </div>
@@ -3549,15 +3623,15 @@ const CSS = `
 .mr-qbody-t{white-space:pre-wrap}
 .mr-qbody .mr-math{margin:0 2px; vertical-align:middle}
 .mr-rich{display:flex; flex-direction:column; gap:8px; margin-top:4px}
-.mr-rich-segs{display:flex; flex-direction:column; gap:8px}
-.mr-rich-text{resize:vertical; min-height:42px}
+.mr-rich-box{min-height:80px; border:1.5px solid var(--line); border-radius:12px; padding:12px 14px; background:var(--card); font-size:15.5px; line-height:2; color:var(--t1); outline:none; white-space:pre-wrap; word-break:break-word}
+.mr-rich-box:focus{border-color:var(--blue)}
+.mr-rich-box:empty:before{content:attr(data-ph); color:var(--t3)}
+.mr-rich-box .mchip{display:inline-block; vertical-align:middle; margin:0 2px; padding:1px 5px; background:var(--blue-bg); border-radius:6px; cursor:pointer; font-size:17px}
 .mr-rich-mathedit{border:1.5px solid var(--blue); border-radius:12px; padding:10px; background:var(--blue-bg)}
 .mr-rich-mrow{display:flex; gap:10px; align-items:center; margin-top:8px}
-.mr-rich-chip{display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:var(--card)}
-.mr-rich-chip-math{flex:1; font-size:18px; overflow-x:auto}
-.mr-rich-chip-b{border:none; background:none; color:var(--blue); font-weight:700; font-size:13.5px; cursor:pointer; padding:4px}
-.mr-rich-add{display:flex; gap:8px}
-.mr-btn-soft{flex:1; border:1px dashed var(--line); background:var(--bg); color:var(--t2); font-family:inherit; font-size:14px; font-weight:700; padding:11px; border-radius:10px; cursor:pointer}
+.mr-rich-add{display:flex; gap:10px; align-items:center}
+.mr-rich-tip{font-size:12px; color:var(--t3)}
+.mr-btn-soft{border:1px dashed var(--line); background:var(--bg); color:var(--t2); font-family:inherit; font-size:14px; font-weight:700; padding:10px 14px; border-radius:10px; cursor:pointer}
 .mr-btn-soft:active{background:var(--blue-bg); color:var(--blue)}
 .mr-math-preview{background:var(--bg); border-radius:12px; padding:18px 14px 14px; text-align:center; position:relative; overflow-x:auto}
 .mf-canvas{min-height:54px; border:1.5px solid var(--line); border-radius:12px; padding:12px 14px; background:var(--card); font-size:22px; line-height:1.5; overflow-x:auto; display:flex; align-items:center; flex-wrap:wrap}
