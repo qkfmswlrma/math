@@ -1783,6 +1783,8 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
       : [blankQ()]
   );
   const update = (id, patch) => setQuestions((qs) => qs.map((q) => (q.id === id ? { ...q, ...patch } : q)));
+  // 수식 입력값은 타이핑 중 React 상태를 건드리지 않도록 ref에 보관 (모바일 입력 끊김 방지)
+  const latexRefs = React.useRef({});
   const addQ = () => setQuestions((qs) => [...qs, blankQ()]);
   const delQ = (id) => setQuestions((qs) => (qs.length > 1 ? qs.filter((q) => q.id !== id) : qs));
 
@@ -1805,7 +1807,13 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
 
   const save = () => {
     if (!title.trim()) return alert("시험 제목을 입력하세요.");
-    for (const q of questions) {
+    // 수식은 입력칸 ref에서 최신값을 읽어 합침 (타이핑 중 상태를 안 건드렸으므로)
+    const final = questions.map((q) => ({
+      ...q,
+      latex: q.id in latexRefs.current ? latexRefs.current[q.id] : (q.latex || ""),
+      points: Number(q.points) || 0,
+    }));
+    for (const q of final) {
       if (!q.image && !(q.latex && q.latex.trim()) && !(q.text && q.text.trim()))
         return alert("각 문항에 문제 사진 · 수식 · 설명 중 하나는 넣어주세요.");
       if (q.type === "mc" && q.options.some((o) => !o.trim()))
@@ -1820,12 +1828,7 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
       publishAt = new Date(y, m - 1, d, 0, 0, 0, 0).getTime(); // 그 날 자정(00:00)에 공개
       if (isNaN(publishAt)) return alert("공개 날짜가 올바르지 않아요.");
     }
-    onSave({
-      title: title.trim(),
-      examType,
-      publishAt,
-      questions: questions.map((q) => ({ ...q, points: Number(q.points) || 0 })),
-    });
+    onSave({ title: title.trim(), examType, publishAt, questions: final });
   };
 
   return (
@@ -1892,7 +1895,10 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
 
           <QuestionImage value={q.image} onChange={(img) => update(q.id, { image: img })} />
           <div className="mr-cat-label">수식 (선택)</div>
-          <MathField value={q.latex} onChange={(v) => update(q.id, { latex: v })} />
+          <MathField
+            value={q.latex}
+            onChange={(v) => { latexRefs.current[q.id] = v; }}
+          />
           <input
             className="mr-input"
             placeholder="문제 보충 설명 (선택)"
