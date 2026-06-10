@@ -3184,7 +3184,7 @@ function MathField({ initialTree, onChange }) {
       {!open && (
         <button type="button" className="mf-open" onClick={() => setOpen(true)}>⌨ 수식 키보드 열기</button>
       )}
-      {open && (
+      {open && ReactDOM.createPortal(
         <div className="mf-kb">
           <div className="mf-kb-top">
             <div className="mf-kb-tabs">
@@ -3217,7 +3217,8 @@ function MathField({ initialTree, onChange }) {
               </div>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       <p className="mf-hint">네모 칸(▢)을 누른 뒤 키보드로 입력하세요. 분수·적분은 f(x) 탭에 있어요.</p>
     </div>
