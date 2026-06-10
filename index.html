@@ -2976,7 +2976,7 @@ function MathView({ latex, block }) {
 /* ===== 수식 입력기: LaTeX 몰라도 버튼으로 입력 ===== */
 let _mfid = 0;
 const newField = (items) => ({ id: "f" + ++_mfid, items: items || [] });
-const SUBS = { frac: ["a", "b"], sup: ["a"], sub: ["a"], sqrt: ["a"], nthroot: ["a", "b"], int: ["c", "a", "b", "e"], sum: ["a", "b"], lim: ["a"], paren: ["a"], abs: ["a"] };
+const SUBS = { frac: ["a", "b"], sup: ["a"], sub: ["a"], sqrt: ["a"], nthroot: ["a", "b"], int: ["c", "a", "b", "e"], sum: ["a", "b"], lim: ["a"], paren: ["a"], abs: ["a"], exp: ["a"], pow10: ["a"], logb: ["a", "b"], ddx: ["c", "a"] };
 
 function fieldToLatex(f) {
   return (f.items || []).map(itemToLatex).join("");
@@ -2998,6 +2998,10 @@ function itemToLatex(it) {
     case "lim": return "\\lim_{" + A + "}";
     case "paren": return "\\left(" + A + "\\right)";
     case "abs": return "\\left|" + A + "\\right|";
+    case "exp": return "e^{" + A + "}";
+    case "pow10": return "10^{" + A + "}";
+    case "logb": return "\\log_{" + A + "} " + B;
+    case "ddx": return "\\frac{d}{d" + A + "} " + C;
     default: return "";
   }
 }
@@ -3043,40 +3047,40 @@ function makeStruct(kind) {
 }
 
 // 키패드 버튼
-// GeoGebra 스타일 탭 키보드
+// GeoGebra 스타일 탭 키보드 (행 단위 배열)
 const KB = {
   num: [
-    "7", "8", "9", { d: "÷", t: "\\div" }, { d: "×", t: "\\times" },
-    "4", "5", "6", "+", "-",
-    "1", "2", "3", "=", { d: "(", t: "(" },
-    "0", ".", { d: ")", t: ")" }, { d: "x/y", k: "frac" }, { d: "xⁿ", k: "sup" },
+    ["x", "y", { d: "π", t: "\\pi" }, { d: "e", t: "e" }, "7", "8", "9", { d: "×", t: "\\times" }, { d: "÷", t: "\\div" }],
+    [{ d: "xⁿ", k: "sup" }, { d: "√", k: "sqrt" }, { d: "ⁿ√", k: "nthroot" }, { d: "|x|", k: "abs" }, "4", "5", "6", "+", "-"],
+    [{ d: "x/y", k: "frac" }, { d: "(", t: "(" }, { d: ")", t: ")" }, { d: ",", t: "," }, "1", "2", "3", "=", { sp: "bs" }],
+    [{ d: "xₙ", k: "sub" }, { d: "<", t: "<" }, { d: ">", t: ">" }, "0", "."],
   ],
   fx: [
-    { d: "x/y", k: "frac" }, { d: "xⁿ", k: "sup" }, { d: "xₙ", k: "sub" }, { d: "√", k: "sqrt" }, { d: "ⁿ√", k: "nthroot" },
-    { d: "∫", k: "int" }, { d: "∑", k: "sum" }, { d: "lim", k: "lim" }, { d: "( )", k: "paren" }, { d: "|x|", k: "abs" },
-    { d: "sin", t: "\\sin" }, { d: "cos", t: "\\cos" }, { d: "tan", t: "\\tan" }, { d: "log", t: "\\log" }, { d: "ln", t: "\\ln" },
+    [{ d: "sin", t: "\\sin" }, { d: "cos", t: "\\cos" }, { d: "tan", t: "\\tan" }, { d: "sin⁻¹", t: "\\sin^{-1}" }, { d: "cos⁻¹", t: "\\cos^{-1}" }, { d: "tan⁻¹", t: "\\tan^{-1}" }],
+    [{ d: "ln", t: "\\ln" }, { d: "log", t: "\\log" }, { d: "logₐ", k: "logb" }, { d: "eˣ", k: "exp" }, { d: "10ˣ", k: "pow10" }, { d: "d/dx", k: "ddx" }],
+    [{ d: "∫", k: "int" }, { d: "∑", k: "sum" }, { d: "lim", k: "lim" }, { d: "√", k: "sqrt" }, { d: "ⁿ√", k: "nthroot" }, { d: "x/y", k: "frac" }],
+    [{ d: "xⁿ", k: "sup" }, { d: "xₙ", k: "sub" }, { d: "|x|", k: "abs" }, { d: "( )", k: "paren" }, { d: "π", t: "\\pi" }, { sp: "bs" }],
   ],
   abc: [
-    "a", "b", "c", "d", "e", "f", "g",
-    "h", "i", "j", "k", "l", "m", "n",
-    "o", "p", "q", "r", "s", "t", "u",
-    "v", "w", "x", "y", "z", { shift: true },
+    ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
+    ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
+    [{ sp: "shift" }, "z", "x", "c", "v", "b", "n", "m", { sp: "bs" }],
+    [{ sp: "greek" }, { d: ",", t: "," }, { d: "(", t: "(" }, { d: ")", t: ")" }],
   ],
   greek: [
-    { d: "α", t: "\\alpha" }, { d: "β", t: "\\beta" }, { d: "γ", t: "\\gamma" }, { d: "δ", t: "\\delta" }, { d: "ε", t: "\\epsilon" }, { d: "ζ", t: "\\zeta" },
-    { d: "η", t: "\\eta" }, { d: "θ", t: "\\theta" }, { d: "ι", t: "\\iota" }, { d: "κ", t: "\\kappa" }, { d: "λ", t: "\\lambda" }, { d: "μ", t: "\\mu" },
-    { d: "ν", t: "\\nu" }, { d: "ξ", t: "\\xi" }, { d: "π", t: "\\pi" }, { d: "ρ", t: "\\rho" }, { d: "σ", t: "\\sigma" }, { d: "τ", t: "\\tau" },
-    { d: "υ", t: "\\upsilon" }, { d: "φ", t: "\\phi" }, { d: "χ", t: "\\chi" }, { d: "ψ", t: "\\psi" }, { d: "ω", t: "\\omega" }, { d: "∂", t: "\\partial" },
-    { d: "Γ", t: "\\Gamma" }, { d: "Δ", t: "\\Delta" }, { d: "Θ", t: "\\Theta" }, { d: "Λ", t: "\\Lambda" }, { d: "Π", t: "\\Pi" }, { d: "Σ", t: "\\Sigma" },
-    { d: "Φ", t: "\\Phi" }, { d: "Ψ", t: "\\Psi" }, { d: "Ω", t: "\\Omega" },
+    [{ d: "φ", t: "\\phi" }, { d: "ς", t: "\\varsigma" }, { d: "ε", t: "\\epsilon" }, { d: "ρ", t: "\\rho" }, { d: "τ", t: "\\tau" }, { d: "υ", t: "\\upsilon", up: { d: "Υ", t: "\\Upsilon" } }, { d: "θ", t: "\\theta", up: { d: "Θ", t: "\\Theta" } }, { d: "ι", t: "\\iota" }, { d: "ο", t: "o" }, { d: "π", t: "\\pi", up: { d: "Π", t: "\\Pi" } }],
+    [{ d: "α", t: "\\alpha" }, { d: "σ", t: "\\sigma", up: { d: "Σ", t: "\\Sigma" } }, { d: "δ", t: "\\delta", up: { d: "Δ", t: "\\Delta" } }, { d: "φ", t: "\\varphi", up: { d: "Φ", t: "\\Phi" } }, { d: "γ", t: "\\gamma", up: { d: "Γ", t: "\\Gamma" } }, { d: "η", t: "\\eta" }, { d: "ξ", t: "\\xi", up: { d: "Ξ", t: "\\Xi" } }, { d: "κ", t: "\\kappa" }, { d: "λ", t: "\\lambda", up: { d: "Λ", t: "\\Lambda" } }],
+    [{ sp: "shift" }, { d: "ζ", t: "\\zeta" }, { d: "χ", t: "\\chi" }, { d: "ψ", t: "\\psi", up: { d: "Ψ", t: "\\Psi" } }, { d: "ω", t: "\\omega", up: { d: "Ω", t: "\\Omega" } }, { d: "β", t: "\\beta" }, { d: "ν", t: "\\nu" }, { d: "μ", t: "\\mu" }, { sp: "bs" }],
+    [{ sp: "abc" }, { d: ",", t: "," }, { d: "∂", t: "\\partial" }, { d: "∞", t: "\\infty" }],
   ],
   sym: [
-    { d: "≤", t: "\\leq" }, { d: "≥", t: "\\geq" }, { d: "≠", t: "\\neq" }, { d: "≈", t: "\\approx" }, { d: "±", t: "\\pm" },
-    { d: "·", t: "\\cdot" }, { d: "→", t: "\\to" }, { d: "∞", t: "\\infty" }, { d: "∈", t: "\\in" }, { d: "∉", t: "\\notin" },
-    { d: "⊂", t: "\\subset" }, { d: "∪", t: "\\cup" }, { d: "∩", t: "\\cap" }, { d: "∅", t: "\\emptyset" }, { d: "∴", t: "\\therefore" },
+    [{ d: "∞", t: "\\infty" }, { d: "≠", t: "\\neq" }, { d: "≈", t: "\\approx" }, { d: "≤", t: "\\leq" }, { d: "≥", t: "\\geq" }, { d: "±", t: "\\pm" }, { d: "·", t: "\\cdot" }, { d: "→", t: "\\to" }],
+    [{ d: "∈", t: "\\in" }, { d: "∉", t: "\\notin" }, { d: "⊂", t: "\\subset" }, { d: "⊆", t: "\\subseteq" }, { d: "∪", t: "\\cup" }, { d: "∩", t: "\\cap" }, { d: "∅", t: "\\emptyset" }, { d: "∴", t: "\\therefore" }],
+    [{ d: "∧", t: "\\land" }, { d: "∨", t: "\\lor" }, { d: "¬", t: "\\neg" }, { d: "∠", t: "\\angle" }, { d: "⊥", t: "\\perp" }, { d: "∥", t: "\\parallel" }, { d: "∀", t: "\\forall" }, { d: "∃", t: "\\exists" }],
+    [{ d: "[", t: "[" }, { d: "]", t: "]" }, { d: "{", t: "\\{" }, { d: "}", t: "\\}" }, { d: "°", t: "^{\\circ}" }, { sp: "bs" }],
   ],
 };
-const KB_TABS = [["num", "123"], ["fx", "f(x)"], ["abc", "ABC"], ["greek", "αβγ"], ["sym", "#&≤"]];
+const KB_TABS = [["num", "123"], ["fx", "f(x)"], ["abc", "ABC"], ["greek", "αβγ"], ["sym", "#&¬"]];
 
 function MFField({ f, activeId, onSelect }) {
   const active = f.id === activeId;
@@ -3115,6 +3119,10 @@ function MFItem({ it, activeId, onSelect }) {
     case "lim": return <span className="mf-bigop"><span className="mf-op mf-lim">lim</span><span className="mf-lims"><span className="mf-lo">{fld("a")}</span></span></span>;
     case "paren": return <span className="mf-row"><span className="mf-fence">(</span>{fld("a")}<span className="mf-fence">)</span></span>;
     case "abs": return <span className="mf-row"><span className="mf-fence">|</span>{fld("a")}<span className="mf-fence">|</span></span>;
+    case "exp": return <span className="mf-row">e<span className="mf-sup">{fld("a")}</span></span>;
+    case "pow10": return <span className="mf-row">10<span className="mf-sup">{fld("a")}</span></span>;
+    case "logb": return <span className="mf-row">log<span className="mf-sub">{fld("a")}</span>{fld("b")}</span>;
+    case "ddx": return <span className="mf-row"><span className="mf-frac"><span className="mf-frac-n">d</span><span className="mf-frac-b">d{fld("a")}</span></span>{fld("c")}</span>;
     default: return null;
   }
 }
@@ -3140,13 +3148,24 @@ function MathField({ initialTree, onChange }) {
     if (typeof k === "string") {
       const ch = shift && tab === "abc" ? k.toUpperCase() : k;
       addAtom(ch, ch);
-    } else if (k.shift) {
-      setShift((v) => !v);
-    } else if (k.k) {
-      addStruct(k.k);
-    } else {
-      addAtom(k.t, k.d);
+      return;
     }
+    if (k.sp === "bs") return backspace();
+    if (k.sp === "shift") return setShift((v) => !v);
+    if (k.sp === "greek") return setTab("greek");
+    if (k.sp === "abc") return setTab("abc");
+    if (k.k) return addStruct(k.k);
+    if (k.up && shift && tab === "greek") return addAtom(k.up.t, k.up.d);
+    return addAtom(k.t, k.d);
+  };
+  const keyLabel = (k) => {
+    if (typeof k === "string") return shift && tab === "abc" ? k.toUpperCase() : k;
+    if (k.sp === "bs") return "⌫";
+    if (k.sp === "shift") return "⇧";
+    if (k.sp === "greek") return "αβγ";
+    if (k.sp === "abc") return "ABC";
+    if (k.up && shift && tab === "greek") return k.up.d;
+    return k.d;
   };
   const select = (id) => { setActiveId(id); setOpen(true); };
 
@@ -3178,16 +3197,25 @@ function MathField({ initialTree, onChange }) {
               <button type="button" className="mf-kb-x" onClick={() => setOpen(false)}>▼</button>
             </div>
           </div>
-          <div className="mf-kb-grid">
-            {KB[tab].map((k, i) => {
-              const label = typeof k === "string" ? (shift && tab === "abc" ? k.toUpperCase() : k) : k.shift ? "⇧" : k.d;
-              const cls = "mf-key" + (k && k.shift && shift ? " on" : "");
-              return (
-                <button key={i} type="button" className={cls} onClick={() => handleKey(k)}>
-                  {label}
-                </button>
-              );
-            })}
+          <div className="mf-kb-rows">
+            {KB[tab].map((row, ri) => (
+              <div className="mf-kb-row" key={ri}>
+                {row.map((k, ci) => {
+                  const sp = k && typeof k === "object" && k.sp;
+                  const on = sp === "shift" && shift;
+                  return (
+                    <button
+                      key={ci}
+                      type="button"
+                      className={"mf-key" + (sp ? " sp" : "") + (on ? " on" : "")}
+                      onClick={() => handleKey(k)}
+                    >
+                      {keyLabel(k)}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -3466,9 +3494,11 @@ const CSS = `
 .mf-kb-tab.on{background:var(--blue); border-color:var(--blue); color:#fff}
 .mf-kb-act{display:flex; gap:5px}
 .mf-kb-x{border:1px solid var(--line); background:var(--bg); color:var(--t1); font-size:17px; font-weight:700; width:46px; height:40px; border-radius:9px; cursor:pointer}
-.mf-kb-grid{display:grid; grid-template-columns:repeat(5,1fr); gap:6px; max-width:560px; margin:0 auto}
-.mf-key{border:1px solid var(--line); background:var(--card); color:var(--t1); font-family:inherit; font-size:18px; font-weight:600; padding:13px 0; border-radius:10px; cursor:pointer; text-align:center}
+.mf-kb-rows{display:flex; flex-direction:column; gap:6px; max-width:640px; margin:0 auto}
+.mf-kb-row{display:flex; gap:5px}
+.mf-key{flex:1; min-width:0; border:1px solid var(--line); background:var(--card); color:var(--t1); font-family:inherit; font-size:17px; font-weight:600; padding:14px 2px; border-radius:10px; cursor:pointer; text-align:center; white-space:nowrap}
 .mf-key:active{background:var(--blue-bg)}
+.mf-key.sp{flex:0.8; background:var(--bg); color:var(--t2); font-weight:700}
 .mf-key.on{background:var(--blue); color:#fff; border-color:var(--blue)}
 .mf-dvar{display:inline-flex; align-items:center}
 .mf-hint{font-size:12px; color:var(--t3); margin:8px 2px 0; line-height:1.5}
