@@ -3023,13 +3023,12 @@ const MATH_BTNS = [
   { l: "∩", s: "\\cap" },
 ];
 
-function MathField({ value, onChange }) {
+const MathField = React.memo(function MathField({ value, onChange }) {
   const ref = React.useRef(null);
-  // 초기화 + 입력 이벤트 연결 (마운트 시 1회)
+  // 초기화 + 입력 이벤트 연결 (마운트 시 1회). 이후 리렌더로 칸이 초기화되지 않게 memo로 고정.
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    // 칸을 탭하면 수식 키보드가 자동으로 뜨고 입력까지 연결됨 (정석 동작)
     try { el.mathVirtualKeyboardPolicy = "auto"; } catch (e) {}
     if (value && el.value !== value) el.value = value;
     const handler = () => onChange(el.value);
@@ -3057,7 +3056,7 @@ function MathField({ value, onChange }) {
       <p className="mr-math-hint">아래 칸을 누르면 수식 키보드가 떠요. 버튼을 누르면 네모 칸이 생기고, 그 칸을 눌러 채우면 돼요.</p>
     </div>
   );
-}
+}, () => true); // props가 바뀌어도 절대 리렌더 안 함 (입력칸이 스스로 값 관리)
 
 function QuestionImage({ value, onChange }) {
   const [busy, setBusy] = useState(false);
