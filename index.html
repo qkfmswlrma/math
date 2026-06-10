@@ -3038,11 +3038,6 @@ function MathField({ value, onChange }) {
     el.addEventListener("blur", blur);
     return () => { el.removeEventListener("input", handler); el.removeEventListener("blur", blur); };
   }, []);
-  // 다른 문항으로 바뀌는 등 외부 값 변경 동기화
-  useEffect(() => {
-    const el = ref.current;
-    if (el && (value || "") !== el.value) el.value = value || "";
-  }, [value]);
 
   const ins = (s) => {
     const el = ref.current;
