@@ -3306,6 +3306,27 @@ function MathField({ initialTree, onChange }) {
       setCursor((c) => moveCursor(root, c, -1));
     }
   };
+  // 물리 키보드 입력 (가상 키보드와 동시 사용)
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => {
+      const t = e.target;
+      if (t && (t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+      const k = e.key;
+      if (k === "ArrowLeft") { e.preventDefault(); setCursor((c) => moveCursor(root, c, -1)); return; }
+      if (k === "ArrowRight") { e.preventDefault(); setCursor((c) => moveCursor(root, c, 1)); return; }
+      if (k === "Backspace") { e.preventDefault(); backspace(); return; }
+      if (k === "Enter" || k === "Tab") { e.preventDefault(); return; }
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (k === "^") { e.preventDefault(); addStruct("sup"); return; }
+      if (k === "_") { e.preventDefault(); addStruct("sub"); return; }
+      if (k === "/") { e.preventDefault(); addStruct("frac"); return; }
+      if (k === "*") { e.preventDefault(); addAtom("\\times", "×"); return; }
+      if (k.length === 1) { e.preventDefault(); addAtom(k, k); return; }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, root, cursor]);
   const handleKey = (k) => {
     if (typeof k === "string") {
       const ch = shift && tab === "abc" ? k.toUpperCase() : k;
