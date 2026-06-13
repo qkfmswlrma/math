@@ -1581,7 +1581,7 @@ function RichEditor({ value, onChange, placeholder }) {
       </div>
       {building && (
         <div className="mr-rte-mathedit">
-          <MathField initialTree={draft.current.tree} onChange={(latex, tree) => { draft.current = { latex, tree }; }} />
+          <MathField initialTree={draft.current.tree} initialLatex={draft.current.latex} onChange={(latex, tree) => { draft.current = { latex, tree }; }} />
           <div className="mr-rich-mrow">
             <button type="button" className="mr-btn" onClick={finishMath}>{building.mode === "edit" ? "수정 완료" : "이 수식 넣기"}</button>
             <button type="button" className="mr-btn-text" onClick={() => setBuilding(null)}>취소</button>
@@ -3279,13 +3279,18 @@ function MFItem({ it, cursor, onSelect }) {
   }
 }
 
-function MathField({ initialTree, onChange }) {
+function MathField({ initialTree, initialLatex, onChange }) {
   const [root, setRoot] = useState(() => (initialTree ? cloneField(initialTree) : newField()));
   const [cursor, setCursor] = useState(() => ({ fieldId: root.id, index: (root.items || []).length }));
   const [open, setOpen] = useState(true);
   const [tab, setTab] = useState("num");
   const [shift, setShift] = useState(false);
-  useEffect(() => { onChange(fieldToLatex(root), root); }, [root]);
+  const [rawMode, setRawMode] = useState(() => !initialTree && !!initialLatex);
+  const [raw, setRaw] = useState(initialLatex || "");
+  useEffect(() => {
+    if (rawMode) onChange(raw, null);
+    else onChange(fieldToLatex(root), root);
+  }, [root, raw, rawMode]);
 
   const addAtom = (tex, label) => {
     const atom = { kind: "atom", tex, label: label != null ? label : tex };
@@ -3356,22 +3361,36 @@ function MathField({ initialTree, onChange }) {
   };
   const select = (id, idx) => { setCursor({ fieldId: id, index: idx != null ? idx : 0 }); setOpen(true); };
 
-  const latex = fieldToLatex(root);
+  const latex = rawMode ? raw : fieldToLatex(root);
   return (
     <div className="mr-mathfield">
-      <div className="mf-canvas" onClick={() => select(root.id, (root.items || []).length)}>
-        <MFField f={root} cursor={cursor} onSelect={select} />
+      <div className="mf-mode">
+        <button type="button" className={"mf-mode-btn" + (!rawMode ? " on" : "")} onClick={() => setRawMode(false)}>키보드</button>
+        <button type="button" className={"mf-mode-btn" + (rawMode ? " on" : "")} onClick={() => setRawMode(true)}>LaTeX 직접</button>
       </div>
+      {rawMode ? (
+        <textarea
+          className="mr-input mf-raw"
+          placeholder={"LaTeX 코드 입력/붙여넣기  예: \\frac{\\sqrt{15}}{2}"}
+          value={raw}
+          rows={2}
+          onChange={(e) => setRaw(e.target.value)}
+        />
+      ) : (
+        <div className="mf-canvas" onClick={() => select(root.id, (root.items || []).length)}>
+          <MFField f={root} cursor={cursor} onSelect={select} />
+        </div>
+      )}
       {latex ? (
         <div className="mr-math-preview">
           <span className="mr-math-preview-tag">미리보기</span>
           <MathView latex={latex} block />
         </div>
       ) : null}
-      {!open && (
+      {!rawMode && !open && (
         <button type="button" className="mf-open" onClick={() => setOpen(true)}>⌨ 수식 키보드 열기</button>
       )}
-      {open && ReactDOM.createPortal(
+      {!rawMode && open && ReactDOM.createPortal(
         <div className="mf-kb">
           <div className="mf-kb-top">
             <div className="mf-kb-tabs">
@@ -3407,7 +3426,7 @@ function MathField({ initialTree, onChange }) {
         </div>,
         document.body
       )}
-      <p className="mf-hint">네모 칸(▢)을 누른 뒤 키보드로 입력하세요. 분수·적분은 f(x) 탭에 있어요.</p>
+      <p className="mf-hint">{rawMode ? "가진 LaTeX 코드를 붙여넣으면 수식으로 들어가요." : "네모 칸(▢)을 누른 뒤 키보드로 입력하세요. 분수·적분은 f(x) 탭에 있어요."}</p>
     </div>
   );
 }
@@ -3461,17 +3480,24 @@ function htmlToBody(el) {
     if (out.length && out[out.length - 1].type === "text") out[out.length - 1].v += v;
     else out.push({ type: "text", v });
   };
-  el.childNodes.forEach((n) => {
-    if (n.nodeType === 3) pushText(n.textContent);
-    else if (n.nodeType === 1) {
+  const walk = (node) => {
+    node.childNodes.forEach((n) => {
+      if (n.nodeType === 3) { pushText(n.textContent); return; }
+      if (n.nodeType !== 1) return;
       if (n.classList && n.classList.contains("mchip")) {
         let tree = null;
         try { tree = JSON.parse(decodeURIComponent(n.dataset.tree || "")); } catch (e) {}
         out.push({ type: "math", latex: n.dataset.latex || "", tree });
-      } else if (n.tagName === "BR") pushText("\n");
-      else pushText(n.textContent);
-    }
-  });
+        return;
+      }
+      if (n.tagName === "BR") { pushText("\n"); return; }
+      // div/p 등 줄 단위 래퍼: 줄바꿈 후 내부를 재귀 탐색 (중첩 칩 보존)
+      const block = /^(DIV|P|LI)$/.test(n.tagName);
+      if (block && out.length && !(out[out.length - 1].type === "text" && out[out.length - 1].v.endsWith("\n"))) pushText("\n");
+      walk(n);
+    });
+  };
+  walk(el);
   return out;
 }
 
@@ -3556,7 +3582,7 @@ function RichBody({ value, onChange }) {
       </div>
       {building && (
         <div className="mr-rich-mathedit">
-          <MathField initialTree={draft.current.tree} onChange={(latex, tree) => { draft.current = { latex, tree }; }} />
+          <MathField initialTree={draft.current.tree} initialLatex={draft.current.latex} onChange={(latex, tree) => { draft.current = { latex, tree }; }} />
           <div className="mr-rich-mrow">
             <button type="button" className="mr-btn" onClick={finishMath}>{building.mode === "edit" ? "수정 완료" : "이 수식 넣기"}</button>
             <button type="button" className="mr-btn-text" onClick={() => setBuilding(null)}>취소</button>
@@ -3824,6 +3850,10 @@ const CSS = `
 .mf-canvas{min-height:54px; border:1.5px solid var(--line); border-radius:12px; padding:12px 14px; background:var(--card); font-size:22px; line-height:1.5; overflow-x:auto; display:flex; align-items:center; flex-wrap:wrap}
 .mf-field{display:inline-flex; align-items:center; min-width:18px; min-height:26px; padding:0 2px; border-radius:5px; vertical-align:middle}
 .mf-field.active{background:rgba(43,108,176,0.10)}
+.mf-mode{display:flex; gap:6px; margin-bottom:8px}
+.mf-mode-btn{border:1px solid var(--line); background:var(--bg); color:var(--t2); font-family:inherit; font-size:13px; font-weight:700; padding:7px 14px; border-radius:8px; cursor:pointer}
+.mf-mode-btn.on{background:var(--blue); border-color:var(--blue); color:#fff}
+.mf-raw{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:14px; resize:vertical}
 .mf-caret{display:inline-block; width:2px; align-self:stretch; min-height:20px; background:var(--blue); margin:0 1px; vertical-align:middle; animation:mfblink 1s steps(1) infinite}
 @keyframes mfblink{50%{opacity:0}}
 .mf-ph{display:inline-block; width:16px; height:22px; border:1.5px dashed var(--t3); border-radius:4px; opacity:.6}
