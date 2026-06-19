@@ -1529,19 +1529,21 @@ function RichEditor({ value, onChange, placeholder }) {
       chip.innerHTML = chipInnerHtml(latex);
     } else {
       const el = ref.current;
-      const parts = tree === null ? parseMixed(latex) : [{ type: "math", latex, tree }];
-      const frag = buildMixedFragment(parts);
-      const sp = document.createTextNode("\u00A0");
-      frag.appendChild(sp);
+      const tmp = document.createElement("div");
+      tmp.innerHTML = chipHtml(latex, tree);
+      const chip = tmp.firstChild;
       const range = lastRange.current && el && el.contains(lastRange.current.commonAncestorContainer) ? lastRange.current : null;
       if (range) {
         range.collapse(false);
-        range.insertNode(frag);
+        range.insertNode(chip);
+        const sp = document.createTextNode("\u00A0");
+        chip.parentNode.insertBefore(sp, chip.nextSibling);
         const r2 = document.createRange();
         r2.setStartAfter(sp); r2.collapse(true);
         const sel = document.getSelection(); sel.removeAllRanges(); sel.addRange(r2);
       } else if (el) {
-        el.appendChild(frag);
+        el.appendChild(chip);
+        el.appendChild(document.createTextNode("\u00A0"));
       }
     }
     setBuilding(null);
@@ -3364,14 +3366,14 @@ function MathField({ initialTree, initialLatex, onChange }) {
     <div className="mr-mathfield">
       <div className="mf-mode">
         <button type="button" className={"mf-mode-btn" + (!rawMode ? " on" : "")} onClick={() => setRawMode(false)}>키보드</button>
-        <button type="button" className={"mf-mode-btn" + (rawMode ? " on" : "")} onClick={() => setRawMode(true)}>텍스트+수식</button>
+        <button type="button" className={"mf-mode-btn" + (rawMode ? " on" : "")} onClick={() => setRawMode(true)}>LaTeX 직접</button>
       </div>
       {rawMode ? (
         <textarea
           className="mr-input mf-raw"
-          placeholder={"글자는 그대로, 수식만 $ $로 감싸세요.\n예: x > $\\frac{\\sqrt{15}}{2}$ 에서 정의된 함수 $f(x)$"}
+          placeholder={"LaTeX 코드 입력/붙여넣기  예: \\frac{\\sqrt{15}}{2}"}
           value={raw}
-          rows={5}
+          rows={2}
           onChange={(e) => setRaw(e.target.value)}
         />
       ) : (
@@ -3379,10 +3381,10 @@ function MathField({ initialTree, initialLatex, onChange }) {
           <MFField f={root} cursor={cursor} onSelect={select} />
         </div>
       )}
-      {(rawMode ? raw.trim() : latex) ? (
+      {latex ? (
         <div className="mr-math-preview">
           <span className="mr-math-preview-tag">미리보기</span>
-          {rawMode ? <QuestionBody body={parseMixed(raw)} /> : <MathView latex={latex} block />}
+          <MathView latex={latex} block />
         </div>
       ) : null}
       {!rawMode && !open && (
@@ -3467,38 +3469,6 @@ function chipHtml(latex, tree) {
   const t = tree ? encodeURIComponent(JSON.stringify(tree)) : "";
   return '<span class="mchip" contenteditable="false" data-latex="' + escapeHtml(latex || "") + '" data-tree="' + t + '">' + chipInnerHtml(latex) + "</span>";
 }
-// "글자 $수식$ 글자" → [{text},{math},...]  ($ 없으면 전체를 수식으로)
-function parseMixed(str) {
-  const re = /\$([^$]+)\$/g;
-  const parts = [];
-  let last = 0, m, found = false;
-  while ((m = re.exec(str))) {
-    found = true;
-    if (m.index > last) parts.push({ type: "text", v: str.slice(last, m.index) });
-    parts.push({ type: "math", latex: m[1].trim(), tree: null });
-    last = m.index + m[0].length;
-  }
-  if (!found) return [{ type: "math", latex: str.trim(), tree: null }];
-  if (last < str.length) parts.push({ type: "text", v: str.slice(last) });
-  return parts;
-}
-// 조각들 → DOM 프래그먼트 (텍스트 노드 + 수식 칩)
-function buildMixedFragment(parts) {
-  const frag = document.createDocumentFragment();
-  parts.forEach((p) => {
-    if (p.type === "text") {
-      String(p.v).split("\n").forEach((ln, i) => {
-        if (i > 0) frag.appendChild(document.createElement("br"));
-        if (ln) frag.appendChild(document.createTextNode(ln));
-      });
-    } else {
-      const tmp = document.createElement("div");
-      tmp.innerHTML = chipHtml(p.latex, p.tree);
-      if (tmp.firstChild) frag.appendChild(tmp.firstChild);
-    }
-  });
-  return frag;
-}
 function bodyToHtml(body) {
   if (!body || !body.length) return "";
   return body.map((s) => (s.type === "text" ? escapeHtml(s.v) : chipHtml(s.latex, s.tree))).join("");
@@ -3570,19 +3540,21 @@ function RichBody({ value, onChange }) {
       chip.innerHTML = chipInnerHtml(latex);
     } else {
       const el = ref.current;
-      const parts = tree === null ? parseMixed(latex) : [{ type: "math", latex, tree }];
-      const frag = buildMixedFragment(parts);
-      const sp = document.createTextNode("\u00A0");
-      frag.appendChild(sp);
+      const tmp = document.createElement("div");
+      tmp.innerHTML = chipHtml(latex, tree);
+      const chip = tmp.firstChild;
       const range = lastRange.current && el && el.contains(lastRange.current.commonAncestorContainer) ? lastRange.current : null;
       if (range) {
         range.collapse(false);
-        range.insertNode(frag);
+        range.insertNode(chip);
+        const sp = document.createTextNode("\u00A0");
+        chip.parentNode.insertBefore(sp, chip.nextSibling);
         const r2 = document.createRange();
         r2.setStartAfter(sp); r2.collapse(true);
         const sel = document.getSelection(); sel.removeAllRanges(); sel.addRange(r2);
       } else if (el) {
-        el.appendChild(frag);
+        el.appendChild(chip);
+        el.appendChild(document.createTextNode("\u00A0"));
       }
     }
     setBuilding(null);
@@ -3860,8 +3832,7 @@ const CSS = `
 .mr-pick-card:active{transform:scale(.98)}
 .mr-pick-icon{width:60px; height:60px; border-radius:18px; display:grid; place-items:center; font-size:30px; position:relative}
 .mr-mathfield{display:flex; flex-direction:column; gap:8px; margin-top:4px}
-.mr-qbody{font-size:13.5px; line-height:1.85; color:var(--t1); white-space:pre-wrap; word-break:break-word; overflow-x:auto}
-.mr-qbody .katex{font-size:1em}
+.mr-qbody{font-size:15.5px; line-height:1.9; color:var(--t1); white-space:pre-wrap; word-break:break-word}
 .mr-qbody-t{white-space:pre-wrap}
 .mr-qbody .mr-math{margin:0 2px; vertical-align:middle}
 .mr-rich{display:flex; flex-direction:column; gap:8px; margin-top:4px}
