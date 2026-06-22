@@ -5,21 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>수학질문방</title>
 <meta name="description" content="수학질문방 - 칼럼과 시험으로 함께 공부하는 수학 커뮤니티" />
-<meta name="theme-color" content="#3182F6" />
+<meta name="theme-color" content="#b388ff" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="수학질문방" />
 <meta property="og:type" content="website" />
 <meta property="og:title" content="수학질문방" />
 <meta property="og:description" content="칼럼과 시험으로 함께 공부하는 수학 커뮤니티" />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%233182F6'/%3E%3Ctext x='32' y='44' font-size='38' font-weight='800' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E2%88%AB%3C/text%3E%3C/svg%3E" />
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%233182F6'/%3E%3Ctext x='32' y='44' font-size='38' font-weight='800' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E2%88%AB%3C/text%3E%3C/svg%3E" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%239b6cff'/%3E%3Cstop offset='1' stop-color='%23ff8fc8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='15' fill='url(%23g)'/%3E%3Ctext x='32' y='44' font-size='38' font-weight='800' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E2%88%AB%3C/text%3E%3C/svg%3E" />
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%239b6cff'/%3E%3Cstop offset='1' stop-color='%23ff8fc8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='15' fill='url(%23g)'/%3E%3Ctext x='32' y='44' font-size='38' font-weight='800' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E2%88%AB%3C/text%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 <style>
-  html,body,#root{margin:0;padding:0;height:100%;background:#F2F4F6}
+  html,body,#root{margin:0;padding:0;min-height:100%;background:linear-gradient(165deg,#f4e9ff 0%,#fde9f4 46%,#e9eeff 100%)}
   .mr-splash{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:'Pretendard',-apple-system,sans-serif;color:#4E5968}
-  .mr-splash .lg{width:52px;height:52px;border-radius:15px;background:#3182F6;color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800}
+  .mr-splash .lg{width:52px;height:52px;border-radius:15px;background:linear-gradient(140deg,#9b6cff,#ff8fc8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800}
   .mr-splash .tx{font-weight:700;font-size:15px;letter-spacing:-0.3px}
-  .mr-splash .sp{width:22px;height:22px;border:3px solid #E5E8EB;border-top-color:#3182F6;border-radius:50%;animation:mrsp .7s linear infinite}
+  .mr-splash .sp{width:22px;height:22px;border:3px solid #E5E8EB;border-top-color:#9b6cff;border-radius:50%;animation:mrsp .7s linear infinite}
   @keyframes mrsp{to{transform:rotate(360deg)}}
 </style>
 <script defer crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -131,6 +134,15 @@ function rateColor(rate) {
 function App() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("home");
+  const [over, setOver] = useState(null); // {key, rect, expanded}
+  const openOver = (key, rect) => {
+    setOver({ key, rect, expanded: false });
+    requestAnimationFrame(() => requestAnimationFrame(() => setOver((o) => (o ? { ...o, expanded: true } : o))));
+  };
+  const closeOver = () => {
+    setOver((o) => (o ? { ...o, expanded: false } : o));
+    setTimeout(() => setOver(null), 520);
+  };
   const [readColIds, setReadColIds] = useState(() => getReadColIds());
   const [readExamIds, setReadExamIds] = useState(() => getReadExamIds());
   const markColumnRead = (id) => {
@@ -493,15 +505,51 @@ function App() {
   };
 
   const homeView = (
-    <Home role={role} student={student} loggedIn={loggedIn} noticeCount={role === "admin" ? notices.length : notices.filter((n) => !n.isDraft).length} columnUnread={columnUnreadCount(notices, readColIds)} examUnread={todayUnreadCount(exams.filter(isPublished), readExamIds)} examCount={role === "admin" ? exams.length : exams.filter(isPublished).length} onGo={setTab} />
+    <Home role={role} student={student} loggedIn={loggedIn} noticeCount={role === "admin" ? notices.length : notices.filter((n) => !n.isDraft).length} columnUnread={columnUnreadCount(notices, readColIds)} examUnread={todayUnreadCount(exams.filter(isPublished), readExamIds)} examCount={role === "admin" ? exams.length : exams.filter(isPublished).length} onGo={openOver} />
   );
+
+  const screenFor = (key) => {
+    switch (key) {
+      case "records": return loggedIn ? <MyRecords student={student} exams={exams} subs={subs} /> : homeView;
+      case "admin": return role === "admin" ? <Admin auth={auth} users={users} notices={notices} exams={exams} subs={subs} auditLog={auditLog} onToggleAdmin={onToggleAdmin} onDeleteUser={onDeleteUser} onResetPassword={onResetPassword} /> : homeView;
+      case "account": return loggedIn ? <Account auth={auth} onChangePassword={onChangePassword} onUpdateKakao={onUpdateKakao} onDeleteMe={onDeleteMe} onLogout={onLogout} /> : homeView;
+      case "notices": return <Notices role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} notices={notices} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} readIds={readColIds} onRead={markColumnRead} />;
+      case "privacy": return <Privacy onBack={() => setTab("home")} />;
+      case "game": return <SpeedGame onBack={closeOver} auth={auth} onGoAccount={() => { closeOver(); setTab("account"); }} onLogin={() => setAuthOpen(true)} />;
+      case "exams": return <Exams role={role} student={student} myId={auth ? auth.id : null} users={users} loggedIn={loggedIn} requireLogin={requireLogin} exams={exams} subs={subs} onAddExam={onAddExam} onEditExam={onEditExam} onDeleteExam={onDeleteExam} onGradeSub={onGradeSub} onAddSub={onAddSub} onGuestSubmit={onGuestSubmit} guestSubs={guestSubs} readIds={readExamIds} onView={markExamRead} />;
+      default: return homeView;
+    }
+  };
 
   return (
     <div className="mr-root">
       <style>{CSS}</style>
+      {over && (
+        <div className="mr-ov-scrim" style={{ opacity: over.expanded ? 1 : 0 }} onClick={closeOver} />
+      )}
+      {over && (
+        <div
+          className="mr-ov"
+          style={over.expanded
+            ? { position: "fixed", zIndex: 150, overflow: "hidden", top: "74px", left: "0px", width: "100vw", height: "calc(100vh - 74px)", borderRadius: "0px" }
+            : { position: "fixed", zIndex: 150, overflow: "hidden", top: over.rect.top + "px", left: over.rect.left + "px", width: over.rect.width + "px", height: over.rect.height + "px", borderRadius: "26px" }}
+        >
+          <button className="mr-ov-back" onClick={closeOver} style={{ opacity: over.expanded ? 1 : 0 }} aria-label="뒤로">←</button>
+          <div
+            className="mr-ov-inner"
+            style={{
+              opacity: over.expanded ? 1 : 0,
+              transform: over.expanded ? "none" : "translateY(10px)",
+              transition: over.expanded ? "opacity .34s ease .15s, transform .42s cubic-bezier(.22,1,.36,1) .12s" : "opacity .15s ease, transform .15s ease",
+            }}
+          >
+            <main className="mr-main">{screenFor(over.key)}</main>
+          </div>
+        </div>
+      )}
 
       <header className="mr-header">
-        <div className="mr-brand" onClick={() => setTab("home")} role="button">
+        <div className="mr-brand" onClick={() => { closeOver(); setTab("home"); }} role="button">
           <span className="mr-logo">∫</span>
           <div>
             <div className="mr-brand-name">수학질문방</div>
@@ -512,7 +560,7 @@ function App() {
           {loggedIn ? (
             <button
               className={"mr-account-btn" + (tab === "account" ? " active" : "")}
-              onClick={() => setTab("account")}
+              onClick={() => { closeOver(); setTab("account"); }}
               aria-label="회원정보"
             >
               <PersonIcon />
@@ -526,47 +574,15 @@ function App() {
       </header>
 
       <main className="mr-main">
+        <div className="mr-screen-in" key={tab}>
         {loading ? (
           <div className="mr-loading">불러오는 중…</div>
         ) : tab === "home" ? (
           homeView
-        ) : tab === "records" ? (
-          loggedIn ? <MyRecords student={student} exams={exams} subs={subs} /> : homeView
-        ) : tab === "admin" ? (
-          role === "admin" ? (
-            <Admin auth={auth} users={users} notices={notices} exams={exams} subs={subs} auditLog={auditLog} onToggleAdmin={onToggleAdmin} onDeleteUser={onDeleteUser} onResetPassword={onResetPassword} />
-          ) : (
-            homeView
-          )
-        ) : tab === "account" ? (
-          loggedIn ? <Account auth={auth} onChangePassword={onChangePassword} onUpdateKakao={onUpdateKakao} onDeleteMe={onDeleteMe} onLogout={onLogout} /> : homeView
-        ) : tab === "notices" ? (
-          <Notices role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} notices={notices} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} readIds={readColIds} onRead={markColumnRead} />
-        ) : tab === "privacy" ? (
-          <Privacy onBack={() => setTab("home")} />
-        ) : tab === "game" ? (
-          <SpeedGame onBack={() => setTab("home")} auth={auth} onGoAccount={() => setTab("account")} onLogin={() => setAuthOpen(true)} />
         ) : (
-          <Exams
-            role={role}
-            student={student}
-            myId={auth ? auth.id : null}
-            users={users}
-            loggedIn={loggedIn}
-            requireLogin={requireLogin}
-            exams={exams}
-            subs={subs}
-            onAddExam={onAddExam}
-            onEditExam={onEditExam}
-            onDeleteExam={onDeleteExam}
-            onGradeSub={onGradeSub}
-            onAddSub={onAddSub}
-            onGuestSubmit={onGuestSubmit}
-            guestSubs={guestSubs}
-            readIds={readExamIds}
-            onView={markExamRead}
-          />
+          screenFor(tab)
         )}
+        </div>
       </main>
 
       <footer className="mr-foot">
@@ -733,7 +749,7 @@ function MyRecords({ student, exams, subs }) {
     const tone = ratio >= 0.8 ? "good" : ratio >= 0.5 ? "mid" : "low";
     return (
       <div className="mr-col">
-        <button className="mr-btn-text" onClick={() => setOpen(null)}>← 내 시험 기록</button>
+        <button className="mr-back" onClick={() => setOpen(null)}>내 시험 기록</button>
         <section className="mr-card" style={{ textAlign: "center", padding: "28px 20px" }}>
           <div className="mr-card-tag" style={{ marginBottom: "10px" }}>{exam.title}</div>
           <div className={"mr-record-score " + tone} style={{ fontSize: "40px" }}>
@@ -831,8 +847,8 @@ function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onD
 
     return (
       <div className="mr-col">
-        <button className="mr-btn-text" onClick={() => setSelUser(null)}>
-          ← 회원 목록
+        <button className="mr-back" onClick={() => setSelUser(null)}>
+          회원 목록
         </button>
         {!u ? (
           <Empty text="회원을 찾을 수 없어요." />
@@ -1181,7 +1197,7 @@ function Home({ role, student, loggedIn, noticeCount, columnUnread, examUnread, 
             key={s.key}
             className="mr-sector"
             style={{ animationDelay: `${i * 60}ms` }}
-            onClick={() => onGo(s.key)}
+            onClick={(e) => onGo(s.key, e.currentTarget.getBoundingClientRect())}
           >
             <span className={"mr-sector-icon " + s.tone}>
               {s.icon}
@@ -1289,8 +1305,8 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onR
   if (view === "write")
     return (
       <div className="mr-col">
-        <button className="mr-btn-text" onClick={() => setView("list")}>
-          ← 칼럼 목록
+        <button className="mr-back" onClick={() => setView("list")}>
+          칼럼 목록
         </button>
         <section className="mr-card mr-writer">
           <div className="mr-card-tag">{draftId ? "임시저장 이어쓰기" : "새 칼럼 쓰기"}</div>
@@ -1325,8 +1341,8 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onR
   if (view === "edit")
     return (
       <div className="mr-col">
-        <button className="mr-btn-text" onClick={() => setView("read")}>
-          ← 칼럼 보기
+        <button className="mr-back" onClick={() => setView("read")}>
+          칼럼 보기
         </button>
         <section className="mr-card mr-writer">
           <div className="mr-card-tag">칼럼 수정하기</div>
@@ -1356,8 +1372,8 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onR
     const n = notices.find((x) => x.id === openId);
     return (
       <div className="mr-col">
-        <button className="mr-btn-text" onClick={() => setView("list")}>
-          ← 칼럼 목록
+        <button className="mr-back" onClick={() => setView("list")}>
+          칼럼 목록
         </button>
         {!n ? (
           <Empty text="글을 찾을 수 없어요." />
@@ -1548,7 +1564,7 @@ function RichEditor({ value, onChange, placeholder }) {
     sync();
     if (ref.current) ref.current.focus();
   };
-  const colors = ["#191F28", "#F04452", "#3182F6", "#00B262", "#F59F00", "#7048E8"];
+  const colors = ["#2c2347", "#8a8398", "#b23b5e", "#2f6f8f", "#3f7d5a", "#8a5cf0"];
   return (
     <div className="mr-rte-wrap">
       <div className="mr-rte-toolbar">
@@ -1751,8 +1767,8 @@ function ExamsAdmin({ exams, onAddExam, onEditExam, onDeleteExam, subs, onGradeS
 
   return (
     <div className="mr-col">
-      <button className="mr-btn-text" onClick={onBackToChooser}>
-        ← 시험 종류
+      <button className="mr-back" onClick={onBackToChooser}>
+        시험 종류
       </button>
       <div className="mr-list-top">
         <span className="mr-list-title">{EXAM_TYPES[examType]}</span>
@@ -2029,8 +2045,8 @@ function GradePanel({ exam, subs, guestSubs, users, onBack, onSaveGrade }) {
 
   return (
     <div className="mr-col">
-      <button className="mr-btn-text" onClick={onBack}>
-        ← 시험 목록
+      <button className="mr-back" onClick={onBack}>
+        시험 목록
       </button>
       <section className="mr-card">
         <div className="mr-notice-head">
@@ -2224,8 +2240,8 @@ function ExamsStudent({ student, loggedIn, requireLogin, exams, subs, onAddSub, 
 
   return (
     <div className="mr-col">
-      <button className="mr-btn-text" onClick={onBackToChooser}>
-        ← 시험 종류
+      <button className="mr-back" onClick={onBackToChooser}>
+        시험 종류
       </button>
       <div className="mr-list-top">
         <span className="mr-list-title">{EXAM_TYPES[examType]}</span>
@@ -2406,8 +2422,8 @@ function TakeExam({ exam, student, loggedIn, onGuestSubmit, onCancel, onSubmit }
 
   return (
     <div className="mr-col">
-      <button className="mr-btn-text" onClick={onCancel}>
-        ← 시험 목록
+      <button className="mr-back" onClick={onCancel}>
+        시험 목록
       </button>
       <section className="mr-card">
         <div className="mr-notice-head">
@@ -2752,7 +2768,7 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
   if (phase === "rank")
     return (
       <div className="mr-col">
-        <button className="mr-btn-text" onClick={() => setPhase("ready")}>← 게임으로</button>
+        <button className="mr-back" onClick={() => setPhase("ready")}>게임으로</button>
         <RankingCard ranking={ranking} myRankBar={myRankBar} canRank={canRank} nickname={nickname} showGuestNote={!loggedIn} />
         <button className="mr-btn mr-game-start" onClick={start}>게임 시작</button>
         {guestPopup}
@@ -2762,7 +2778,6 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
   if (phase === "ready")
     return (
       <div className="mr-col">
-        <button className="mr-btn-text" onClick={onBack}>← 홈</button>
         <section className="mr-card mr-game-intro">
           <div className="mr-game-emoji">⚡</div>
           <h2 className="mr-game-title">스피드 연산</h2>
@@ -2782,7 +2797,6 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
   if (phase === "over")
     return (
       <div className="mr-col">
-        <button className="mr-btn-text" onClick={onBack}>← 홈</button>
         <section className="mr-card mr-game-intro">
           <div className="mr-game-emoji">🏁</div>
           <h2 className="mr-game-title">게임 끝!</h2>
@@ -3003,7 +3017,7 @@ function PrivacyBody() {
 function Privacy({ onBack }) {
   return (
     <div className="mr-col mr-pp">
-      <button className="mr-btn-text" onClick={onBack}>← 홈</button>
+      <button className="mr-back" onClick={onBack}>홈</button>
       <PrivacyBody />
     </div>
   );
@@ -3011,7 +3025,7 @@ function Privacy({ onBack }) {
 
 function PolicyModal({ onClose }) {
   return (
-    <div className="mr-modal-overlay" onClick={onClose} style={{ zIndex: 50 }}>
+    <div className="mr-modal-overlay" onClick={onClose} style={{ zIndex: 460 }}>
       <div className="mr-policy-modal mr-pp" onClick={(e) => e.stopPropagation()}>
         <div className="mr-policy-head">
           <span className="mr-modal-title">개인정보 처리방침</span>
@@ -3711,38 +3725,47 @@ const CSS = `
 
 .mr-root *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 .mr-root{
-  --bg:#F2F4F6; --card:#FFFFFF; --t1:#191F28; --t2:#4E5968; --t3:#8B95A1;
-  --blue:#3182F6; --blue-d:#1B64DA; --blue-bg:#E8F3FF;
-  --line:#E5E8EB; --line-soft:#F2F4F6; --green:#00B262; --green-bg:#E7F8F0;
-  --red:#F04452; --red-bg:#FDECEE;
-  min-height:100vh; width:100%; background:var(--bg); color:var(--t1);
-  font-family:'Pretendard',-apple-system,BlinkMacSystemFont,sans-serif;
+  --bg:rgba(255,255,255,0.46); --card:rgba(255,255,255,0.62); --t1:#2c2347; --t2:#6f6391; --t3:#9a8fb8;
+  --blue:#8a5cf0; --blue-d:#7340e0; --blue-bg:rgba(140,92,240,0.14);
+  --line:rgba(255,255,255,0.78); --line-soft:rgba(140,92,180,0.14); --green:#16a394; --green-bg:rgba(22,163,148,0.14);
+  --red:#f0508a; --red-bg:rgba(240,80,138,0.12);
+  --glass-sh:0 14px 34px rgba(91,55,140,0.16), inset 0 1px 1px rgba(255,255,255,0.92);
+  --grad:linear-gradient(140deg,#9b6cff,#ff8fc8);
+  position:relative; min-height:100vh; width:100%; color:var(--t1);
+  font-family:'Pretendard','Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif;
   -webkit-font-smoothing:antialiased; padding-bottom:64px; letter-spacing:-0.2px;
 }
+.mr-root::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+   radial-gradient(320px 320px at 12% 6%, rgba(216,182,255,0.6), transparent 64%),
+   radial-gradient(320px 320px at 88% 82%, rgba(255,185,224,0.55), transparent 64%),
+   radial-gradient(280px 280px at 62% 42%, rgba(174,195,255,0.5), transparent 66%);}
 
 /* header */
 .mr-header{
   display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;
   padding:16px 20px; background:var(--card); border-bottom:1px solid var(--line-soft);
-  position:sticky; top:0; z-index:10;
+  position:sticky; top:0; z-index:300;
 }
 .mr-brand{display:flex; align-items:center; gap:11px; cursor:pointer}
 .mr-logo{
   font-size:22px; font-weight:800; color:#fff; width:42px; height:42px;
-  display:grid; place-items:center; background:var(--blue); border-radius:13px;
+  display:grid; place-items:center; background:var(--grad); border-radius:14px;
+  box-shadow:0 8px 20px rgba(124,92,255,0.4), inset 0 1px 1px rgba(255,255,255,0.5);
 }
 .mr-brand-name{font-size:19px; font-weight:800; letter-spacing:-0.4px}
 .mr-rolebox{display:flex; align-items:center; gap:8px}
 
 /* 로그인 / 로그아웃 헤더 */
 .mr-login-btn{
-  border:0; background:var(--blue); color:#fff; font-family:inherit; font-weight:700;
-  font-size:14px; padding:9px 18px; border-radius:11px; cursor:pointer; transition:background .15s;
+  border:0; background:var(--grad); color:#fff; font-family:inherit; font-weight:700;
+  font-size:14px; padding:9px 18px; border-radius:12px; cursor:pointer; transition:filter .15s;
+  box-shadow:0 8px 18px rgba(124,92,255,0.32);
 }
-.mr-login-btn:hover{background:var(--blue-d)}
+.mr-login-btn:hover{filter:brightness(1.05)}
 .mr-account-btn{
   width:42px; height:42px; border-radius:50%; border:0; background:var(--bg); color:var(--t2);
-  display:grid; place-items:center; cursor:pointer; transition:all .15s; overflow:hidden; padding:0;
+  display:grid; place-items:center; cursor:pointer; transition:background .15s,color .15s,border-color .15s,transform .15s; overflow:hidden; padding:0;
 }
 .mr-account-btn:hover{background:var(--blue-bg); color:var(--blue)}
 .mr-account-btn.active{background:var(--blue); color:#fff}
@@ -3773,7 +3796,7 @@ const CSS = `
 
 /* 관리자 페이지 */
 .mr-subtabs{display:flex; gap:6px; background:var(--bg); border-radius:13px; padding:4px}
-.mr-subtabs button{flex:1; border:0; background:transparent; padding:10px; font-family:inherit; font-weight:700; font-size:14px; color:var(--t3); border-radius:10px; cursor:pointer; transition:all .15s}
+.mr-subtabs button{flex:1; border:0; background:transparent; padding:10px; font-family:inherit; font-weight:700; font-size:14px; color:var(--t3); border-radius:10px; cursor:pointer; transition:background .15s,color .15s,border-color .15s,transform .15s}
 .mr-subtabs button.on{background:#fff; color:var(--t1); box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .mr-member-row{
   display:flex; align-items:center; gap:11px; width:100%; text-align:left; background:transparent;
@@ -3826,7 +3849,8 @@ const CSS = `
 
 /* 모달 */
 .mr-modal-overlay{
-  position:fixed; inset:0; z-index:50; background:rgba(25,31,40,.45);
+  position:fixed; inset:0; z-index:400; background:rgba(180,170,200,.10);
+  -webkit-backdrop-filter:blur(14px) saturate(120%); backdrop-filter:blur(14px) saturate(120%);
   display:flex; align-items:center; justify-content:center; padding:20px;
   animation:fade .2s ease both;
 }
@@ -3910,7 +3934,7 @@ const CSS = `
 .mf-kb-top{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px}
 .mf-kb-tabs{display:flex; gap:5px; flex-wrap:wrap}
 .mf-kb-tab{border:1px solid #E5E8EB; background:#F2F4F6; color:#4E5968; font-family:inherit; font-size:14px; font-weight:700; padding:8px 13px; border-radius:9px; cursor:pointer}
-.mf-kb-tab.on{background:#3182F6; border-color:#3182F6; color:#fff}
+.mf-kb-tab.on{background:#8a5cf0; border-color:#8a5cf0; color:#fff}
 .mf-kb-act{display:flex; gap:5px}
 .mf-kb-x{border:1px solid #E5E8EB; background:#F2F4F6; color:#191F28; font-size:17px; font-weight:700; width:46px; height:40px; border-radius:9px; cursor:pointer}
 .mf-kb-rows{display:flex; flex-direction:column; gap:6px; max-width:640px; margin:0 auto}
@@ -3918,7 +3942,7 @@ const CSS = `
 .mf-key{flex:1; min-width:0; border:1px solid #E5E8EB; background:#FFFFFF; color:#191F28; font-family:inherit; font-size:17px; font-weight:600; padding:14px 2px; border-radius:10px; cursor:pointer; text-align:center; white-space:nowrap}
 .mf-key:active{background:#E8F3FF}
 .mf-key.sp{flex:0.8; background:#F2F4F6; color:#4E5968; font-weight:700}
-.mf-key.on{background:#3182F6; color:#fff; border-color:#3182F6}
+.mf-key.on{background:#8a5cf0; color:#fff; border-color:#8a5cf0}
 .mf-dvar{display:inline-flex; align-items:center}
 .mf-hint{font-size:12px; color:var(--t3); margin:8px 2px 0; line-height:1.5}
 .mr-math-preview-tag{position:absolute; top:6px; left:10px; font-size:10.5px; font-weight:700; color:var(--t3)}
@@ -4000,10 +4024,11 @@ const CSS = `
 
 /* buttons */
 .mr-btn{
-  border:0; background:var(--blue); color:#fff; padding:12px 20px; border-radius:13px;
-  font-family:inherit; font-weight:700; font-size:15px; cursor:pointer; transition:background .15s,transform .08s;
+  border:0; background:var(--grad); color:#fff; padding:12px 20px; border-radius:14px;
+  font-family:inherit; font-weight:700; font-size:15px; cursor:pointer; transition:filter .15s,transform .08s;
+  box-shadow:0 8px 20px rgba(124,92,255,0.35), inset 0 1px 1px rgba(255,255,255,0.5);
 }
-.mr-btn:hover{background:var(--blue-d)}
+.mr-btn:hover{filter:brightness(1.05)}
 .mr-btn:active{transform:scale(.98)}
 .mr-btn-ghost{
   border:0; background:var(--blue-bg); color:var(--blue); padding:11px 18px; border-radius:13px;
@@ -4013,6 +4038,10 @@ const CSS = `
 .mr-btn-ghost.danger{background:var(--red-bg); color:var(--red)}
 .mr-btn-ghost.danger:hover{background:#FBD5DA}
 .mr-btn-text{border:0; background:none; color:var(--t2); cursor:pointer; font-family:inherit; font-size:14.5px; font-weight:700; align-self:flex-start; padding:4px 0}
+.mr-back{display:inline-flex; align-items:center; gap:5px; align-self:flex-start; border:1px solid var(--line); background:rgba(255,255,255,0.6); color:var(--t2); cursor:pointer; font-family:inherit; font-size:13.5px; font-weight:700; padding:8px 14px 8px 11px; border-radius:999px; margin-bottom:4px; transition:background .15s,color .15s}
+.mr-back:hover{background:rgba(255,255,255,0.9); color:var(--t1)}
+.mr-back:active{transform:scale(.97)}
+.mr-back::before{content:"‹"; font-size:17px; line-height:1; margin-top:-1px}
 .mr-row-end{display:flex; justify-content:flex-end; margin-top:14px}
 .mr-row-between{display:flex; justify-content:space-between; align-items:center; gap:10px}
 .mr-gap{display:flex; gap:8px; align-items:center}
@@ -4022,7 +4051,7 @@ const CSS = `
 .mr-qnum{font-weight:800; color:var(--blue); font-size:16px}
 .mr-qnum-sm{font-weight:800; color:var(--blue); margin-right:5px}
 .mr-seg{display:flex; background:var(--bg); border-radius:9px; padding:3px; gap:2px}
-.mr-seg button{border:0; background:transparent; padding:6px 13px; font-size:13px; cursor:pointer; font-family:inherit; color:var(--t3); font-weight:700; border-radius:7px; transition:all .15s}
+.mr-seg button{border:0; background:transparent; padding:6px 13px; font-size:13px; cursor:pointer; font-family:inherit; color:var(--t3); font-weight:700; border-radius:7px; transition:background .15s,color .15s,border-color .15s,transform .15s}
 .mr-seg button.on{background:#fff; color:var(--t1); box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .mr-points{display:flex; align-items:center; gap:6px; font-size:13px; color:var(--t3); font-weight:600; margin-left:auto}
 .mr-points input{width:60px; border:none; background:var(--bg); border-radius:8px; padding:7px 9px; font-family:inherit; font-weight:700; color:var(--t1)}
@@ -4059,11 +4088,11 @@ const CSS = `
 /* 칼럼 게시판 */
 .mr-list-top{display:flex; align-items:center; justify-content:space-between; padding:6px 2px 4px}
 .mr-list-title{font-size:22px; font-weight:800; letter-spacing:-0.5px; color:var(--t1)}
-.mr-postlist{background:var(--card); border-radius:20px; overflow:hidden; box-shadow:0 1px 2px rgba(0,0,0,.03)}
+.mr-postlist{display:flex; flex-direction:column; gap:10px}
 .mr-post-row{
   display:flex; flex-direction:column; gap:5px; width:100%; text-align:left; background:transparent;
-  border:0; border-bottom:1px solid var(--line-soft); padding:17px 18px; cursor:pointer;
-  font-family:inherit; transition:background .12s; animation:rise .35s cubic-bezier(.2,.7,.3,1) both;
+  border:0; padding:17px 18px; cursor:pointer;
+  font-family:inherit; transition:background .12s;
 }
 .mr-post-row:last-child{border-bottom:0}
 .mr-post-row:hover{background:var(--bg)}
@@ -4075,10 +4104,10 @@ const CSS = `
 .mr-draft-badge{font-size:11px; font-weight:700; color:#B26A00; background:#FFF4E0; padding:2px 7px; border-radius:6px; margin-left:8px; vertical-align:middle}
 .mr-cat-label{font-size:12.5px; font-weight:700; color:var(--t2); margin-top:14px}
 .mr-cat-seg{display:flex; gap:4px; background:var(--bg); border-radius:11px; padding:4px; margin-top:8px}
-.mr-cat-seg button{flex:1; border:0; background:transparent; padding:9px; font-family:inherit; font-weight:700; font-size:13.5px; color:var(--t3); border-radius:8px; cursor:pointer; transition:all .15s}
+.mr-cat-seg button{flex:1; border:0; background:transparent; padding:9px; font-family:inherit; font-weight:700; font-size:13.5px; color:var(--t3); border-radius:8px; cursor:pointer; transition:background .15s,color .15s,border-color .15s,transform .15s}
 .mr-cat-seg button.on{background:#fff; color:var(--t1); box-shadow:0 1px 3px rgba(0,0,0,.08)}
-.mr-post-item{display:flex; align-items:stretch; border-bottom:1px solid var(--line-soft)}
-.mr-post-item:last-child{border-bottom:0}
+.mr-post-item{display:flex; align-items:stretch; background:rgba(255,255,255,0.72); border:1px solid var(--line); border-radius:18px; box-shadow:var(--glass-sh); overflow:hidden; animation:rise .35s cubic-bezier(.2,.7,.3,1) both}
+.mr-post-item:last-child{border-bottom:1px solid var(--line)}
 .mr-post-item .mr-post-row{border-bottom:0; flex:1; min-width:0}
 .mr-reorder{display:flex; flex-direction:column; justify-content:center; gap:3px; padding:0 12px; flex:none}
 .mr-reorder button{border:0; background:var(--bg); color:var(--t2); width:30px; height:22px; border-radius:6px; cursor:pointer; font-size:10px; line-height:1; font-family:inherit}
@@ -4103,7 +4132,7 @@ const CSS = `
 .mr-img-drop{
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
   margin-top:12px; padding:26px 16px; background:var(--bg); border:2px dashed #D1D6DB;
-  border-radius:14px; cursor:pointer; text-align:center; transition:all .15s;
+  border-radius:14px; cursor:pointer; text-align:center; transition:background .15s,color .15s,border-color .15s,transform .15s;
 }
 .mr-img-drop:hover{border-color:var(--blue); background:var(--blue-bg)}
 .mr-img-icon{font-size:26px}
@@ -4148,7 +4177,7 @@ const CSS = `
 .mr-pts-tag{font-size:12px; color:var(--t3); margin-left:8px; background:var(--bg); padding:3px 9px; border-radius:20px; font-weight:700}
 .mr-rate-tag{font-size:12px; color:var(--blue); margin-left:6px; background:var(--bg); padding:3px 9px; border-radius:20px; font-weight:700}
 .mr-take-options{margin-top:14px; display:flex; flex-direction:column; gap:9px}
-.mr-take-opt{display:flex; align-items:center; gap:10px; padding:14px; background:var(--bg); border-radius:13px; cursor:pointer; font-size:14.5px; font-weight:600; transition:all .15s; border:2px solid transparent}
+.mr-take-opt{display:flex; align-items:center; gap:10px; padding:14px; background:var(--bg); border-radius:13px; cursor:pointer; font-size:14.5px; font-weight:600; transition:background .15s,color .15s,border-color .15s,transform .15s; border:2px solid transparent}
 .mr-take-opt.review{cursor:default}
 .mr-take-opt.review.ans{border-color:var(--green); background:var(--green-bg)}
 .mr-take-opt.review.mychoice{border-color:var(--red); background:var(--red-bg)}
@@ -4191,7 +4220,7 @@ const CSS = `
 .mr-game-combo{font-size:13.5px; font-weight:800; color:var(--t3)}
 .mr-game-combo.hot{color:#F97316}
 .mr-game-timebar{position:relative; height:26px; background:var(--bg); border-radius:13px; overflow:hidden; margin:4px 0 2px}
-.mr-game-timefill{position:absolute; left:0; top:0; bottom:0; background:linear-gradient(90deg,#3182F6,#00B262); border-radius:13px; transition:width .12s linear}
+.mr-game-timefill{position:absolute; left:0; top:0; bottom:0; background:linear-gradient(90deg,#9b6cff,#ff8fc8); border-radius:13px; transition:width .12s linear}
 .mr-game-timetext{position:absolute; right:12px; top:0; line-height:26px; font-size:12.5px; font-weight:800; color:var(--t1)}
 .mr-game-crit{text-align:center; font-size:16px; font-weight:800; color:#F97316; animation:rise .25s ease both}
 .mr-game-qcard{text-align:center; padding:24px 20px}
@@ -4261,6 +4290,37 @@ const CSS = `
 .mr-policy-head{display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-bottom:1px solid var(--line-soft); flex:none}
 .mr-policy-scroll{overflow-y:auto; padding:16px}
 .mr-policy-scroll .mr-card{box-shadow:none; padding:0}
+
+/* ===== 글래스모피즘 1단계 (성능 최적화) ===== */
+/* 반복되는 카드엔 실시간 블러 X (렉 방지) — 반투명 흰색으로 유리 느낌만 */
+.mr-card,.mr-sector,.mr-pick-card{
+  background:rgba(255,255,255,0.72); border:1px solid var(--line); box-shadow:var(--glass-sh); border-radius:26px;
+}
+.mr-empty{background:rgba(255,255,255,0.72); border:1px solid var(--line); box-shadow:var(--glass-sh); border-radius:26px}
+.mr-sector:hover,.mr-pick-card:hover{box-shadow:0 18px 40px rgba(91,55,140,0.2), inset 0 1px 1px rgba(255,255,255,0.92)}
+/* 화면에 1~2개뿐인 것만 진짜 블러 */
+.mr-header,.mr-modal,.mr-policy-modal,.mr-rte-toolbar{
+  -webkit-backdrop-filter:blur(16px) saturate(170%); backdrop-filter:blur(16px) saturate(170%);
+}
+.mr-header{border-bottom:1px solid var(--line-soft); background:rgba(255,255,255,0.7)}
+.mr-modal{background:rgba(255,255,255,0.82); border:1px solid var(--line); box-shadow:0 24px 70px rgba(72,40,110,0.3), inset 0 1px 1px rgba(255,255,255,0.92)}
+.mr-input,.mr-textarea{background:rgba(255,255,255,0.6); border:1px solid var(--line)}
+.mr-input:focus,.mr-textarea:focus{background:rgba(255,255,255,0.92); box-shadow:inset 0 0 0 2px var(--blue)}
+.mr-pick-icon.blue,.mr-sector-icon.blue{background:var(--grad); color:#fff}
+.mr-sector-icon.green,.mr-pick-icon.green{background:linear-gradient(140deg,#7c9bff,#aec3ff); color:#fff}
+.mr-btn-ghost{background:rgba(140,92,240,0.16)}
+.mr-account-avatar{background:var(--grad); color:#fff}
+/* 카드 확장 트랜지션: 카드 자리에서 펼쳐지며 그 안에 상세화면 */
+.mr-ov-scrim{position:fixed; top:74px; left:0; right:0; bottom:0; z-index:149; background:linear-gradient(165deg,#efe2ff,#fbe2ef 46%,#e2e9ff); transition:opacity .4s ease}
+.mr-ov{background:linear-gradient(165deg,#f4e9ff 0%,#fde9f4 46%,#e9eeff 100%); border:0; box-shadow:none;
+  transition:top .5s cubic-bezier(.4,0,.2,1), left .5s cubic-bezier(.4,0,.2,1), width .5s cubic-bezier(.4,0,.2,1), height .5s cubic-bezier(.4,0,.2,1), border-radius .5s cubic-bezier(.4,0,.2,1);}
+.mr-ov-inner{position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-top:44px}
+.mr-ov-inner .mr-main{padding-top:8px}
+.mr-ov-back{position:absolute; top:10px; left:12px; z-index:3; width:40px; height:40px; border-radius:50%;
+  border:1px solid var(--line); background:rgba(255,255,255,0.7); color:var(--t1); font-size:20px; cursor:pointer;
+  display:grid; place-items:center; transition:opacity .25s ease; -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px)}
+@keyframes screenIn{from{opacity:0; transform:translateY(20px) scale(.985)}to{opacity:1; transform:none}}
+.mr-screen-in{animation:screenIn .44s cubic-bezier(.22,1,.36,1)}
 `;
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
