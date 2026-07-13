@@ -76,7 +76,8 @@ const mapProfile = (r) => ({
 const uid = () => Math.random().toString(36).slice(2, 10);
 const fmtDate = (ts) => {
   const d = new Date(ts);
-  return `${d.getMonth() + 1}.${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(
+  const y = d.getFullYear() !== new Date().getFullYear() ? d.getFullYear() + "." : "";
+  return `${y}${d.getMonth() + 1}.${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(
     d.getMinutes()
   ).padStart(2, "0")}`;
 };
@@ -109,10 +110,11 @@ function totalScore(exam, sub) {
 }
 // 한 문항을 '맞춤'으로 볼지 (회원정답률 계산용) — 자동 정답 또는 보정으로 만점인 경우
 function isQCorrect(q, sub) {
-  if (q.type === "mc") return sub.answers[q.id] === q.answer;
+  const answers = (sub && sub.answers) || {}; // 비회원 집계 행은 answers가 null일 수 있음 → 크래시 방지
+  if (q.type === "mc") return answers[q.id] === q.answer;
   const ov = sub.manualScores && sub.manualScores[q.id];
   if (ov !== undefined && ov !== null && ov !== "") return Number(ov) >= (Number(q.points) || 0) && (Number(q.points) || 0) > 0;
-  return isShortCorrect(q, sub.answers[q.id]);
+  return isShortCorrect(q, answers[q.id]);
 }
 // 표시용 이름: 현재 회원 목록에 없으면 '탈퇴한 회원 (원래아이디)'
 function studentName(name, users) {
@@ -410,7 +412,7 @@ function App() {
     if (error) { alert("칼럼 저장에 실패했어요: " + error.message); return null; }
     await logAction(post.isDraft ? "칼럼 임시저장" : "칼럼 작성", post.title);
     await refresh();
-    return data ? data.id : null;
+    return data ? data.id : true; // id를 못 받아도 insert 자체는 성공 → 실패로 오인하지 않기
   };
   const onDeleteColumn = async (id) => {
     const n = notices.find((x) => x.id === id);
@@ -424,9 +426,10 @@ function App() {
     if (typeof isDraft === "boolean") patch.is_draft = isDraft;
     if (category) patch.category = category;
     const { error } = await sb.from("columns").update(patch).eq("id", id);
-    if (error) { alert("칼럼 수정에 실패했어요: " + error.message); return; }
+    if (error) { alert("칼럼 수정에 실패했어요: " + error.message); return null; }
     await logAction(isDraft ? "칼럼 임시저장" : "칼럼 수정", title);
     await refresh();
+    return true;
   };
   const onReorderColumns = async (ids) => {
     const results = await Promise.all(ids.map((cid, i) => sb.from("columns").update({ sort_order: i + 1 }).eq("id", cid)));
@@ -505,7 +508,7 @@ function App() {
   };
 
   const homeView = (
-    <Home role={role} student={student} loggedIn={loggedIn} noticeCount={role === "admin" ? notices.length : notices.filter((n) => !n.isDraft).length} columnUnread={columnUnreadCount(notices, readColIds)} examUnread={todayUnreadCount(exams.filter(isPublished), readExamIds)} examCount={role === "admin" ? exams.length : exams.filter(isPublished).length} onGo={openOver} />
+    <Home role={role} student={student} loggedIn={loggedIn} noticeCount={notices.filter((n) => !n.isDraft).length} columnUnread={columnUnreadCount(notices, readColIds)} examUnread={todayUnreadCount(exams.filter(isPublished), readExamIds)} examCount={role === "admin" ? exams.length : exams.filter(isPublished).length} onGo={openOver} />
   );
 
   const screenFor = (key) => {
@@ -1054,6 +1057,10 @@ function AuthModal({ onClose, onLogin, onSignup }) {
     if (error) alert(error);
   };
 
+  const onEnter = (e) => {
+    if (e.key === "Enter" && !e.nativeEvent.isComposing) (mode === "login" ? doLogin : doSignup)();
+  };
+
   return (
     <div className="mr-modal-overlay" onClick={onClose}>
       <div className="mr-modal" onClick={(e) => e.stopPropagation()}>
@@ -1069,6 +1076,7 @@ function AuthModal({ onClose, onLogin, onSignup }) {
           placeholder="아이디"
           value={id}
           onChange={(e) => setId(e.target.value)}
+          onKeyDown={onEnter}
         />
         <input
           className="mr-input"
@@ -1076,6 +1084,7 @@ function AuthModal({ onClose, onLogin, onSignup }) {
           placeholder="비밀번호"
           value={pw}
           onChange={(e) => setPw(e.target.value)}
+          onKeyDown={onEnter}
         />
         {mode === "signup" && (
           <input
@@ -1083,6 +1092,7 @@ function AuthModal({ onClose, onLogin, onSignup }) {
             placeholder="채팅방 닉네임 (선택)"
             value={kakao}
             onChange={(e) => setKakao(e.target.value)}
+            onKeyDown={onEnter}
           />
         )}
 
@@ -1251,23 +1261,27 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onR
   // 임시저장 (발행 안 함)
   const saveDraft = async () => {
     if (!title.trim() && !body.trim()) return alert("내용을 입력하세요.");
+    let ok;
     if (draftId) {
-      await onEdit(draftId, title.trim() || "(제목 없음)", body, true, editCat);
+      ok = await onEdit(draftId, title.trim() || "(제목 없음)", body, true, editCat);
     } else {
       const newId = await onAdd({ title: title.trim() || "(제목 없음)", body, author: authorName(), isDraft: true, category: editCat });
-      if (newId) setDraftId(newId);
+      if (newId && newId !== true) setDraftId(newId);
+      ok = !!newId;
     }
-    setSavedNote("임시저장됐어요");
+    if (ok) setSavedNote("임시저장됐어요"); // 실패하면 alert만 뜨고 작성 내용은 그대로 유지
   };
 
   // 발행 (목록에 공개)
   const post = async () => {
     if (!title.trim()) return alert("제목을 입력하세요.");
+    let ok;
     if (draftId) {
-      await onEdit(draftId, title.trim(), body, false, editCat);
+      ok = await onEdit(draftId, title.trim(), body, false, editCat);
     } else {
-      await onAdd({ title: title.trim(), body, author: authorName(), isDraft: false, category: editCat });
+      ok = await onAdd({ title: title.trim(), body, author: authorName(), isDraft: false, category: editCat });
     }
+    if (!ok) return; // 발행 실패: 작성 내용을 지우지 않고 화면 유지
     setTitle("");
     setBody("");
     setDraftId(null);
@@ -1284,8 +1298,8 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onR
 
   const saveEdit = async () => {
     if (!title.trim()) return alert("제목을 입력하세요.");
-    await onEdit(openId, title.trim(), body, false, editCat);
-    setView("read");
+    const ok = await onEdit(openId, title.trim(), body, false, editCat);
+    if (ok) setView("read"); // 실패 시 수정 화면 유지 (내용 보존)
   };
 
   const CatPicker = (
@@ -1885,7 +1899,9 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
         if (q.id !== qid || q.options.length <= 2) return q;
         const options = q.options.filter((_, i) => i !== idx);
         let answer = q.answer;
+        if (idx < answer) answer -= 1; // 정답보다 앞 보기를 지우면 정답이 같은 보기를 계속 가리키게 당김
         if (answer >= options.length) answer = options.length - 1;
+        if (answer < 0) answer = 0;
         return { ...q, options, answer };
       })
     );
@@ -2542,7 +2558,10 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
       } else i++;
     }
     let r = n[0];
-    for (let i = 0; i < o.length; i++) r = o[i] === "+" ? r + n[i + 1] : r - n[i + 1];
+    for (let i = 0; i < o.length; i++) {
+      if (o[i] === "+") r += n[i + 1];
+      else if (o[i] === "−" || o[i] === "-") r -= n[i + 1]; // 뺄셈 기호를 명시적으로 처리 (연산자 추가에 안전)
+    }
     return r;
   };
   // 자릿수 사다리 (○ = 사칙연산 아무거나). 콤보 오를수록 단계 상승.
@@ -2570,7 +2589,8 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
       nums = [numOfDigits(digits[0])];
       ops = [];
       for (let i = 1; i < digits.length; i++) {
-        const pool = stage >= 3 ? ["+", "−", "×", "÷"] : ["+", "−", "×"]; // 나눗셈은 후반(단계4~)부터
+        let pool = stage >= 3 ? ["+", "−", "×", "÷"] : ["+", "−", "×"]; // 나눗셈은 후반(단계4~)부터
+        if (ops[ops.length - 1] === "÷") pool = pool.filter((x) => x !== "÷"); // ÷ 연속이면 앞 나눗셈의 정수 보장이 깨져 재시도만 낭비됨
         const op = pool[rand(0, pool.length - 1)];
         ops.push(op);
         if (op === "÷") {
@@ -2820,6 +2840,7 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
         {loggedIn && (
           <RankingCard ranking={ranking} myRankBar={myRankBar} canRank={canRank} nickname={nickname} showGuestNote={false} />
         )}
+        {guestPopup}
       </div>
     );
 
@@ -3471,7 +3492,7 @@ let _segid = 0;
 const segId = () => "s" + ++_segid;
 // 편집기: 텍스트칸/수식칸을 순서대로 만드는 본문 작성기
 function escapeHtml(s) {
-  return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 function chipInnerHtml(latex) {
   try { return window.katex ? window.katex.renderToString(latex || "", { throwOnError: false }) : escapeHtml(latex); }
@@ -3492,7 +3513,10 @@ function parseMixed(str) {
     parts.push({ type: "math", latex: m[1].trim(), tree: null });
     last = m.index + m[0].length;
   }
-  if (!found) return [{ type: "math", latex: str.trim(), tree: null }];
+  if (!found) {
+    if (str.indexOf("$") !== -1) return [{ type: "text", v: str }]; // $ 짝이 안 맞으면 수식으로 오인하지 않음
+    return [{ type: "math", latex: str.trim(), tree: null }];
+  }
   if (last < str.length) parts.push({ type: "text", v: str.slice(last) });
   return parts;
 }
