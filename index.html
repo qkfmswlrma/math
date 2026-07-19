@@ -1589,30 +1589,34 @@ function RichEditor({ value, onChange, placeholder }) {
   return (
     <div className="mr-rte-wrap">
       <div className="mr-rte-toolbar">
-        <button type="button" className="mr-rte-btn" style={{ fontWeight: 800 }} title="굵게" onMouseDown={(e) => tool(e, "bold")}>가</button>
-        <button type="button" className="mr-rte-btn" style={{ fontStyle: "italic" }} title="기울임" onMouseDown={(e) => tool(e, "italic")}>가</button>
-        <button type="button" className="mr-rte-btn" style={{ textDecoration: "underline" }} title="밑줄" onMouseDown={(e) => tool(e, "underline")}>가</button>
-        <button type="button" className="mr-rte-btn" style={{ textDecoration: "line-through" }} title="취소선" onMouseDown={(e) => tool(e, "strikeThrough")}>가</button>
-        <span className="mr-rte-div" />
-        <button type="button" className="mr-rte-btn sm" title="작게" onMouseDown={(e) => tool(e, "fontSize", "2")}>작게</button>
-        <button type="button" className="mr-rte-btn sm" title="보통" onMouseDown={(e) => tool(e, "fontSize", "4")}>보통</button>
-        <button type="button" className="mr-rte-btn sm" title="크게" onMouseDown={(e) => tool(e, "fontSize", "6")}>크게</button>
-        <span className="mr-rte-div" />
-        <button type="button" className="mr-rte-btn sm" title="고딕체" onMouseDown={(e) => tool(e, "fontName", "'Pretendard', sans-serif")}>고딕</button>
-        <button type="button" className="mr-rte-btn sm" style={{ fontFamily: "serif" }} title="명조체" onMouseDown={(e) => tool(e, "fontName", "serif")}>명조</button>
-        <span className="mr-rte-div" />
-        {colors.map((c) => (
-          <button
-            type="button"
-            key={c}
-            className="mr-rte-color"
-            style={{ background: c }}
-            title="글자색"
-            onMouseDown={(e) => tool(e, "foreColor", c)}
-          />
-        ))}
-        <span className="mr-rte-div" />
-        <button type="button" className="mr-rte-btn sm mathbtn" title="수식 넣기" onMouseDown={openNewMath}>＋수식</button>
+        <div className="mr-rte-tools">
+          <button type="button" className="mr-rte-btn sm mathbtn" title="수식 넣기" onMouseDown={openNewMath}>＋수식</button>
+          <span className="mr-rte-div" />
+          <button type="button" className="mr-rte-btn" style={{ fontWeight: 800 }} title="굵게" onMouseDown={(e) => tool(e, "bold")}>가</button>
+          <button type="button" className="mr-rte-btn" style={{ fontStyle: "italic" }} title="기울임" onMouseDown={(e) => tool(e, "italic")}>가</button>
+          <button type="button" className="mr-rte-btn" style={{ textDecoration: "underline" }} title="밑줄" onMouseDown={(e) => tool(e, "underline")}>가</button>
+          <button type="button" className="mr-rte-btn" style={{ textDecoration: "line-through" }} title="취소선" onMouseDown={(e) => tool(e, "strikeThrough")}>가</button>
+          <span className="mr-rte-div" />
+          <button type="button" className="mr-rte-btn sm" title="작게" onMouseDown={(e) => tool(e, "fontSize", "2")}>작게</button>
+          <button type="button" className="mr-rte-btn sm" title="보통" onMouseDown={(e) => tool(e, "fontSize", "4")}>보통</button>
+          <button type="button" className="mr-rte-btn sm" title="크게" onMouseDown={(e) => tool(e, "fontSize", "6")}>크게</button>
+          <span className="mr-rte-div" />
+          <button type="button" className="mr-rte-btn sm" title="고딕체" onMouseDown={(e) => tool(e, "fontName", "'Pretendard', sans-serif")}>고딕</button>
+          <button type="button" className="mr-rte-btn sm" style={{ fontFamily: "serif" }} title="명조체" onMouseDown={(e) => tool(e, "fontName", "serif")}>명조</button>
+          <span className="mr-rte-div" />
+          {colors.map((c) => (
+            <button
+              type="button"
+              key={c}
+              className="mr-rte-color"
+              style={{ background: c }}
+              title="글자색"
+              onMouseDown={(e) => tool(e, "foreColor", c)}
+            />
+          ))}
+          <span className="mr-rte-div" />
+          <button type="button" className="mr-rte-btn sm" title="색·크기 등 서식 지우기" onMouseDown={(e) => tool(e, "removeFormat")}>지우기</button>
+        </div>
       </div>
       {building && (
         <div className="mr-rte-mathedit">
@@ -3638,7 +3642,11 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 
 /* 서식 입력기 */
 .mr-rte-wrap{margin-top:10px; border-radius:12px; background:#fff; box-shadow:inset 0 0 0 1px var(--line)}
-.mr-rte-toolbar{display:flex; flex-wrap:wrap; align-items:center; gap:4px; padding:8px; background:#fff; border-bottom:1px solid var(--line-soft); position:sticky; top:72px; z-index:9; border-radius:12px 12px 0 0; box-shadow:0 4px 12px rgba(0,0,0,0.05)}
+.mr-rte-toolbar{position:sticky; top:72px; z-index:9; background:#fff; border-bottom:1px solid var(--line-soft); border-radius:12px 12px 0 0; padding:6px 8px; box-shadow:0 2px 8px rgba(0,0,0,0.04)}
+.mr-rte-toolbar::after{content:""; position:absolute; top:6px; right:0; bottom:6px; width:26px; background:linear-gradient(to left, #fff 25%, rgba(255,255,255,0)); pointer-events:none; border-radius:0 12px 0 0}
+.mr-rte-tools{display:flex; align-items:center; gap:5px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-right:18px}
+.mr-rte-tools::-webkit-scrollbar{display:none}
+.mr-rte-tools > *{flex:0 0 auto}
 .mr-rte-btn.mathbtn{background:var(--blue-bg); color:var(--blue); font-weight:800}
 .mr-rte-mathedit{border:1.5px solid var(--blue); margin:8px; border-radius:12px; padding:10px; background:var(--blue-bg)}
 .mr-rte .mchip{display:inline-block; vertical-align:middle; margin:0 2px; padding:1px 5px; background:var(--blue-bg); border-radius:6px; cursor:pointer; font-size:16px}
@@ -3646,7 +3654,7 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-rte-btn.sm{font-size:13px; font-weight:700}
 .mr-rte-btn:hover{background:var(--blue-bg); color:var(--blue)}
 .mr-rte-div{width:1px; height:20px; background:var(--line); margin:0 3px}
-.mr-rte-color{width:22px; height:22px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px var(--line); cursor:pointer; padding:0; transition:transform .1s}
+.mr-rte-color{width:26px; height:26px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px var(--line); cursor:pointer; padding:0; transition:transform .1s}
 .mr-rte-color:hover{transform:scale(1.15)}
 .mr-rte{min-height:240px; padding:14px; font-size:15px; line-height:1.75; color:var(--t1); outline:none; white-space:pre-wrap; word-break:break-word}
 .mr-rte:empty:before{content:attr(data-placeholder); color:var(--t3)}
