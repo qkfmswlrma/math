@@ -30,6 +30,7 @@
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathlive"></script>
 <script defer src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>
 </head>
 <body>
@@ -48,6 +49,8 @@ const SUPABASE_URL = "https://fhdwwqlvosbjonrenpqz.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZoZHd3cWx2b3Niam9ucmVucHF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMTk4NzYsImV4cCI6MjA5NTg5NTg3Nn0.JgUEKxDRioqKvhSaOPxJMH9tuo0wdFv0-kkc0s5mJ8U";
 const EMAIL_DOMAIN = "mathroom.app";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+/* MathLive(수식 입력기) 전역 설정: 키 입력 효과음 끔 */
+try { if (window.MathfieldElement) window.MathfieldElement.soundsDirectory = null; } catch (e) {}
 const emailOf = (id) => `${String(id).trim().toLowerCase()}@${EMAIL_DOMAIN}`;
 const padPw = (pw) => String(pw) + "__mr__";
 
@@ -1540,9 +1543,7 @@ function RichEditor({ value, onChange, placeholder }) {
   };
   const openNewMath = (e) => { e.preventDefault(); saveRange(); draft.current = { latex: "", tree: null }; setBuilding({ mode: "new" }); };
   const openEditMath = (chip) => {
-    let tree = null;
-    try { tree = JSON.parse(decodeURIComponent(chip.dataset.tree || "")); } catch (err) {}
-    draft.current = { latex: chip.dataset.latex || "", tree };
+    draft.current = { latex: chip.dataset.latex || "", tree: null };
     setBuilding({ mode: "edit", chip });
   };
   const onBoxClick = (e) => {
@@ -1551,16 +1552,22 @@ function RichEditor({ value, onChange, placeholder }) {
   };
   const finishMath = () => {
     if (!building) return;
-    const { latex, tree } = draft.current;
+    const { latex } = draft.current;
+    if (!String(latex || "").trim()) {
+      // 비워서 완료하면: 수정 중이던 수식 칩은 삭제 (지우기 동작)
+      if (building.mode === "edit" && building.chip && building.chip.parentNode) building.chip.parentNode.removeChild(building.chip);
+      setBuilding(null);
+      sync();
+      return;
+    }
     if (building.mode === "edit" && building.chip) {
       const chip = building.chip;
-      chip.dataset.latex = latex || "";
-      chip.dataset.tree = tree ? encodeURIComponent(JSON.stringify(tree)) : "";
+      chip.dataset.latex = latex;
+      chip.dataset.tree = "";
       chip.innerHTML = chipInnerHtml(latex);
     } else {
       const el = ref.current;
-      const parts = tree === null ? parseMixed(latex) : [{ type: "math", latex, tree }];
-      const frag = buildMixedFragment(parts);
+      const frag = buildMixedFragment([{ type: "math", latex, tree: null }]);
       const sp = document.createTextNode("\u00A0");
       frag.appendChild(sp);
       const range = lastRange.current && el && el.contains(lastRange.current.commonAncestorContainer) ? lastRange.current : null;
@@ -1609,7 +1616,7 @@ function RichEditor({ value, onChange, placeholder }) {
       </div>
       {building && (
         <div className="mr-rte-mathedit">
-          <MathField initialTree={draft.current.tree} initialLatex={draft.current.latex} onChange={(latex, tree) => { draft.current = { latex, tree }; }} />
+          <MathField initialLatex={draft.current.latex} onChange={(latex) => { draft.current = { latex, tree: null }; }} />
           <div className="mr-rich-mrow">
             <button type="button" className="mr-btn" onClick={finishMath}>{building.mode === "edit" ? "수정 완료" : "이 수식 넣기"}</button>
             <button type="button" className="mr-btn-text" onClick={() => setBuilding(null)}>취소</button>
@@ -3071,395 +3078,44 @@ function MathView({ latex, block }) {
   return <span className={block ? "mr-math-block" : "mr-math"} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
-/* ===== 수식 입력기: LaTeX 몰라도 버튼으로 입력 ===== */
-let _mfid = 0;
-const newField = (items) => ({ id: "f" + ++_mfid, items: items || [] });
-const SUBS = { frac: ["a", "b"], sup: ["a"], sub: ["a"], sqrt: ["a"], nthroot: ["a", "b"], int: ["c", "a", "b", "e"], sum: ["a", "b"], lim: ["a"], paren: ["a"], abs: ["a"], exp: ["a"], pow10: ["a"], logb: ["a", "b"], ddx: ["c", "a"] };
+/* ===== 수식 입력기: MathLive 기반 =====
+   기존 자체 구현(트리 편집기 + 커스텀 키패드)을 통째로 교체.
+   - 실제 수식 모양 그대로 보면서 편집 (WYSIWYG)
+   - 휴대폰: 입력창을 누르면 수식 전용 키패드가 자동으로 열림
+   - PC: 물리 키보드로 바로 입력 — / 분수, ^ 지수, sqrt 루트, pi π 등 단축 입력 내장
+   - LaTeX 붙여넣기 인식, 값은 input 이벤트의 .value(LaTeX)로 받음 */
+function MathField({ initialLatex, onChange }) {
+  const ref = React.useRef(null);
+  const cbRef = React.useRef(onChange);
+  cbRef.current = onChange;
+  const [latex, setLatex] = useState(initialLatex || "");
 
-function fieldToLatex(f) {
-  return (f.items || []).map(itemToLatex).join("");
-}
-function itemToLatex(it) {
-  const A = it.a ? fieldToLatex(it.a) : "";
-  const B = it.b ? fieldToLatex(it.b) : "";
-  const C = it.c ? fieldToLatex(it.c) : "";
-  const E = it.e ? fieldToLatex(it.e) : "";
-  switch (it.kind) {
-    case "atom": return it.tex;
-    case "frac": return "\\frac{" + A + "}{" + B + "}";
-    case "sup": return "^{" + A + "}";
-    case "sub": return "_{" + A + "}";
-    case "sqrt": return "\\sqrt{" + A + "}";
-    case "nthroot": return "\\sqrt[" + A + "]{" + B + "}";
-    case "int": return "\\int_{" + A + "}^{" + B + "} " + C + " \\, d" + E;
-    case "sum": return "\\sum_{" + A + "}^{" + B + "}";
-    case "lim": return "\\lim_{" + A + "}";
-    case "paren": return "\\left(" + A + "\\right)";
-    case "abs": return "\\left|" + A + "\\right|";
-    case "exp": return "e^{" + A + "}";
-    case "pow10": return "10^{" + A + "}";
-    case "logb": return "\\log_{" + A + "} " + B;
-    case "ddx": return "\\frac{d}{d" + A + "} " + C;
-    default: return "";
-  }
-}
-// id 재생성하며 복제 (기존 트리 불러올 때)
-function cloneField(f) {
-  return newField((f.items || []).map(cloneItem));
-}
-function cloneItem(it) {
-  const c = { kind: it.kind };
-  if (it.kind === "atom") { c.tex = it.tex; c.label = it.label; return c; }
-  (SUBS[it.kind] || []).forEach((k) => { if (it[k]) c[k] = cloneField(it[k]); });
-  return c;
-}
-// id로 필드 찾아 변환 (불변 업데이트)
-function mapField(f, id, fn) {
-  if (f.id === id) return fn(f);
-  let changed = false;
-  const items = (f.items || []).map((it) => {
-    const ni = mapItem(it, id, fn);
-    if (ni !== it) changed = true;
-    return ni;
-  });
-  return changed ? { ...f, items } : f;
-}
-function mapItem(it, id, fn) {
-  if (it.kind === "atom") return it;
-  let changed = false;
-  const c = { ...it };
-  (SUBS[it.kind] || []).forEach((k) => {
-    if (it[k]) {
-      const nf = mapField(it[k], id, fn);
-      if (nf !== it[k]) { changed = true; c[k] = nf; }
-    }
-  });
-  return changed ? c : it;
-}
-// 구조 만들기 (첫 빈 칸 id 반환)
-function makeStruct(kind) {
-  const it = { kind };
-  const subs = SUBS[kind] || [];
-  subs.forEach((k) => { it[k] = newField(); });
-  return { item: it, firstId: subs.length ? it[subs[0]].id : null };
-}
-// 활성 칸의 부모 칸 찾기 (커서 빠져나오기용)
-function findParentField(field, id) {
-  for (const it of field.items || []) {
-    if (it.kind === "atom") continue;
-    for (const k of SUBS[it.kind] || []) {
-      if (it[k]) {
-        if (it[k].id === id) return field;
-        const deeper = findParentField(it[k], id);
-        if (deeper) return deeper;
-      }
-    }
-  }
-  return null;
-}
-// id로 칸 객체 찾기
-function getField(field, id) {
-  if (field.id === id) return field;
-  for (const it of field.items || []) {
-    if (it.kind === "atom") continue;
-    for (const k of SUBS[it.kind] || []) {
-      if (it[k]) { const r = getField(it[k], id); if (r) return r; }
-    }
-  }
-  return null;
-}
-// 칸의 위치(부모칸, 항목 인덱스, 서브키) 찾기
-function locateField(root, fieldId) {
-  function rec(field) {
-    for (let i = 0; i < (field.items || []).length; i++) {
-      const it = field.items[i];
-      if (it.kind === "atom") continue;
-      for (const k of SUBS[it.kind] || []) {
-        if (it[k]) {
-          if (it[k].id === fieldId) return { parent: field, itemIndex: i, subKey: k };
-          const r = rec(it[k]);
-          if (r) return r;
-        }
-      }
-    }
-    return null;
-  }
-  return rec(root);
-}
-// 커서 우/좌 이동
-function moveCursor(root, cur, dir) {
-  const f = getField(root, cur.fieldId);
-  if (!f) return cur;
-  if (dir > 0) {
-    if (cur.index < f.items.length) {
-      const it = f.items[cur.index];
-      if (it.kind === "atom") return { fieldId: f.id, index: cur.index + 1 };
-      const subs = SUBS[it.kind];
-      return { fieldId: it[subs[0]].id, index: 0 };
-    }
-    const loc = locateField(root, cur.fieldId);
-    if (!loc) return cur;
-    const it = loc.parent.items[loc.itemIndex];
-    const subs = SUBS[it.kind];
-    const si = subs.indexOf(loc.subKey);
-    if (si < subs.length - 1) return { fieldId: it[subs[si + 1]].id, index: 0 };
-    return { fieldId: loc.parent.id, index: loc.itemIndex + 1 };
-  } else {
-    if (cur.index > 0) {
-      const it = f.items[cur.index - 1];
-      if (it.kind === "atom") return { fieldId: f.id, index: cur.index - 1 };
-      const subs = SUBS[it.kind];
-      const last = it[subs[subs.length - 1]];
-      return { fieldId: last.id, index: last.items.length };
-    }
-    const loc = locateField(root, cur.fieldId);
-    if (!loc) return cur;
-    const it = loc.parent.items[loc.itemIndex];
-    const subs = SUBS[it.kind];
-    const si = subs.indexOf(loc.subKey);
-    if (si > 0) { const prev = it[subs[si - 1]]; return { fieldId: prev.id, index: prev.items.length }; }
-    return { fieldId: loc.parent.id, index: loc.itemIndex };
-  }
-}
-
-// 키패드 버튼
-// GeoGebra 스타일 탭 키보드 (행 단위 배열)
-const KB = {
-  num: [
-    ["x", "y", { d: "π", t: "\\pi" }, { d: "e", t: "e" }, "7", "8", "9", { d: "×", t: "\\times" }, { d: "÷", t: "\\div" }],
-    [{ d: "xⁿ", k: "sup" }, { d: "√", k: "sqrt" }, { d: "ⁿ√", k: "nthroot" }, { d: "|x|", k: "abs" }, "4", "5", "6", "+", "-"],
-    [{ d: "x/y", k: "frac" }, { d: "(", t: "(" }, { d: ")", t: ")" }, { d: ",", t: "," }, "1", "2", "3", "=", { sp: "bs" }],
-    [{ d: "xₙ", k: "sub" }, { sp: "left" }, { sp: "right" }, "0", "."],
-  ],
-  fx: [
-    [{ d: "sin", t: "\\sin" }, { d: "cos", t: "\\cos" }, { d: "tan", t: "\\tan" }, { d: "sin⁻¹", t: "\\sin^{-1}" }, { d: "cos⁻¹", t: "\\cos^{-1}" }, { d: "tan⁻¹", t: "\\tan^{-1}" }],
-    [{ d: "ln", t: "\\ln" }, { d: "log", t: "\\log" }, { d: "logₐ", k: "logb" }, { d: "eˣ", k: "exp" }, { d: "10ˣ", k: "pow10" }, { d: "d/dx", k: "ddx" }],
-    [{ d: "∫", k: "int" }, { d: "∑", k: "sum" }, { d: "lim", k: "lim" }, { d: "√", k: "sqrt" }, { d: "ⁿ√", k: "nthroot" }, { d: "x/y", k: "frac" }],
-    [{ d: "xⁿ", k: "sup" }, { d: "xₙ", k: "sub" }, { d: "|x|", k: "abs" }, { d: "( )", k: "paren" }, { sp: "left" }, { sp: "right" }, { sp: "bs" }],
-  ],
-  abc: [
-    ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
-    ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
-    [{ sp: "shift" }, "z", "x", "c", "v", "b", "n", "m", { sp: "bs" }],
-    [{ sp: "greek" }, { d: ",", t: "," }, { d: "(", t: "(" }, { d: ")", t: ")" }, { sp: "left" }, { sp: "right" }],
-  ],
-  greek: [
-    [{ d: "φ", t: "\\phi" }, { d: "ς", t: "\\varsigma" }, { d: "ε", t: "\\epsilon" }, { d: "ρ", t: "\\rho" }, { d: "τ", t: "\\tau" }, { d: "υ", t: "\\upsilon", up: { d: "Υ", t: "\\Upsilon" } }, { d: "θ", t: "\\theta", up: { d: "Θ", t: "\\Theta" } }, { d: "ι", t: "\\iota" }, { d: "ο", t: "o" }, { d: "π", t: "\\pi", up: { d: "Π", t: "\\Pi" } }],
-    [{ d: "α", t: "\\alpha" }, { d: "σ", t: "\\sigma", up: { d: "Σ", t: "\\Sigma" } }, { d: "δ", t: "\\delta", up: { d: "Δ", t: "\\Delta" } }, { d: "φ", t: "\\varphi", up: { d: "Φ", t: "\\Phi" } }, { d: "γ", t: "\\gamma", up: { d: "Γ", t: "\\Gamma" } }, { d: "η", t: "\\eta" }, { d: "ξ", t: "\\xi", up: { d: "Ξ", t: "\\Xi" } }, { d: "κ", t: "\\kappa" }, { d: "λ", t: "\\lambda", up: { d: "Λ", t: "\\Lambda" } }],
-    [{ sp: "shift" }, { d: "ζ", t: "\\zeta" }, { d: "χ", t: "\\chi" }, { d: "ψ", t: "\\psi", up: { d: "Ψ", t: "\\Psi" } }, { d: "ω", t: "\\omega", up: { d: "Ω", t: "\\Omega" } }, { d: "β", t: "\\beta" }, { d: "ν", t: "\\nu" }, { d: "μ", t: "\\mu" }, { sp: "bs" }],
-    [{ sp: "abc" }, { d: ",", t: "," }, { d: "∂", t: "\\partial" }, { sp: "left" }, { sp: "right" }],
-  ],
-  sym: [
-    [{ d: "<", t: "<" }, { d: ">", t: ">" }, { d: "≤", t: "\\leq" }, { d: "≥", t: "\\geq" }, { d: "≠", t: "\\neq" }, { d: "≈", t: "\\approx" }, { d: "±", t: "\\pm" }, { d: "∞", t: "\\infty" }, { d: "·", t: "\\cdot" }, { d: "→", t: "\\to" }],
-    [{ d: "∈", t: "\\in" }, { d: "∉", t: "\\notin" }, { d: "⊂", t: "\\subset" }, { d: "⊆", t: "\\subseteq" }, { d: "∪", t: "\\cup" }, { d: "∩", t: "\\cap" }, { d: "∅", t: "\\emptyset" }, { d: "∴", t: "\\therefore" }],
-    [{ d: "∧", t: "\\land" }, { d: "∨", t: "\\lor" }, { d: "¬", t: "\\neg" }, { d: "∠", t: "\\angle" }, { d: "⊥", t: "\\perp" }, { d: "∥", t: "\\parallel" }, { d: "∀", t: "\\forall" }, { d: "∃", t: "\\exists" }],
-    [{ d: "[", t: "[" }, { d: "]", t: "]" }, { d: "{", t: "\\{" }, { d: "}", t: "\\}" }, { d: "°", t: "^{\\circ}" }, { sp: "left" }, { sp: "right" }, { sp: "bs" }],
-  ],
-};
-const KB_TABS = [["num", "123"], ["fx", "f(x)"], ["abc", "ABC"], ["greek", "αβγ"], ["sym", "#&¬"]];
-
-function MFField({ f, cursor, onSelect }) {
-  const active = f.id === cursor.fieldId;
-  const items = f.items || [];
-  return (
-    <span
-      className={"mf-field" + (active ? " active" : "")}
-      onClick={(e) => { e.stopPropagation(); onSelect(f.id, items.length); }}
-    >
-      {items.length === 0
-        ? (active ? <span className="mf-caret" /> : <span className="mf-ph">▢</span>)
-        : items.map((it, i) => (
-            <React.Fragment key={i}>
-              {active && cursor.index === i ? <span className="mf-caret" /> : null}
-              <MFItem it={it} cursor={cursor} onSelect={onSelect} />
-            </React.Fragment>
-          ))}
-      {items.length > 0 && active && cursor.index === items.length ? <span className="mf-caret" /> : null}
-    </span>
-  );
-}
-function MFItem({ it, cursor, onSelect }) {
-  if (it.kind === "atom") return <span className="mf-atom">{it.label}</span>;
-  const fld = (k) => <MFField f={it[k]} cursor={cursor} onSelect={onSelect} />;
-  switch (it.kind) {
-    case "frac":
-      return (
-        <span className="mf-frac">
-          <span className="mf-frac-n">{fld("a")}</span>
-          <span className="mf-frac-b">{fld("b")}</span>
-        </span>
-      );
-    case "sup": return <span className="mf-sup">{fld("a")}</span>;
-    case "sub": return <span className="mf-sub">{fld("a")}</span>;
-    case "sqrt": return <span className="mf-sqrt"><span className="mf-radic">√</span><span className="mf-under">{fld("a")}</span></span>;
-    case "nthroot": return <span className="mf-sqrt"><sup className="mf-nidx">{fld("a")}</sup><span className="mf-radic">√</span><span className="mf-under">{fld("b")}</span></span>;
-    case "int": return (
-      <span className="mf-row">
-        <span className="mf-bigop"><span className="mf-op">∫</span><span className="mf-lims"><span className="mf-up">{fld("b")}</span><span className="mf-lo">{fld("a")}</span></span></span>
-        {fld("c")}
-        <span className="mf-dvar">&nbsp;d{fld("e")}</span>
-      </span>
-    );
-    case "sum": return <span className="mf-bigop"><span className="mf-op">∑</span><span className="mf-lims"><span className="mf-up">{fld("b")}</span><span className="mf-lo">{fld("a")}</span></span></span>;
-    case "lim": return <span className="mf-bigop"><span className="mf-op mf-lim">lim</span><span className="mf-lims"><span className="mf-lo">{fld("a")}</span></span></span>;
-    case "paren": return <span className="mf-row"><span className="mf-fence">(</span>{fld("a")}<span className="mf-fence">)</span></span>;
-    case "abs": return <span className="mf-row"><span className="mf-fence">|</span>{fld("a")}<span className="mf-fence">|</span></span>;
-    case "exp": return <span className="mf-row">e<span className="mf-sup">{fld("a")}</span></span>;
-    case "pow10": return <span className="mf-row">10<span className="mf-sup">{fld("a")}</span></span>;
-    case "logb": return <span className="mf-row">log<span className="mf-sub">{fld("a")}</span>{fld("b")}</span>;
-    case "ddx": return <span className="mf-row"><span className="mf-frac"><span className="mf-frac-n">d</span><span className="mf-frac-b">d{fld("a")}</span></span>{fld("c")}</span>;
-    default: return null;
-  }
-}
-
-function MathField({ initialTree, initialLatex, onChange }) {
-  const [root, setRoot] = useState(() => (initialTree ? cloneField(initialTree) : newField()));
-  const [cursor, setCursor] = useState(() => ({ fieldId: root.id, index: (root.items || []).length }));
-  const [open, setOpen] = useState(true);
-  const [tab, setTab] = useState("num");
-  const [shift, setShift] = useState(false);
-  const [rawMode, setRawMode] = useState(() => !initialTree && !!initialLatex);
-  const [raw, setRaw] = useState(initialLatex || "");
-  useEffect(() => {
-    if (rawMode) onChange(raw, null);
-    else onChange(fieldToLatex(root), root);
-  }, [root, raw, rawMode]);
-
-  const addAtom = (tex, label) => {
-    const atom = { kind: "atom", tex, label: label != null ? label : tex };
-    setRoot((r) => mapField(r, cursor.fieldId, (f) => ({ ...f, items: [...f.items.slice(0, cursor.index), atom, ...f.items.slice(cursor.index)] })));
-    setCursor((c) => ({ fieldId: c.fieldId, index: c.index + 1 }));
-  };
-  const addStruct = (kind) => {
-    const { item, firstId } = makeStruct(kind);
-    setRoot((r) => mapField(r, cursor.fieldId, (f) => ({ ...f, items: [...f.items.slice(0, cursor.index), item, ...f.items.slice(cursor.index)] })));
-    if (firstId) setCursor({ fieldId: firstId, index: 0 });
-    else setCursor((c) => ({ fieldId: c.fieldId, index: c.index + 1 }));
-  };
-  const backspace = () => {
-    if (cursor.index > 0) {
-      setRoot((r) => mapField(r, cursor.fieldId, (f) => ({ ...f, items: [...f.items.slice(0, cursor.index - 1), ...f.items.slice(cursor.index)] })));
-      setCursor((c) => ({ fieldId: c.fieldId, index: c.index - 1 }));
-    } else {
-      setCursor((c) => moveCursor(root, c, -1));
-    }
-  };
-  // 물리 키보드 입력 (가상 키보드와 동시 사용)
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => {
-      const t = e.target;
-      if (t && (t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
-      const k = e.key;
-      if (k === "ArrowLeft") { e.preventDefault(); setCursor((c) => moveCursor(root, c, -1)); return; }
-      if (k === "ArrowRight") { e.preventDefault(); setCursor((c) => moveCursor(root, c, 1)); return; }
-      if (k === "Backspace") { e.preventDefault(); backspace(); return; }
-      if (k === "Enter" || k === "Tab") { e.preventDefault(); return; }
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
-      if (k === "^") { e.preventDefault(); addStruct("sup"); return; }
-      if (k === "_") { e.preventDefault(); addStruct("sub"); return; }
-      if (k === "/") { e.preventDefault(); addStruct("frac"); return; }
-      if (k === "*") { e.preventDefault(); addAtom("\\times", "×"); return; }
-      if (k.length === 1) { e.preventDefault(); addAtom(k, k); return; }
+  React.useEffect(() => {
+    const mf = ref.current;
+    if (!mf) return;
+    try { mf.setAttribute("placeholder", "\\text{수식을 입력하세요}"); } catch (e) {}
+    mf.value = initialLatex || "";
+    const emit = () => {
+      const v = mf.value || "";
+      setLatex(v);
+      cbRef.current(v, null);
     };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, root, cursor]);
-  const handleKey = (k) => {
-    if (typeof k === "string") {
-      const ch = shift && tab === "abc" ? k.toUpperCase() : k;
-      addAtom(ch, ch);
-      return;
-    }
-    if (k.sp === "bs") return backspace();
-    if (k.sp === "left") return setCursor((c) => moveCursor(root, c, -1));
-    if (k.sp === "right") return setCursor((c) => moveCursor(root, c, 1));
-    if (k.sp === "shift") return setShift((v) => !v);
-    if (k.sp === "greek") return setTab("greek");
-    if (k.sp === "abc") return setTab("abc");
-    if (k.k) return addStruct(k.k);
-    if (k.up && shift && tab === "greek") return addAtom(k.up.t, k.up.d);
-    return addAtom(k.t, k.d);
-  };
-  const keyLabel = (k) => {
-    if (typeof k === "string") return shift && tab === "abc" ? k.toUpperCase() : k;
-    if (k.sp === "bs") return "⌫";
-    if (k.sp === "left") return "◀";
-    if (k.sp === "right") return "▶";
-    if (k.sp === "shift") return "⇧";
-    if (k.sp === "greek") return "αβγ";
-    if (k.sp === "abc") return "ABC";
-    if (k.up && shift && tab === "greek") return k.up.d;
-    return k.d;
-  };
-  const select = (id, idx) => { setCursor({ fieldId: id, index: idx != null ? idx : 0 }); setOpen(true); };
+    emit(); // 수정 모드: 초기값도 부모에 전달해 바로 '수정 완료' 가능
+    mf.addEventListener("input", emit);
+    const t = setTimeout(() => { try { mf.focus(); } catch (e) {} }, 80);
+    return () => { clearTimeout(t); mf.removeEventListener("input", emit); };
+  }, []);
 
-  const latex = rawMode ? raw : fieldToLatex(root);
   return (
     <div className="mr-mathfield">
-      <div className="mf-mode">
-        <button type="button" className={"mf-mode-btn" + (!rawMode ? " on" : "")} onClick={() => setRawMode(false)}>키보드</button>
-        <button type="button" className={"mf-mode-btn" + (rawMode ? " on" : "")} onClick={() => setRawMode(true)}>텍스트+수식</button>
-      </div>
-      {rawMode ? (
-        <textarea
-          className="mr-input mf-raw"
-          placeholder={"글자는 그대로, 수식만 $ $로 감싸세요.\n예: x > $\\frac{\\sqrt{15}}{2}$ 에서 정의된 함수 $f(x)$"}
-          value={raw}
-          rows={5}
-          onChange={(e) => setRaw(e.target.value)}
-        />
-      ) : (
-        <div className="mf-canvas" onClick={() => select(root.id, (root.items || []).length)}>
-          <MFField f={root} cursor={cursor} onSelect={select} />
-        </div>
-      )}
-      {(rawMode ? raw.trim() : latex) ? (
+      <math-field ref={ref}></math-field>
+      {latex.trim() ? (
         <div className="mr-math-preview">
-          <span className="mr-math-preview-tag">미리보기</span>
-          {rawMode ? <QuestionBody body={parseMixed(raw)} /> : <MathView latex={latex} block />}
+          <span className="mr-math-preview-tag">문제에 이렇게 보여요</span>
+          <MathView latex={latex} block />
         </div>
       ) : null}
-      {!rawMode && !open && (
-        <button type="button" className="mf-open" onClick={() => setOpen(true)}>⌨ 수식 키보드 열기</button>
-      )}
-      {!rawMode && open && ReactDOM.createPortal(
-        <div className="mf-kb">
-          <div className="mf-kb-top">
-            <div className="mf-kb-tabs">
-              {KB_TABS.map(([key, label]) => (
-                <button key={key} type="button" className={"mf-kb-tab" + (tab === key ? " on" : "")} onClick={() => setTab(key)}>{label}</button>
-              ))}
-            </div>
-            <div className="mf-kb-act">
-              <button type="button" className="mf-kb-x" onClick={backspace}>⌫</button>
-              <button type="button" className="mf-kb-x" onClick={() => setOpen(false)}>▼</button>
-            </div>
-          </div>
-          <div className="mf-kb-rows">
-            {KB[tab].map((row, ri) => (
-              <div className="mf-kb-row" key={ri}>
-                {row.map((k, ci) => {
-                  const sp = k && typeof k === "object" && k.sp;
-                  const on = sp === "shift" && shift;
-                  return (
-                    <button
-                      key={ci}
-                      type="button"
-                      className={"mf-key" + (sp ? " sp" : "") + (on ? " on" : "")}
-                      onClick={() => handleKey(k)}
-                    >
-                      {keyLabel(k)}
-                    </button>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-        </div>,
-        document.body
-      )}
-      <p className="mf-hint">{rawMode ? "가진 LaTeX 코드를 붙여넣으면 수식으로 들어가요." : "네모 칸(▢)을 누른 뒤 키보드로 입력하세요. 분수·적분은 f(x) 탭에 있어요."}</p>
+      <p className="mf-hint">키보드로 바로 입력돼요 — <b>/</b> 분수 · <b>^</b> 지수 · <b>sqrt</b> 루트 · <b>pi</b> π. 휴대폰은 입력창을 누르면 수식 키패드가 열리고, LaTeX 붙여넣기도 돼요.</p>
     </div>
   );
 }
@@ -3501,24 +3157,6 @@ function chipInnerHtml(latex) {
 function chipHtml(latex, tree) {
   const t = tree ? encodeURIComponent(JSON.stringify(tree)) : "";
   return '<span class="mchip" contenteditable="false" data-latex="' + escapeHtml(latex || "") + '" data-tree="' + t + '">' + chipInnerHtml(latex) + "</span>";
-}
-// "글자 $수식$ 글자" → [{text},{math},...]  ($ 없으면 전체를 수식으로)
-function parseMixed(str) {
-  const re = /\$([^$]+)\$/g;
-  const parts = [];
-  let last = 0, m, found = false;
-  while ((m = re.exec(str))) {
-    found = true;
-    if (m.index > last) parts.push({ type: "text", v: str.slice(last, m.index) });
-    parts.push({ type: "math", latex: m[1].trim(), tree: null });
-    last = m.index + m[0].length;
-  }
-  if (!found) {
-    if (str.indexOf("$") !== -1) return [{ type: "text", v: str }]; // $ 짝이 안 맞으면 수식으로 오인하지 않음
-    return [{ type: "math", latex: str.trim(), tree: null }];
-  }
-  if (last < str.length) parts.push({ type: "text", v: str.slice(last) });
-  return parts;
 }
 // 조각들 → DOM 프래그먼트 (텍스트 노드 + 수식 칩)
 function buildMixedFragment(parts) {
@@ -3589,9 +3227,7 @@ function RichBody({ value, onChange }) {
 
   const openNew = () => { saveRange(); draft.current = { latex: "", tree: null }; setBuilding({ mode: "new" }); };
   const openEdit = (chip) => {
-    let tree = null;
-    try { tree = JSON.parse(decodeURIComponent(chip.dataset.tree || "")); } catch (e) {}
-    draft.current = { latex: chip.dataset.latex || "", tree };
+    draft.current = { latex: chip.dataset.latex || "", tree: null };
     setBuilding({ mode: "edit", chip });
   };
   const onBoxClick = (e) => {
@@ -3600,16 +3236,22 @@ function RichBody({ value, onChange }) {
   };
   const finishMath = () => {
     if (!building) return;
-    const { latex, tree } = draft.current;
+    const { latex } = draft.current;
+    if (!String(latex || "").trim()) {
+      // 비워서 완료하면: 수정 중이던 수식 칩은 삭제 (지우기 동작)
+      if (building.mode === "edit" && building.chip && building.chip.parentNode) building.chip.parentNode.removeChild(building.chip);
+      setBuilding(null);
+      serialize();
+      return;
+    }
     if (building.mode === "edit" && building.chip) {
       const chip = building.chip;
-      chip.dataset.latex = latex || "";
-      chip.dataset.tree = tree ? encodeURIComponent(JSON.stringify(tree)) : "";
+      chip.dataset.latex = latex;
+      chip.dataset.tree = "";
       chip.innerHTML = chipInnerHtml(latex);
     } else {
       const el = ref.current;
-      const parts = tree === null ? parseMixed(latex) : [{ type: "math", latex, tree }];
-      const frag = buildMixedFragment(parts);
+      const frag = buildMixedFragment([{ type: "math", latex, tree: null }]);
       const sp = document.createTextNode("\u00A0");
       frag.appendChild(sp);
       const range = lastRange.current && el && el.contains(lastRange.current.commonAncestorContainer) ? lastRange.current : null;
@@ -3648,7 +3290,7 @@ function RichBody({ value, onChange }) {
       </div>
       {building && (
         <div className="mr-rich-mathedit">
-          <MathField initialTree={draft.current.tree} initialLatex={draft.current.latex} onChange={(latex, tree) => { draft.current = { latex, tree }; }} />
+          <MathField initialLatex={draft.current.latex} onChange={(latex) => { draft.current = { latex, tree: null }; }} />
           <div className="mr-rich-mrow">
             <button type="button" className="mr-btn" onClick={finishMath}>{building.mode === "edit" ? "수정 완료" : "이 수식 넣기"}</button>
             <button type="button" className="mr-btn-text" onClick={() => setBuilding(null)}>취소</button>
@@ -3924,50 +3566,13 @@ const CSS = `
 .mr-btn-soft{border:1px dashed var(--line); background:var(--bg); color:var(--t2); font-family:inherit; font-size:14px; font-weight:700; padding:10px 14px; border-radius:10px; cursor:pointer}
 .mr-btn-soft:active{background:var(--blue-bg); color:var(--blue)}
 .mr-math-preview{background:var(--bg); border-radius:12px; padding:18px 14px 14px; text-align:center; position:relative; overflow-x:auto}
-.mf-canvas{min-height:54px; border:1.5px solid var(--line); border-radius:12px; padding:12px 14px; background:var(--card); font-size:22px; line-height:1.5; overflow-x:auto; display:flex; align-items:center; flex-wrap:wrap}
-.mf-field{display:inline-flex; align-items:center; min-width:18px; min-height:26px; padding:0 2px; border-radius:5px; vertical-align:middle}
-.mf-field.active{background:rgba(43,108,176,0.10)}
-.mf-mode{display:flex; gap:6px; margin-bottom:8px}
-.mf-mode-btn{border:1px solid var(--line); background:var(--bg); color:var(--t2); font-family:inherit; font-size:13px; font-weight:700; padding:7px 14px; border-radius:8px; cursor:pointer}
-.mf-mode-btn.on{background:var(--blue); border-color:var(--blue); color:#fff}
-.mf-raw{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:14px; resize:vertical}
-.mf-caret{display:inline-block; width:2px; align-self:stretch; min-height:20px; background:var(--blue); margin:0 1px; vertical-align:middle; animation:mfblink 1s steps(1) infinite}
-@keyframes mfblink{50%{opacity:0}}
-.mf-ph{display:inline-block; width:16px; height:22px; border:1.5px dashed var(--t3); border-radius:4px; opacity:.6}
-.mf-atom{padding:0 1px}
-.mf-frac{display:inline-flex; flex-direction:column; align-items:center; vertical-align:middle; margin:0 3px}
-.mf-frac-n{border-bottom:1.5px solid var(--t1); padding:0 4px 2px}
-.mf-frac-b{padding:3px 4px 0}
-.mf-sup{display:inline-flex; vertical-align:super; font-size:.72em}
-.mf-sub{display:inline-flex; vertical-align:sub; font-size:.72em}
-.mf-sqrt{display:inline-flex; align-items:flex-start; margin:0 2px}
-.mf-radic{font-size:1.05em}
-.mf-under{border-top:1.5px solid var(--t1); padding:0 3px}
-.mf-nidx{font-size:.6em; margin-right:-4px}
-.mf-row{display:inline-flex; align-items:center}
-.mf-fence{font-size:1.1em}
-.mf-bigop{display:inline-flex; align-items:center; margin:0 3px}
-.mf-op{font-size:1.5em; line-height:1}
-.mf-op.mf-lim{font-size:.8em}
-.mf-lims{display:inline-flex; flex-direction:column; font-size:.6em; margin-left:1px}
-.mf-up{margin-bottom:1px}
-.mf-open{margin-top:4px; align-self:flex-start; border:1px solid var(--line); background:var(--blue-bg); color:var(--blue); font-weight:700; font-size:14px; padding:9px 14px; border-radius:10px; cursor:pointer}
-.mf-kb{position:fixed; left:0; right:0; bottom:0; z-index:1200; background:#FFFFFF; border-top:1px solid #E5E8EB; box-shadow:0 -6px 24px rgba(0,0,0,0.18); padding:8px 8px calc(8px + env(safe-area-inset-bottom)); animation:mfkbup .18s ease-out; -webkit-tap-highlight-color:transparent}
-.mf-kb *{box-sizing:border-box}
-@keyframes mfkbup{from{transform:translateY(100%)}to{transform:translateY(0)}}
-.mf-kb-top{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px}
-.mf-kb-tabs{display:flex; gap:5px; flex-wrap:wrap}
-.mf-kb-tab{border:1px solid #E5E8EB; background:#F2F4F6; color:#4E5968; font-family:inherit; font-size:14px; font-weight:700; padding:8px 13px; border-radius:9px; cursor:pointer}
-.mf-kb-tab.on{background:#8a5cf0; border-color:#8a5cf0; color:#fff}
-.mf-kb-act{display:flex; gap:5px}
-.mf-kb-x{border:1px solid #E5E8EB; background:#F2F4F6; color:#191F28; font-size:17px; font-weight:700; width:46px; height:40px; border-radius:9px; cursor:pointer}
-.mf-kb-rows{display:flex; flex-direction:column; gap:6px; max-width:640px; margin:0 auto}
-.mf-kb-row{display:flex; gap:5px}
-.mf-key{flex:1; min-width:0; border:1px solid #E5E8EB; background:#FFFFFF; color:#191F28; font-family:inherit; font-size:17px; font-weight:600; padding:14px 2px; border-radius:10px; cursor:pointer; text-align:center; white-space:nowrap}
-.mf-key:active{background:#E8F3FF}
-.mf-key.sp{flex:0.8; background:#F2F4F6; color:#4E5968; font-weight:700}
-.mf-key.on{background:#8a5cf0; color:#fff; border-color:#8a5cf0}
-.mf-dvar{display:inline-flex; align-items:center}
+/* ===== MathLive 수식 입력창 ===== */
+math-field{display:block; width:100%; font-size:19px; min-height:52px; padding:6px 8px;
+  border:1.5px solid var(--line); border-radius:12px; background:rgba(255,255,255,0.92); color:var(--t1);
+  --caret-color:#8a5cf0; --selection-background-color:rgba(140,92,240,0.25)}
+math-field:focus-within{outline:none; box-shadow:inset 0 0 0 2px var(--blue); background:#fff}
+math-field::part(menu-toggle){display:none}
+body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모달(460)보다 위에 뜨도록 */
 .mf-hint{font-size:12px; color:var(--t3); margin:8px 2px 0; line-height:1.5}
 .mr-math-preview-tag{position:absolute; top:6px; left:10px; font-size:10.5px; font-weight:700; color:var(--t3)}
 .mr-math-block{display:block; margin:6px 0; overflow-x:auto}
