@@ -30,7 +30,7 @@
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/mathlive"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathlive@0.110.0"></script>
 <script defer src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>
 </head>
 <body>
@@ -1869,7 +1869,7 @@ function ExamsAdmin({ exams, onAddExam, onEditExam, onDeleteExam, subs, onGradeS
 /* ---------- 시험 출제/수정 에디터 ---------- */
 function ExamEditor({ initial, defaultType, onCancel, onSave }) {
   function blankQ() {
-    return { id: uid(), type: "mc", text: "", image: "", latex: "", mathTree: null, body: [{ id: segId(), type: "text", v: "" }], points: 10, options: ["", ""], answer: 0, accept: "" };
+    return { id: uid(), type: "mc", text: "", image: "", latex: "", mathTree: null, body: [{ id: segId(), type: "text", v: "" }], points: 10, options: ["", ""], answer: 0, accept: "", explain: null };
   }
   const [title, setTitle] = useState(initial ? initial.title : "");
   const [examType, setExamType] = useState(initial ? (initial.examType || "level") : (defaultType || "level"));
@@ -1883,7 +1883,7 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
   const [questions, setQuestions] = useState(
     initial && initial.questions && initial.questions.length
       ? initial.questions.map((q) => {
-          const m = { options: ["", ""], accept: "", answer: 0, latex: "", mathTree: null, body: null, ...q };
+          const m = { options: ["", ""], accept: "", answer: 0, latex: "", mathTree: null, body: null, explain: null, ...q };
           if (!m.body || !m.body.length) {
             const segs = [];
             if (m.text) segs.push({ id: segId(), type: "text", v: m.text });
@@ -1894,6 +1894,7 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
         })
       : [blankQ()]
   );
+  const [expOpen, setExpOpen] = useState({}); // 해설 입력칸 펼침 상태 (문항별)
   const update = (id, patch) => setQuestions((qs) => qs.map((q) => (q.id === id ? { ...q, ...patch } : q)));
   const addQ = () => setQuestions((qs) => [...qs, blankQ()]);
   const delQ = (id) => setQuestions((qs) => (qs.length > 1 ? qs.filter((q) => q.id !== id) : qs));
@@ -2044,6 +2045,20 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
                 onChange={(e) => update(q.id, { accept: e.target.value })}
               />
             </div>
+          )}
+          {expOpen[q.id] || hasExplain(q) ? (
+            <>
+              <div className="mr-cat-label">해설 (선택 — 채점 결과에서 보여요)</div>
+              <RichBody
+                value={q.explain}
+                onChange={(explain) => update(q.id, { explain })}
+                ph="해설을 입력하세요. 비워두면 학생에게 '출제자에게 문의하세요' 안내가 떠요."
+              />
+            </>
+          ) : (
+            <button type="button" className="mr-add-opt" style={{ marginTop: "12px" }} onClick={() => setExpOpen((o) => ({ ...o, [q.id]: true }))}>
+              ＋ 해설 달기 (선택)
+            </button>
           )}
         </section>
       ))}
@@ -2286,6 +2301,8 @@ function ExamsStudent({ student, loggedIn, requireLogin, exams, subs, onAddSub, 
                 <span className="mr-date">{fmtDate(ex.createdAt)}</span>
               </div>
               <div className="mr-exam-meta">
+                <span>출제자 {ex.author || "관리자"}</span>
+                <span>·</span>
                 <span>문항 {ex.questions.length}개</span>
                 <span>·</span>
                 <span>만점 {maxScore(ex)}점</span>
@@ -2327,7 +2344,7 @@ function TakeExam({ exam, student, loggedIn, onGuestSubmit, onCancel, onSubmit }
     }
   });
   const [result, setResult] = useState(null);
-  const [rates, setRates] = useState({});
+  const rates = useExamRates(exam.id);
   const [restored, setRestored] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const submitLock = React.useRef(false);
@@ -2354,19 +2371,6 @@ function TakeExam({ exam, student, loggedIn, onGuestSubmit, onCancel, onSubmit }
       localStorage.removeItem(draftKey);
     } catch (e) {}
   };
-
-  useEffect(() => {
-    let active = true;
-    sb.rpc("exam_question_stats", { p_exam_id: exam.id })
-      .then(({ data }) => {
-        if (!active || !data) return;
-        const m = {};
-        data.forEach((r) => { m[r.qid] = { total: r.total, correct: r.correct, gtotal: r.gtotal, gcorrect: r.gcorrect }; });
-        setRates(m);
-      })
-      .catch(() => {});
-    return () => { active = false; };
-  }, []);
 
   const memRate = (qid) => {
     const st = rates[qid];
@@ -2456,6 +2460,9 @@ function TakeExam({ exam, student, loggedIn, onGuestSubmit, onCancel, onSubmit }
         <div className="mr-notice-head">
           <h3>{exam.title}</h3>
           <span className="mr-date">만점 {maxScore(exam)}점</span>
+        </div>
+        <div className="mr-exam-meta">
+          <span>출제자 {exam.author || "관리자"}</span>
         </div>
       </section>
 
@@ -2896,8 +2903,65 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
   );
 }
 
-// 채점 리뷰(문항별 정오·내 답·정답) — 응시 직후 / 내 시험 기록에서 공용 사용
+/* 문항별 정답률 불러오기 (응시 화면·채점 리뷰 공용) */
+function useExamRates(examId) {
+  const [rates, setRates] = useState({});
+  useEffect(() => {
+    let active = true;
+    sb.rpc("exam_question_stats", { p_exam_id: examId })
+      .then(({ data }) => {
+        if (!active || !data) return;
+        const m = {};
+        data.forEach((r) => { m[r.qid] = { total: r.total, correct: r.correct, gtotal: r.gtotal, gcorrect: r.gcorrect }; });
+        setRates(m);
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [examId]);
+  return rates;
+}
+
+/* 해설이 실제로 작성돼 있는지 (빈 조각뿐이면 없음으로 처리) */
+function hasExplain(q) {
+  const ex = q && q.explain;
+  if (!ex || !ex.length) return false;
+  return ex.some((s) => (s.type === "text" ? String(s.v || "").trim() : String(s.latex || "").trim()));
+}
+
+/* 채점 리뷰의 해설 블록: 있으면 버튼으로 펼치고, 없으면 출제자 문의 안내 */
+function ExplainBlock({ q, exam }) {
+  const [open, setOpen] = useState(false);
+  if (!hasExplain(q))
+    return (
+      <div className="mr-explain-none">
+        이 문제는 아직 해설이 없어요. 해설이 필요하면 출제자 <b>{exam.author || "관리자"}</b>님께 채팅방에서 문의해 주세요.
+      </div>
+    );
+  if (!open)
+    return (
+      <button type="button" className="mr-explain-btn" onClick={() => setOpen(true)}>
+        💡 해설 보기
+      </button>
+    );
+  return (
+    <div className="mr-explain">
+      <div className="mr-explain-tag">💡 해설</div>
+      <QuestionBody body={q.explain} />
+    </div>
+  );
+}
+
+// 채점 리뷰(문항별 정오·내 답·정답·정답률·해설) — 응시 직후 / 내 시험 기록에서 공용 사용
 function ReviewList({ exam, sub }) {
+  const rates = useExamRates(exam.id);
+  const memRate = (qid) => {
+    const st = rates[qid];
+    return st && st.total ? Math.round((100 * st.correct) / st.total) : null;
+  };
+  const guestRate = (qid) => {
+    const st = rates[qid];
+    return st && st.gtotal ? Math.round((100 * st.gcorrect) / st.gtotal) : null;
+  };
   return (
     <>
       {exam.questions.map((q, qi) => {
@@ -2909,6 +2973,8 @@ function ReviewList({ exam, sub }) {
               <span className="mr-qnum">Q{qi + 1}</span>
               <span className="mr-pts-tag">{q.points}점</span>
               <span className={"mr-ox " + (correct ? "o" : "x")}>{correct ? "O 정답" : "X 오답"}</span>
+              <span className="mr-rate-tag" style={{ color: rateColor(memRate(q.id)) }}>회원정답률 {memRate(q.id) === null ? "—" : memRate(q.id) + "%"}</span>
+              <span className="mr-rate-tag" style={{ color: rateColor(guestRate(q.id)) }}>비회원정답률 {guestRate(q.id) === null ? "—" : guestRate(q.id) + "%"}</span>
             </div>
             {q.image && <img className="mr-q-img" src={q.image} alt={"문제 " + (qi + 1)} />}
             <QBody q={q} />
@@ -2942,6 +3008,7 @@ function ReviewList({ exam, sub }) {
                 </div>
               </div>
             )}
+            <ExplainBlock q={q} exam={exam} />
           </section>
         );
       })}
@@ -3211,7 +3278,7 @@ function htmlToBody(el) {
   return out;
 }
 
-function RichBody({ value, onChange }) {
+function RichBody({ value, onChange, ph }) {
   const ref = React.useRef(null);
   const lastRange = React.useRef(null);
   const draft = React.useRef({ latex: "", tree: null });
@@ -3286,7 +3353,7 @@ function RichBody({ value, onChange }) {
         onKeyUp={saveRange}
         onMouseUp={saveRange}
         onClick={onBoxClick}
-        data-ph="문제 본문을 입력하세요. 수식은 아래 ＋수식 버튼으로 넣어요."
+        data-ph={ph || "문제 본문을 입력하세요. 수식은 아래 ＋수식 버튼으로 넣어요."}
       />
       <div className="mr-rich-add">
         <button type="button" className="mr-btn-soft" onClick={openNew}>＋ 수식 넣기</button>
@@ -3831,6 +3898,13 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-sr-v{font-size:14.5px; font-weight:700; color:var(--t1)}
 .mr-sr-v.ok{color:var(--green)}
 .mr-sr-v.no{color:var(--red)}
+.mr-explain-btn{margin-top:14px; width:100%; border:0; background:var(--blue-bg); color:var(--blue); font-family:inherit; font-weight:700; font-size:14px; padding:12px; border-radius:12px; cursor:pointer; transition:background .15s}
+.mr-explain-btn:active{background:rgba(140,92,240,0.26)}
+.mr-explain{margin-top:14px; background:var(--blue-bg); border-radius:12px; padding:12px 14px}
+.mr-explain-tag{font-size:12px; font-weight:800; color:var(--blue); margin-bottom:7px}
+.mr-explain .mr-qbody{font-size:14px; line-height:1.85}
+.mr-explain-none{margin-top:14px; font-size:12.5px; color:var(--t3); font-weight:600; line-height:1.6; background:var(--bg); border-radius:11px; padding:11px 13px}
+.mr-explain-none b{color:var(--t2); font-weight:800}
 .mr-take-opt.sel{background:var(--blue-bg); border-color:var(--blue); color:var(--blue); font-weight:700}
 .mr-take-opt input{width:18px; height:18px; accent-color:var(--blue); flex:none}
 .mr-result-pill{font-weight:800; color:var(--green); background:var(--green-bg); padding:9px 15px; border-radius:11px; font-size:14.5px}
