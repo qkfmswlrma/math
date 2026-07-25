@@ -75,6 +75,8 @@ const mapColumn = r => ({
 });
 const mapExam = r => ({
   id: r.id,
+  no: r.no || null,
+  prevNos: r.prev_nos || [],
   title: r.title,
   questions: r.questions || [],
   author: r.author || "",
@@ -108,8 +110,8 @@ const APP_VERSION = "2.3.0";
 const CHANGELOG = [{
   v: "2.3.0",
   date: "2026.7.25",
-  items: ["모든 화면에 각자 주소가 생겼어요 — 링크를 복사해 카톡에 공유할 수 있어요", "칼럼·공지는 글마다 주소가 있어요 (예: /column/110001)", "받은 링크로 들어가면 그 화면이 바로 열려요", "휴대폰 뒤로가기 버튼이 앱 안에서도 동작해요"],
-  adminItems: ["글번호는 [종류][대상][예비][순번] 규칙으로 자동으로 붙어요", "글의 대상을 바꿔도 예전에 공유한 링크는 계속 열려요"]
+  items: ["모든 화면에 각자 주소가 생겼어요 — 링크를 복사해 카톡에 공유할 수 있어요", "칼럼·공지·시험은 하나하나 주소가 있어요 (예: /column/110001, /exam/320005)", "받은 링크로 들어가면 그 글·그 시험이 바로 열려요", "휴대폰 뒤로가기 버튼이 앱 안에서도 동작해요"],
+  adminItems: ["글번호·시험번호는 [종류][대상][예비][순번] 규칙으로 자동으로 붙어요", "글의 대상이나 시험 종류를 바꿔도 예전에 공유한 링크는 계속 열려요"]
 }, {
   v: "2.2.0",
   date: "2026.7.25",
@@ -197,16 +199,21 @@ const pathOfTab = t => t && t !== "home" ? TAB_PATH[t] || "/" : "/";
 function parsePath() {
   try {
     const p = String(window.location.pathname || "").replace(/\/+$/, "") || "/";
-    const m = p.match(/^\/(column|notice)\/(\d+)$/);
-    if (m) return {
-      tab: m[1] === "column" ? "notices" : "announce",
-      kind: m[1],
-      no: Number(m[2])
+    const seg = p.split("/").filter(Boolean);
+    if (!seg.length) return null;
+    const tab = PATH_TAB["/" + seg[0]];
+    if (!tab) return null;
+    const s2 = seg[1] || null;
+    if (s2 && /^\d+$/.test(s2)) return {
+      tab,
+      no: Number(s2),
+      sub: null
     };
-    if (PATH_TAB[p]) return {
-      tab: PATH_TAB[p]
+    return {
+      tab,
+      sub: s2,
+      no: null
     };
-    return null;
   } catch (e) {
     return null;
   }
@@ -976,6 +983,9 @@ function App() {
         }) : homeView;
       case "admin":
         return role === "admin" ? /*#__PURE__*/React.createElement(Admin, {
+          key: "a" + nav,
+          initialSub: route && route.tab === "admin" ? route.sub : null,
+          pushUrl: pushUrl,
           auth: auth,
           isSuper: isSuper,
           users: users,
@@ -998,7 +1008,8 @@ function App() {
       case "notices":
         return /*#__PURE__*/React.createElement(Notices, {
           key: "c" + nav,
-          initialNo: route && route.kind === "column" ? route.no : null,
+          initialNo: route && route.tab === "notices" ? route.no : null,
+          initialCat: route && route.tab === "notices" ? route.sub : null,
           urlBase: "column",
           pushUrl: pushUrl,
           role: role,
@@ -1015,7 +1026,7 @@ function App() {
       case "announce":
         return /*#__PURE__*/React.createElement(Announcements, {
           key: "n" + nav,
-          initialNo: route && route.kind === "notice" ? route.no : null,
+          initialNo: route && route.tab === "announce" ? route.no : null,
           urlBase: "notice",
           pushUrl: pushUrl,
           role: role,
@@ -1040,6 +1051,9 @@ function App() {
         });
       case "game":
         return /*#__PURE__*/React.createElement(SpeedGame, {
+          key: "g" + nav,
+          initialSub: route && route.tab === "game" ? route.sub : null,
+          pushUrl: pushUrl,
           onBack: closeOver,
           auth: auth,
           onGoAccount: () => {
@@ -1050,6 +1064,10 @@ function App() {
         });
       case "exams":
         return /*#__PURE__*/React.createElement(Exams, {
+          key: "e" + nav,
+          initialSub: route && route.tab === "exams" ? route.sub : null,
+          initialNo: route && route.tab === "exams" ? route.no : null,
+          pushUrl: pushUrl,
           role: role,
           isSuper: isSuper,
           student: student,
@@ -1441,9 +1459,15 @@ function Admin({
   auditLog,
   onToggleAdmin,
   onDeleteUser,
-  onResetPassword
+  onResetPassword,
+  initialSub,
+  pushUrl
 }) {
-  const [subtab0, setSubtab] = useState("dash");
+  const [subtab0, setSubtab0] = useState(initialSub === "members" || initialSub === "log" ? initialSub : "dash");
+  const setSubtab = t => {
+    setSubtab0(t);
+    if (pushUrl) pushUrl(t === "dash" ? "/admin" : "/admin/" + t);
+  };
   // 회원 관리는 root 전용 — 일반 관리자에겐 탭도, 상세도 안 보임
   const subtab = !isSuper && subtab0 === "members" ? "dash" : subtab0;
   const [selUser, setSelUser] = useState(null);
@@ -1863,6 +1887,7 @@ function Notices({
   readIds,
   onRead,
   initialNo,
+  initialCat,
   urlBase,
   pushUrl
 }) {
@@ -1876,7 +1901,12 @@ function Notices({
   };
   const CATS = ["elem", "mid", "high"];
   const [view, setView] = useState("list"); // list | write | read | edit
-  const [cat, setCat] = useState("elem"); // 목록에서 보고 있는 분류 탭
+  const CAT_KEYS = ["elem", "mid", "high"];
+  const [cat, setCat0] = useState(CAT_KEYS.indexOf(initialCat) !== -1 ? initialCat : "elem"); // 목록에서 보고 있는 분류 탭
+  const setCat = k => {
+    setCat0(k);
+    goUrl("/column/" + k);
+  };
   const [editCat, setEditCat] = useState("elem"); // 글 작성/수정 시 선택한 분류
   const [openId, setOpenId] = useState(null);
   const [draftId, setDraftId] = useState(null);
@@ -1961,7 +1991,7 @@ function Notices({
     const n = findByNo(notices, initialNo);
     if (n) {
       setOpenId(n.id);
-      setCat(n.category || "elem");
+      setCat0(n.category || "elem");
       setView("read");
       if (onRead) onRead(n.id);
     }
@@ -1974,7 +2004,7 @@ function Notices({
   };
   const backToList = () => {
     setView("list");
-    goUrl("/");
+    goUrl("/column/" + cat);
   };
   const CatPicker = /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "mr-cat-label"
@@ -2223,7 +2253,7 @@ function Announcements({
   };
   const backToList = () => {
     setView("list");
-    goUrl("/");
+    goUrl("/notice");
   };
   const newWrite = () => {
     setTitle("");
@@ -2809,24 +2839,45 @@ function todayUnreadCount(exams, readIds) {
   return (exams || []).filter(e => (e.examType || "level") === "today" && isPublished(e) && !isExamViewed(e, readIds)).length;
 }
 function Exams(props) {
-  const [examType, setExamType] = useState(null); // null=선택화면, 'level' | 'today'
+  const {
+    initialSub,
+    initialNo,
+    pushUrl
+  } = props;
+  // 주소가 /exam/310001 이면 그 시험의 종류로 시작
+  const byNo = initialNo ? findByNo(props.exams, initialNo) : null;
+  const startType = byNo ? byNo.examType || "level" : initialSub === "level" || initialSub === "today" ? initialSub : null;
+  const [examType, setExamType] = useState(startType); // null=선택화면
+  const goUrl = path => {
+    if (pushUrl) pushUrl(path);
+  };
+  const pick = t => {
+    setExamType(t);
+    goUrl("/exam/" + t);
+  };
   if (!examType) return /*#__PURE__*/React.createElement(ExamChooser, {
-    onPick: setExamType,
+    onPick: pick,
     todayUnread: todayUnreadCount((props.exams || []).filter(isPublished), props.readIds || new Set())
   });
   const filtered = (props.exams || []).filter(e => (e.examType || "level") === examType);
-  const onBackToChooser = () => setExamType(null);
-  if (props.role === "admin") return /*#__PURE__*/React.createElement(ExamsAdmin, _extends({}, props, {
-    exams: filtered,
-    examType: examType,
-    onBackToChooser: onBackToChooser
+  const onBackToChooser = () => {
+    setExamType(null);
+    goUrl("/exam");
+  };
+  const shared = {
+    ...props,
+    examType,
+    onBackToChooser,
+    initialNo,
+    goUrl
+  };
+  if (props.role === "admin") return /*#__PURE__*/React.createElement(ExamsAdmin, _extends({}, shared, {
+    exams: filtered
   }));
   // 학생/비회원: 공개 시각이 지난 시험만 노출
   const visible = filtered.filter(isPublished);
-  return /*#__PURE__*/React.createElement(ExamsStudent, _extends({}, props, {
-    exams: visible,
-    examType: examType,
-    onBackToChooser: onBackToChooser
+  return /*#__PURE__*/React.createElement(ExamsStudent, _extends({}, shared, {
+    exams: visible
   }));
 }
 
@@ -2848,11 +2899,20 @@ function ExamsAdmin({
   onBackToChooser,
   users,
   readIds,
-  onView
+  onView,
+  initialNo,
+  goUrl
 }) {
   const [mode, setMode] = useState("list");
   const [activeExam, setActiveExam] = useState(null);
-  const [taking, setTaking] = useState(null);
+  const [taking, setTaking] = useState(() => initialNo ? findByNo(exams, initialNo) || null : null);
+  const url = p => {
+    if (goUrl) goUrl(p);
+  };
+  const closeExam = () => {
+    setTaking(null);
+    url("/exam/" + examType);
+  };
   const openGrade = exam => {
     setActiveExam(exam);
     setMode("grade");
@@ -2867,7 +2927,7 @@ function ExamsAdmin({
   };
   if (taking) return /*#__PURE__*/React.createElement(ExamTaker, {
     taking: taking,
-    setTaking: setTaking,
+    setTaking: closeExam,
     student: student,
     loggedIn: loggedIn,
     onAddSub: onAddSub
@@ -2949,6 +3009,7 @@ function ExamsAdmin({
       onClick: () => {
         if (onView) onView(ex.id);
         setTaking(ex);
+        if (ex.no) url("/exam/" + ex.no);
       }
     }, "응시하기"))), /*#__PURE__*/React.createElement("div", {
       className: "mr-gap"
@@ -3451,16 +3512,26 @@ function ExamsStudent({
   examType,
   onBackToChooser,
   readIds,
-  onView
+  onView,
+  initialNo,
+  goUrl
 }) {
-  const [taking, setTaking] = useState(null);
+  const [taking, setTaking] = useState(() => initialNo ? findByNo(exams, initialNo) || null : null);
+  const url = p => {
+    if (goUrl) goUrl(p);
+  };
   const openExam = ex => {
     if (onView) onView(ex.id);
     setTaking(ex);
+    if (ex.no) url("/exam/" + ex.no);
+  };
+  const closeExam = () => {
+    setTaking(null);
+    url("/exam/" + examType);
   };
   if (taking) return /*#__PURE__*/React.createElement(ExamTaker, {
     taking: taking,
-    setTaking: setTaking,
+    setTaking: closeExam,
     student: student,
     loggedIn: loggedIn,
     onAddSub: onAddSub,
@@ -3753,8 +3824,13 @@ function SpeedGame({
   onBack,
   auth,
   onGoAccount,
-  onLogin
+  onLogin,
+  initialSub,
+  pushUrl
 }) {
+  const goSub = p => {
+    if (pushUrl) pushUrl(p);
+  };
   const loggedIn = !!auth;
   const nickname = auth && auth.kakaoId ? auth.kakaoId.trim() : "";
   const canRank = loggedIn && !!nickname;
@@ -3911,7 +3987,15 @@ function SpeedGame({
   const openRanking = () => {
     setPhase("rank");
     loadRanking();
+    goSub("/game/rank");
   };
+  // 주소로 랭킹에 바로 들어온 경우
+  useEffect(() => {
+    if (initialSub === "rank") {
+      setPhase("rank");
+      loadRanking();
+    }
+  }, []);
   useEffect(() => {
     try {
       setBest(Number(localStorage.getItem("mrspeedbest") || 0));
@@ -4057,7 +4141,10 @@ function SpeedGame({
     className: "mr-col"
   }, /*#__PURE__*/React.createElement("button", {
     className: "mr-back",
-    onClick: () => setPhase("ready")
+    onClick: () => {
+      setPhase("ready");
+      goSub("/game");
+    }
   }, "게임으로"), /*#__PURE__*/React.createElement(RankingCard, {
     ranking: ranking,
     myRankBar: myRankBar,
