@@ -63,6 +63,8 @@ const emailOf = id => `${String(id).trim().toLowerCase()}@${EMAIL_DOMAIN}`;
 const padPw = pw => String(pw) + "__mr__";
 const mapColumn = r => ({
   id: r.id,
+  no: r.no || null,
+  prevNos: r.prev_nos || [],
   title: r.title,
   body: r.body || "",
   author: r.author || "",
@@ -102,8 +104,13 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.2.0";
+const APP_VERSION = "2.3.0";
 const CHANGELOG = [{
+  v: "2.3.0",
+  date: "2026.7.25",
+  items: ["칼럼과 공지에 각자 주소가 생겼어요 — 링크를 복사해 카톡에 공유할 수 있어요", "받은 링크로 들어가면 그 글이 바로 열려요"],
+  adminItems: ["글번호는 [종류][대상][예비][순번] 규칙으로 자동으로 붙어요", "글의 대상을 바꿔도 예전에 공유한 링크는 계속 열려요"]
+}, {
   v: "2.2.0",
   date: "2026.7.25",
   items: ["공지사항 탭이 생겼어요", "채점 결과에서 문항별 정답률과 해설을 볼 수 있어요", "시험 목록과 응시 화면에 출제자가 표시돼요", "채팅방 닉네임 중복을 막았어요", "앱 버전과 업데이트 내역을 볼 수 있어요"],
@@ -164,6 +171,30 @@ const CHANGELOG = [{
   items: ["수학질문방 시작", "회원가입·로그인, 칼럼 읽기", "시험 응시와 자동 채점"],
   adminItems: ["칼럼 작성, 시험 출제·채점", "관리자 활동 기록"]
 }];
+
+/* ====== 주소(URL) 라우팅 ======
+   /column/7  → 칼럼 7번,  /notice/3 → 공지 3번,  그 외 → 홈
+   Cloudflare 에 _redirects 파일이 있어야 새로고침/직접입력이 동작합니다. */
+function parsePath() {
+  try {
+    const m = String(window.location.pathname || "").match(/^\/(column|notice)\/(\d+)/);
+    return m ? {
+      kind: m[1],
+      no: Number(m[2])
+    } : null;
+  } catch (e) {
+    return null;
+  }
+}
+// 글번호로 찾기 — 분류가 바뀌기 전의 옛 번호로 들어와도 열리게
+function findByNo(list, no) {
+  return (list || []).find(x => x.no === no || (x.prevNos || []).indexOf(no) !== -1);
+}
+function pushUrl(path) {
+  try {
+    if (window.location.pathname !== path) window.history.pushState({}, "", path);
+  } catch (e) {}
+}
 const uid = () => Math.random().toString(36).slice(2, 10);
 const fmtDate = ts => {
   const d = new Date(ts);
@@ -223,7 +254,23 @@ function rateColor(rate) {
 /* ============================================================ */
 function App() {
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("home");
+  const [tab, setTab] = useState(() => {
+    const r = parsePath();
+    return r ? r.kind === "column" ? "notices" : "announce" : "home";
+  });
+  const [route, setRoute] = useState(parsePath);
+  const [nav, setNav] = useState(0); // 뒤로가기 때 화면을 다시 그리기 위한 카운터
+  useEffect(() => {
+    const onPop = () => {
+      const r = parsePath();
+      setRoute(r);
+      setTab(r ? r.kind === "column" ? "notices" : "announce" : "home");
+      setOver(null);
+      setNav(n => n + 1);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
   const [over, setOver] = useState(null); // {key, rect, expanded}
   const openOver = (key, rect) => {
     setOver({
@@ -237,6 +284,7 @@ function App() {
     } : o)));
   };
   const closeOver = () => {
+    pushUrl("/");
     setOver(o => o ? {
       ...o,
       expanded: false
@@ -907,6 +955,10 @@ function App() {
         }) : homeView;
       case "notices":
         return /*#__PURE__*/React.createElement(Notices, {
+          key: "c" + nav,
+          initialNo: route && route.kind === "column" ? route.no : null,
+          urlBase: "column",
+          pushUrl: pushUrl,
           role: role,
           student: student,
           kakaoId: auth ? auth.kakaoId : "",
@@ -920,6 +972,10 @@ function App() {
         });
       case "announce":
         return /*#__PURE__*/React.createElement(Announcements, {
+          key: "n" + nav,
+          initialNo: route && route.kind === "notice" ? route.no : null,
+          urlBase: "notice",
+          pushUrl: pushUrl,
           role: role,
           student: student,
           kakaoId: auth ? auth.kakaoId : "",
@@ -1763,8 +1819,14 @@ function Notices({
   onEdit,
   onReorder,
   readIds,
-  onRead
+  onRead,
+  initialNo,
+  urlBase,
+  pushUrl
 }) {
+  const goUrl = path => {
+    if (pushUrl) pushUrl(path);
+  };
   const CAT = {
     elem: "초등학교",
     mid: "중학교",
@@ -1849,6 +1911,28 @@ function Notices({
     if (!title.trim()) return alert("제목을 입력하세요.");
     const ok = await onEdit(openId, title.trim(), body, false, editCat);
     if (ok) setView("read"); // 실패 시 수정 화면 유지 (내용 보존)
+  };
+
+  // 주소로 들어온 글이 있으면 자동으로 열기 (데이터가 늦게 오므로 도착 후 처리)
+  useEffect(() => {
+    if (!initialNo) return;
+    const n = findByNo(notices, initialNo);
+    if (n) {
+      setOpenId(n.id);
+      setCat(n.category || "elem");
+      setView("read");
+      if (onRead) onRead(n.id);
+    }
+  }, [notices, initialNo]);
+  const openPost = n => {
+    if (onRead) onRead(n.id);
+    setOpenId(n.id);
+    setView("read");
+    if (n.no) goUrl("/" + urlBase + "/" + n.no);
+  };
+  const backToList = () => {
+    setView("list");
+    goUrl("/");
   };
   const CatPicker = /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "mr-cat-label"
@@ -1935,7 +2019,7 @@ function Notices({
       className: "mr-col"
     }, /*#__PURE__*/React.createElement("button", {
       className: "mr-back",
-      onClick: () => setView("list")
+      onClick: backToList
     }, "칼럼 목록"), !n ? /*#__PURE__*/React.createElement(Empty, {
       text: "글을 찾을 수 없어요."
     }) : /*#__PURE__*/React.createElement("article", {
@@ -2029,11 +2113,7 @@ function Notices({
       key: n.id
     }, /*#__PURE__*/React.createElement("button", {
       className: "mr-post-row",
-      onClick: () => {
-        if (onRead) onRead(n.id);
-        setOpenId(n.id);
-        setView("read");
-      }
+      onClick: () => openPost(n)
     }, /*#__PURE__*/React.createElement("span", {
       className: "mr-post-row-title"
     }, unread && /*#__PURE__*/React.createElement("span", {
@@ -2067,8 +2147,14 @@ function Announcements({
   onEdit,
   onReorder,
   readIds,
-  onRead
+  onRead,
+  initialNo,
+  urlBase,
+  pushUrl
 }) {
+  const goUrl = path => {
+    if (pushUrl) pushUrl(path);
+  };
   const [view, setView] = useState("list"); // list | write | read | edit
   const [openId, setOpenId] = useState(null);
   const [draftId, setDraftId] = useState(null);
@@ -2076,6 +2162,27 @@ function Announcements({
   const [body, setBody] = useState("");
   const [savedNote, setSavedNote] = useState("");
   const authorName = () => (kakaoId || "").trim() || (student || "").trim() || "익명";
+
+  // 주소로 들어온 공지가 있으면 자동으로 열기
+  useEffect(() => {
+    if (!initialNo) return;
+    const n = findByNo(posts, initialNo);
+    if (n) {
+      setOpenId(n.id);
+      setView("read");
+      if (onRead) onRead(n.id);
+    }
+  }, [posts, initialNo]);
+  const openPost = n => {
+    if (onRead) onRead(n.id);
+    setOpenId(n.id);
+    setView("read");
+    if (n.no) goUrl("/" + urlBase + "/" + n.no);
+  };
+  const backToList = () => {
+    setView("list");
+    goUrl("/");
+  };
   const newWrite = () => {
     setTitle("");
     setBody("");
@@ -2209,7 +2316,7 @@ function Announcements({
       className: "mr-col"
     }, /*#__PURE__*/React.createElement("button", {
       className: "mr-back",
-      onClick: () => setView("list")
+      onClick: backToList
     }, "공지사항"), !n ? /*#__PURE__*/React.createElement(Empty, {
       text: "공지를 찾을 수 없어요."
     }) : /*#__PURE__*/React.createElement("article", {
@@ -2295,11 +2402,7 @@ function Announcements({
       key: n.id
     }, /*#__PURE__*/React.createElement("button", {
       className: "mr-post-row",
-      onClick: () => {
-        if (onRead) onRead(n.id);
-        setOpenId(n.id);
-        setView("read");
-      }
+      onClick: () => openPost(n)
     }, /*#__PURE__*/React.createElement("span", {
       className: "mr-post-row-title"
     }, unread && /*#__PURE__*/React.createElement("span", {
