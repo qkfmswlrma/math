@@ -10,8 +10,17 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="수학질문방" />
 <meta property="og:type" content="website" />
+<meta property="og:site_name" content="수학질문방" />
 <meta property="og:title" content="수학질문방" />
 <meta property="og:description" content="칼럼과 시험으로 함께 공부하는 수학 커뮤니티" />
+<meta property="og:url" content="https://suhakjilmoon.pages.dev/" />
+<meta property="og:image" content="https://suhakjilmoon.pages.dev/og-image.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="수학질문방" />
+<meta name="twitter:description" content="칼럼과 시험으로 함께 공부하는 수학 커뮤니티" />
+<meta name="twitter:image" content="https://suhakjilmoon.pages.dev/og-image.png" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%239b6cff'/%3E%3Cstop offset='1' stop-color='%23ff8fc8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='15' fill='url(%23g)'/%3E%3Ctext x='32' y='44' font-size='38' font-weight='800' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E2%88%AB%3C/text%3E%3C/svg%3E" />
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%239b6cff'/%3E%3Cstop offset='1' stop-color='%23ff8fc8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='15' fill='url(%23g)'/%3E%3Ctext x='32' y='44' font-size='38' font-weight='800' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E2%88%AB%3C/text%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -107,11 +116,16 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.4.2";
+const APP_VERSION = "2.5.0";
 const CHANGELOG = [{
+  v: "2.5.0",
+  date: "2026.7.25",
+  items: ["카톡에 링크를 붙이면 글 제목과 내용이 미리보기로 떠요", "시험 링크는 시험 제목과 출제자가 보여요"],
+  adminItems: []
+}, {
   v: "2.4.2",
   date: "2026.7.25",
-  items: ["공지사항은 로그인 없이도 볼 수 있어요", "칼럼은 회원 전용이라, 비회원에겐 로그인 안내가 떠요 (전에는 글이 없는 것처럼 보였어요)"],
+  items: ["공지사항은 로그인 없이도 볼 수 있어요", "칼럼은 회원 전용이라 비회원에게는 로그인 안내가 떠요"],
   adminItems: []
 }, {
   v: "2.4.1",
@@ -121,23 +135,23 @@ const CHANGELOG = [{
 }, {
   v: "2.4.0",
   date: "2026.7.25",
-  items: ["틀린 문제만 모아보는 오답노트가 생겼어요 (내 시험 기록 → 틀린 문제)", "오답노트에서 내 답·정답·해설을 한 번에 볼 수 있어요", "칼럼과 공지를 검색할 수 있어요 (제목·내용·글쓴이)"],
+  items: ["내 시험 기록에 틀린 문제만 모아보는 오답노트가 생겼어요", "오답노트에서 내 답·정답·해설을 한 번에 볼 수 있어요", "제목이나 내용, 글쓴이로 칼럼과 공지를 검색할 수 있어요"],
   adminItems: ["칼럼 수정·삭제 권한을 시험과 같은 기준으로 맞췄어요"]
 }, {
   v: "2.3.0",
   date: "2026.7.25",
-  items: ["모든 화면에 각자 주소가 생겼어요 — 링크를 복사해 카톡에 공유할 수 있어요", "칼럼·공지·시험은 하나하나 주소가 있어요 (예: /column/110001, /exam/320005)", "받은 링크로 들어가면 그 글·그 시험이 바로 열려요", "휴대폰 뒤로가기 버튼이 앱 안에서도 동작해요"],
-  adminItems: ["글번호·시험번호는 [종류][대상][예비][순번] 규칙으로 자동으로 붙어요", "글의 대상이나 시험 종류를 바꿔도 예전에 공유한 링크는 계속 열려요"]
+  items: ["모든 화면에 각자 주소가 생겨서 링크를 카톡에 공유할 수 있어요", "칼럼과 공지, 시험은 글마다 주소가 있어요", "받은 링크로 들어가면 그 글·그 시험이 바로 열려요", "휴대폰 뒤로가기 버튼이 앱 안에서도 동작해요"],
+  adminItems: ["글번호와 시험번호는 종류와 대상, 순번을 조합해 자동으로 붙어요", "글의 대상이나 시험 종류를 바꿔도 예전에 공유한 링크는 계속 열려요"]
 }, {
   v: "2.2.0",
   date: "2026.7.25",
   items: ["공지사항 탭이 생겼어요", "채점 결과에서 문항별 정답률과 해설을 볼 수 있어요", "시험 목록과 응시 화면에 출제자가 표시돼요", "채팅방 닉네임 중복을 막았어요", "앱 버전과 업데이트 내역을 볼 수 있어요"],
-  adminItems: ["출제할 때 문항마다 해설을 달 수 있어요", "수식 입력기 버전을 고정했어요 (자동 업데이트로 깨지는 것 방지)"]
+  adminItems: ["출제할 때 문항마다 해설을 달 수 있어요", "수식 입력기 버전을 고정해서 자동 업데이트로 깨지지 않게 했어요"]
 }, {
   v: "2.1.0",
   date: "2026.7.19",
   items: [],
-  adminItems: ["수식 입력기를 새로 바꿨어요 — 수식 모양 그대로 보면서 편집돼요", "휴대폰에서 입력창을 누르면 수식 전용 키패드가 열려요", "LaTeX 붙여넣기도 돼요"]
+  adminItems: ["수식 입력기를 새로 바꿔서 수식 모양 그대로 보면서 편집할 수 있어요", "휴대폰에서 입력창을 누르면 수식 전용 키패드가 열려요", "LaTeX 붙여넣기도 돼요"]
 }, {
   v: "2.0.1",
   date: "2026.7.13",
@@ -146,7 +160,7 @@ const CHANGELOG = [{
 }, {
   v: "2.0.0",
   date: "2026.6.22",
-  items: ["디자인을 유리 느낌(글래스모피즘)으로 전면 개편했어요", "홈에서 카드를 누르면 그 자리에서 화면이 펼쳐져요", "뒤로가기 버튼 모양을 하나로 통일했어요"],
+  items: ["디자인을 유리 느낌으로 전면 개편했어요", "홈에서 카드를 누르면 그 자리에서 화면이 펼쳐져요", "뒤로가기 버튼 모양을 하나로 통일했어요"],
   adminItems: []
 }, {
   v: "1.5.2",
@@ -162,11 +176,11 @@ const CHANGELOG = [{
   v: "1.5.0",
   date: "2026.6.10",
   items: [],
-  adminItems: ["수식 입력기가 생겼어요 — 글 속에 수식을 바로 넣을 수 있어요", "수식 전용 키패드가 추가됐어요"]
+  adminItems: ["글 속에 수식을 바로 넣을 수 있는 입력기가 생겼어요", "수식 전용 키패드가 추가됐어요"]
 }, {
   v: "1.4.0",
   date: "2026.6.8",
-  items: ["칼럼·오늘의 문제에 안 읽음 표시(빨간 점)가 생겼어요", "로그인하면 기기를 바꿔도 읽음 기록이 유지돼요"],
+  items: ["칼럼과 오늘의 문제에 안 읽음 표시가 생겼어요", "로그인하면 기기를 바꿔도 읽음 기록이 유지돼요"],
   adminItems: []
 }, {
   v: "1.3.0",
@@ -176,8 +190,8 @@ const CHANGELOG = [{
 }, {
   v: "1.2.0",
   date: "2026.6.6",
-  items: ["스피드 연산 게임이 생겼어요", "시험 푸는 중에 답안이 자동 저장돼요", "시험이 레벨테스트 / 오늘의 문제로 나뉘었어요", "개인정보 처리방침이 추가됐어요", "회원 탈퇴를 직접 할 수 있어요"],
-  adminItems: ["비회원 풀이도 익명으로 집계돼요", "같은 IP는 24시간에 한 번만 집계돼요 (정답률 조작 방지)"]
+  items: ["스피드 연산 게임이 생겼어요", "시험 푸는 중에 답안이 자동 저장돼요", "시험이 레벨테스트와 오늘의 문제로 나뉘었어요", "개인정보 처리방침이 추가됐어요", "회원 탈퇴를 직접 할 수 있어요"],
+  adminItems: ["비회원 풀이도 익명으로 집계돼요", "정답률 조작을 막으려고 같은 IP는 24시간에 한 번만 집계돼요"]
 }, {
   v: "1.1.0",
   date: "2026.6.5",
