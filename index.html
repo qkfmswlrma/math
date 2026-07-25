@@ -547,8 +547,12 @@ function App() {
     alert(username + " 님의 비밀번호를 0000 으로 초기화했어요.\n로그인 후 계정 화면에서 바꾸도록 안내해주세요.");
   };
 
+  // 같은 columns 테이블을 쓰되 category 로 칼럼/공지사항을 구분
+  const columnPosts = notices.filter((n) => (n.category || "elem") !== "notice");
+  const noticePosts = notices.filter((n) => n.category === "notice");
+
   const homeView = (
-    <Home role={role} student={student} loggedIn={loggedIn} noticeCount={notices.filter((n) => !n.isDraft).length} columnUnread={columnUnreadCount(notices, readColIds)} examUnread={todayUnreadCount(exams.filter(isPublished), readExamIds)} examCount={role === "admin" ? exams.length : exams.filter(isPublished).length} onGo={openOver} />
+    <Home role={role} student={student} loggedIn={loggedIn} noticeCount={columnPosts.filter((n) => !n.isDraft).length} columnUnread={columnUnreadCount(columnPosts, readColIds)} announceCount={noticePosts.filter((n) => !n.isDraft).length} announceUnread={columnUnreadCount(noticePosts, readColIds)} examUnread={todayUnreadCount(exams.filter(isPublished), readExamIds)} examCount={role === "admin" ? exams.length : exams.filter(isPublished).length} onGo={openOver} />
   );
 
   const screenFor = (key) => {
@@ -556,7 +560,8 @@ function App() {
       case "records": return loggedIn ? <MyRecords student={student} exams={exams} subs={subs} /> : homeView;
       case "admin": return role === "admin" ? <Admin auth={auth} isSuper={isSuper} users={users} notices={notices} exams={exams} subs={subs} auditLog={auditLog} onToggleAdmin={onToggleAdmin} onDeleteUser={onDeleteUser} onResetPassword={onResetPassword} /> : homeView;
       case "account": return loggedIn ? <Account auth={auth} onChangePassword={onChangePassword} onUpdateKakao={onUpdateKakao} onDeleteMe={onDeleteMe} onLogout={onLogout} /> : homeView;
-      case "notices": return <Notices role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} notices={notices} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} readIds={readColIds} onRead={markColumnRead} />;
+      case "notices": return <Notices role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} notices={columnPosts} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} readIds={readColIds} onRead={markColumnRead} />;
+      case "announce": return <Announcements role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} posts={noticePosts} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} readIds={readColIds} onRead={markColumnRead} />;
       case "privacy": return <Privacy onBack={() => setTab("home")} />;
       case "game": return <SpeedGame onBack={closeOver} auth={auth} onGoAccount={() => { closeOver(); setTab("account"); }} onLogin={() => setAuthOpen(true)} />;
       case "exams": return <Exams role={role} isSuper={isSuper} student={student} myId={auth ? auth.id : null} users={users} loggedIn={loggedIn} requireLogin={requireLogin} exams={exams} subs={subs} onAddExam={onAddExam} onEditExam={onEditExam} onDeleteExam={onDeleteExam} onGradeSub={onGradeSub} onAddSub={onAddSub} onGuestSubmit={onGuestSubmit} guestSubs={guestSubs} readIds={readExamIds} onView={markExamRead} />;
@@ -1180,7 +1185,7 @@ function AuthModal({ onClose, onLogin, onSignup }) {
 }
 
 /* ===================== 홈 ===================== */
-function Home({ role, student, loggedIn, noticeCount, columnUnread, examUnread, examCount, onGo }) {
+function Home({ role, student, loggedIn, noticeCount, columnUnread, announceCount, announceUnread, examUnread, examCount, onGo }) {
   const greet = !loggedIn
     ? "로그인하고 함께 시작해요"
     : role === "admin"
@@ -1188,6 +1193,15 @@ function Home({ role, student, loggedIn, noticeCount, columnUnread, examUnread, 
     : `${student}님, 환영해요`;
 
   const sectors = [
+    {
+      key: "announce",
+      icon: "📢",
+      title: "공지사항",
+      desc: "꼭 확인해야 할 소식",
+      meta: `${announceCount}개의 공지`,
+      tone: "green",
+      dot: announceUnread > 0,
+    },
     {
       key: "notices",
       icon: "✍️",
@@ -1546,6 +1560,203 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onR
                 </div>
               )}
             </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ===================== 공지사항 =====================
+   칼럼과 같은 columns 테이블을 쓰고 category 를 'notice' 로 저장한다.
+   분류 탭이 없고, 최신 글이 위로 오는 단순한 게시판. */
+function Announcements({ role, student, kakaoId, posts, onAdd, onDelete, onEdit, onReorder, readIds, onRead }) {
+  const [view, setView] = useState("list"); // list | write | read | edit
+  const [openId, setOpenId] = useState(null);
+  const [draftId, setDraftId] = useState(null);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [savedNote, setSavedNote] = useState("");
+
+  const authorName = () => (kakaoId || "").trim() || (student || "").trim() || "익명";
+
+  const newWrite = () => {
+    setTitle(""); setBody(""); setDraftId(null); setSavedNote(""); setView("write");
+  };
+  const resumeDraft = (d) => {
+    setTitle(d.title === "(제목 없음)" ? "" : d.title);
+    setBody(d.body); setDraftId(d.id); setSavedNote(""); setView("write");
+  };
+
+  const saveDraft = async () => {
+    if (!title.trim() && !body.trim()) return alert("내용을 입력하세요.");
+    let ok;
+    if (draftId) {
+      ok = await onEdit(draftId, title.trim() || "(제목 없음)", body, true, "notice");
+    } else {
+      const newId = await onAdd({ title: title.trim() || "(제목 없음)", body, author: authorName(), isDraft: true, category: "notice" });
+      if (newId && newId !== true) setDraftId(newId);
+      ok = !!newId;
+    }
+    if (ok) setSavedNote("임시저장됐어요");
+  };
+
+  const post = async () => {
+    if (!title.trim()) return alert("제목을 입력하세요.");
+    let ok;
+    if (draftId) {
+      ok = await onEdit(draftId, title.trim(), body, false, "notice");
+    } else {
+      ok = await onAdd({ title: title.trim(), body, author: authorName(), isDraft: false, category: "notice" });
+    }
+    if (!ok) return; // 실패 시 작성 내용 보존
+    setTitle(""); setBody(""); setDraftId(null); setView("list");
+  };
+
+  const remove = async (id) => {
+    if (!confirm("이 공지를 삭제할까요?")) return;
+    await onDelete(id);
+    setOpenId(null);
+    setView("list");
+  };
+
+  const saveEdit = async () => {
+    if (!title.trim()) return alert("제목을 입력하세요.");
+    const ok = await onEdit(openId, title.trim(), body, false, "notice");
+    if (ok) setView("read");
+  };
+
+  if (view === "write")
+    return (
+      <div className="mr-col">
+        <button className="mr-back" onClick={() => setView("list")}>공지사항</button>
+        <section className="mr-card mr-writer">
+          <div className="mr-card-tag">{draftId ? "임시저장 이어쓰기" : "새 공지 쓰기"}</div>
+          <input className="mr-input mr-title-input" placeholder="제목" value={title}
+            onChange={(e) => { setTitle(e.target.value); setSavedNote(""); }} />
+          <RichEditor value={body} onChange={(v) => { setBody(v); setSavedNote(""); }}
+            placeholder="회원들에게 알릴 내용을 적어주세요." />
+          <div className="mr-row-between" style={{ marginTop: "14px" }}>
+            <span className="mr-ok-msg">{savedNote}</span>
+            <div className="mr-gap">
+              <button className="mr-btn-ghost" onClick={saveDraft}>임시저장</button>
+              <button className="mr-btn" onClick={post}>발행하기</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+
+  if (view === "edit")
+    return (
+      <div className="mr-col">
+        <button className="mr-back" onClick={() => setView("read")}>공지 보기</button>
+        <section className="mr-card mr-writer">
+          <div className="mr-card-tag">공지 수정하기</div>
+          <input className="mr-input mr-title-input" placeholder="제목" value={title}
+            onChange={(e) => setTitle(e.target.value)} />
+          <RichEditor value={body} onChange={setBody} placeholder="내용을 입력하세요." />
+          <div className="mr-row-end">
+            <button className="mr-btn" onClick={saveEdit}>수정 완료</button>
+          </div>
+        </section>
+      </div>
+    );
+
+  if (view === "read") {
+    const n = posts.find((x) => x.id === openId);
+    return (
+      <div className="mr-col">
+        <button className="mr-back" onClick={() => setView("list")}>공지사항</button>
+        {!n ? (
+          <Empty text="공지를 찾을 수 없어요." />
+        ) : (
+          <article className="mr-card mr-notice mr-post">
+            <h1 className="mr-post-title">{n.title}</h1>
+            <div className="mr-post-byline">
+              <span className="mr-avatar sm">{(n.author || "익")[0]}</span>
+              {n.author || "익명"} · {fmtDate(n.createdAt)}
+            </div>
+            <div className="mr-post-divider" />
+            {n.body ? <div className="mr-notice-body" dangerouslySetInnerHTML={{ __html: n.body }} /> : <p className="mr-muted">내용이 없어요.</p>}
+            {role === "admin" && (
+              <div className="mr-detail-actions" style={{ marginTop: "20px", justifyContent: "flex-end" }}>
+                <button className="mr-mini-btn" onClick={() => { setTitle(n.title); setBody(n.body); setDraftId(null); setView("edit"); }}>수정</button>
+                <button className="mr-mini-btn danger" onClick={() => remove(n.id)}>삭제</button>
+              </div>
+            )}
+          </article>
+        )}
+      </div>
+    );
+  }
+
+  // 목록
+  const published = posts
+    .filter((n) => !n.isDraft)
+    .sort((a, b) => (a.sortOrder - b.sortOrder) || (b.createdAt - a.createdAt));
+  const drafts = posts.filter((n) => n.isDraft);
+
+  const move = async (idx, dir) => {
+    const j = idx + dir;
+    if (j < 0 || j >= published.length) return;
+    const ids = published.map((n) => n.id);
+    const t = ids[idx];
+    ids[idx] = ids[j];
+    ids[j] = t;
+    await onReorder(ids);
+  };
+
+  return (
+    <div className="mr-col">
+      <div className="mr-list-top">
+        <span className="mr-list-title">공지사항</span>
+        {role === "admin" && <button className="mr-btn" onClick={newWrite}>공지 쓰기</button>}
+      </div>
+
+      {role === "admin" && drafts.length > 0 && (
+        <>
+          <div className="mr-draft-head">임시저장 {drafts.length}</div>
+          <div className="mr-postlist">
+            {drafts.map((n) => (
+              <button key={n.id} className="mr-post-row" onClick={() => resumeDraft(n)}>
+                <span className="mr-post-row-title">
+                  {n.title}
+                  <span className="mr-draft-badge">임시저장</span>
+                </span>
+                <span className="mr-post-row-meta">{fmtDate(n.createdAt)}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {published.length === 0 ? (
+        <Empty text="아직 등록된 공지가 없어요." />
+      ) : (
+        <div className="mr-postlist">
+          {published.map((n, i) => {
+            const unread = readIds && !readIds.has(n.id);
+            return (
+              <div className="mr-post-item" key={n.id}>
+                <button
+                  className="mr-post-row"
+                  onClick={() => { if (onRead) onRead(n.id); setOpenId(n.id); setView("read"); }}
+                >
+                  <span className="mr-post-row-title">
+                    {unread && <span className="mr-unread-dot" />}
+                    {n.title}
+                  </span>
+                  <span className="mr-post-row-meta">{n.author || "익명"} · {fmtDate(n.createdAt)}</span>
+                </button>
+                {role === "admin" && (
+                  <div className="mr-reorder">
+                    <button onClick={() => move(i, -1)} disabled={i === 0} title="위로">▲</button>
+                    <button onClick={() => move(i, 1)} disabled={i === published.length - 1} title="아래로">▼</button>
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
