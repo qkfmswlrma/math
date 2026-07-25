@@ -10,8 +10,17 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="수학질문방" />
 <meta property="og:type" content="website" />
+<meta property="og:site_name" content="수학질문방" />
 <meta property="og:title" content="수학질문방" />
 <meta property="og:description" content="칼럼과 시험으로 함께 공부하는 수학 커뮤니티" />
+<meta property="og:url" content="https://suhakjilmoon.pages.dev/" />
+<meta property="og:image" content="https://suhakjilmoon.pages.dev/og-image.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="수학질문방" />
+<meta name="twitter:description" content="칼럼과 시험으로 함께 공부하는 수학 커뮤니티" />
+<meta name="twitter:image" content="https://suhakjilmoon.pages.dev/og-image.png" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%239b6cff'/%3E%3Cstop offset='1' stop-color='%23ff8fc8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='15' fill='url(%23g)'/%3E%3Ctext x='32' y='44' font-size='38' font-weight='800' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E2%88%AB%3C/text%3E%3C/svg%3E" />
 <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%239b6cff'/%3E%3Cstop offset='1' stop-color='%23ff8fc8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='15' fill='url(%23g)'/%3E%3Ctext x='32' y='44' font-size='38' font-weight='800' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E2%88%AB%3C/text%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -81,8 +90,41 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.4.1";
+const APP_VERSION = "2.5.2";
 const CHANGELOG = [
+  {
+    v: "2.5.2",
+    date: "2026.7.25",
+    items: [
+      "화면마다 다르게 나오던 정답률을 하나의 기준으로 통일했어요",
+      "시험 목록이 정답률을 한 번에 받아와 더 빨라졌어요",
+    ],
+    adminItems: ["채점 화면도 비회원 오답률 대신 정답률로 바뀌었어요"],
+  },
+  {
+    v: "2.5.1",
+    date: "2026.7.25",
+    items: ["시험 목록에서 회원과 비회원을 합친 평균 정답률을 바로 볼 수 있어요"],
+    adminItems: [],
+  },
+  {
+    v: "2.5.0",
+    date: "2026.7.25",
+    items: [
+      "카톡에 링크를 붙이면 글 제목과 내용이 미리보기로 떠요",
+      "시험 링크는 시험 제목과 출제자가 보여요",
+    ],
+    adminItems: [],
+  },
+  {
+    v: "2.4.2",
+    date: "2026.7.25",
+    items: [
+      "공지사항은 로그인 없이도 볼 수 있어요",
+      "칼럼은 회원 전용이라 비회원에게는 로그인 안내가 떠요",
+    ],
+    adminItems: [],
+  },
   {
     v: "2.4.1",
     date: "2026.7.25",
@@ -93,9 +135,9 @@ const CHANGELOG = [
     v: "2.4.0",
     date: "2026.7.25",
     items: [
-      "틀린 문제만 모아보는 오답노트가 생겼어요 (내 시험 기록 → 틀린 문제)",
+      "내 시험 기록에 틀린 문제만 모아보는 오답노트가 생겼어요",
       "오답노트에서 내 답·정답·해설을 한 번에 볼 수 있어요",
-      "칼럼과 공지를 검색할 수 있어요 (제목·내용·글쓴이)",
+      "제목이나 내용, 글쓴이로 칼럼과 공지를 검색할 수 있어요",
     ],
     adminItems: [
       "칼럼 수정·삭제 권한을 시험과 같은 기준으로 맞췄어요",
@@ -105,13 +147,13 @@ const CHANGELOG = [
     v: "2.3.0",
     date: "2026.7.25",
     items: [
-      "모든 화면에 각자 주소가 생겼어요 — 링크를 복사해 카톡에 공유할 수 있어요",
-      "칼럼·공지·시험은 하나하나 주소가 있어요 (예: /column/110001, /exam/320005)",
+      "모든 화면에 각자 주소가 생겨서 링크를 카톡에 공유할 수 있어요",
+      "칼럼과 공지, 시험은 글마다 주소가 있어요",
       "받은 링크로 들어가면 그 글·그 시험이 바로 열려요",
       "휴대폰 뒤로가기 버튼이 앱 안에서도 동작해요",
     ],
     adminItems: [
-      "글번호·시험번호는 [종류][대상][예비][순번] 규칙으로 자동으로 붙어요",
+      "글번호와 시험번호는 종류와 대상, 순번을 조합해 자동으로 붙어요",
       "글의 대상이나 시험 종류를 바꿔도 예전에 공유한 링크는 계속 열려요",
     ],
   },
@@ -127,7 +169,7 @@ const CHANGELOG = [
     ],
     adminItems: [
       "출제할 때 문항마다 해설을 달 수 있어요",
-      "수식 입력기 버전을 고정했어요 (자동 업데이트로 깨지는 것 방지)",
+      "수식 입력기 버전을 고정해서 자동 업데이트로 깨지지 않게 했어요",
     ],
   },
   {
@@ -135,7 +177,7 @@ const CHANGELOG = [
     date: "2026.7.19",
     items: [],
     adminItems: [
-      "수식 입력기를 새로 바꿨어요 — 수식 모양 그대로 보면서 편집돼요",
+      "수식 입력기를 새로 바꿔서 수식 모양 그대로 보면서 편집할 수 있어요",
       "휴대폰에서 입력창을 누르면 수식 전용 키패드가 열려요",
       "LaTeX 붙여넣기도 돼요",
     ],
@@ -154,7 +196,7 @@ const CHANGELOG = [
     v: "2.0.0",
     date: "2026.6.22",
     items: [
-      "디자인을 유리 느낌(글래스모피즘)으로 전면 개편했어요",
+      "디자인을 유리 느낌으로 전면 개편했어요",
       "홈에서 카드를 누르면 그 자리에서 화면이 펼쳐져요",
       "뒤로가기 버튼 모양을 하나로 통일했어요",
     ],
@@ -177,7 +219,7 @@ const CHANGELOG = [
     date: "2026.6.10",
     items: [],
     adminItems: [
-      "수식 입력기가 생겼어요 — 글 속에 수식을 바로 넣을 수 있어요",
+      "글 속에 수식을 바로 넣을 수 있는 입력기가 생겼어요",
       "수식 전용 키패드가 추가됐어요",
     ],
   },
@@ -185,7 +227,7 @@ const CHANGELOG = [
     v: "1.4.0",
     date: "2026.6.8",
     items: [
-      "칼럼·오늘의 문제에 안 읽음 표시(빨간 점)가 생겼어요",
+      "칼럼과 오늘의 문제에 안 읽음 표시가 생겼어요",
       "로그인하면 기기를 바꿔도 읽음 기록이 유지돼요",
     ],
     adminItems: [],
@@ -202,13 +244,13 @@ const CHANGELOG = [
     items: [
       "스피드 연산 게임이 생겼어요",
       "시험 푸는 중에 답안이 자동 저장돼요",
-      "시험이 레벨테스트 / 오늘의 문제로 나뉘었어요",
+      "시험이 레벨테스트와 오늘의 문제로 나뉘었어요",
       "개인정보 처리방침이 추가됐어요",
       "회원 탈퇴를 직접 할 수 있어요",
     ],
     adminItems: [
       "비회원 풀이도 익명으로 집계돼요",
-      "같은 IP는 24시간에 한 번만 집계돼요 (정답률 조작 방지)",
+      "정답률 조작을 막으려고 같은 IP는 24시간에 한 번만 집계돼요",
     ],
   },
   {
@@ -816,7 +858,7 @@ function App() {
       case "records": return loggedIn ? <MyRecords key={"r" + nav} initialSub={route && route.tab === "records" ? route.sub : null} pushUrl={pushUrl} student={student} exams={exams} subs={subs} /> : homeView;
       case "admin": return role === "admin" ? <Admin key={"a" + nav} initialSub={route && route.tab === "admin" ? route.sub : null} pushUrl={pushUrl} auth={auth} isSuper={isSuper} users={users} notices={notices} exams={exams} subs={subs} auditLog={auditLog} onToggleAdmin={onToggleAdmin} onDeleteUser={onDeleteUser} onResetPassword={onResetPassword} /> : homeView;
       case "account": return loggedIn ? <Account auth={auth} onChangePassword={onChangePassword} onUpdateKakao={onUpdateKakao} onDeleteMe={onDeleteMe} onLogout={onLogout} /> : homeView;
-      case "notices": return <Notices key={"c" + nav} initialNo={route && route.tab === "notices" ? route.no : null} initialCat={route && route.tab === "notices" ? route.sub : null} urlBase="column" pushUrl={pushUrl} role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} notices={columnPosts} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} readIds={readColIds} onRead={markColumnRead} />;
+      case "notices": return <Notices key={"c" + nav} loggedIn={loggedIn} requireLogin={requireLogin} initialNo={route && route.tab === "notices" ? route.no : null} initialCat={route && route.tab === "notices" ? route.sub : null} urlBase="column" pushUrl={pushUrl} role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} notices={columnPosts} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} readIds={readColIds} onRead={markColumnRead} />;
       case "announce": return <Announcements key={"n" + nav} initialNo={route && route.tab === "announce" ? route.no : null} urlBase="notice" pushUrl={pushUrl} role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} posts={noticePosts} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} readIds={readColIds} onRead={markColumnRead} />;
       case "privacy": return <Privacy onBack={() => go("home")} />;
       case "changelog": return <Changelog onBack={() => go("home")} isAdmin={role === "admin"} />;
@@ -1552,7 +1594,7 @@ function Home({ role, student, loggedIn, noticeCount, columnUnread, announceCoun
       icon: "✍️",
       title: "칼럼",
       desc: "수학 이야기와 공부 팁",
-      meta: `${noticeCount}개의 글`,
+      meta: loggedIn ? `${noticeCount}개의 글` : "로그인하고 읽기",
       tone: "blue",
       dot: columnUnread > 0,
     },
@@ -1632,7 +1674,7 @@ function Home({ role, student, loggedIn, noticeCount, columnUnread, announceCoun
 }
 
 /* ===================== 칼럼 ===================== */
-function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onReorder, readIds, onRead, initialNo, initialCat, urlBase, pushUrl }) {
+function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onReorder, readIds, onRead, initialNo, initialCat, urlBase, pushUrl, loggedIn, requireLogin }) {
   const goUrl = (path) => { if (pushUrl) pushUrl(path); };
   const CAT = { elem: "초등학교", mid: "중학교", high: "고등학교" };
   const CATS = ["elem", "mid", "high"];
@@ -1745,6 +1787,24 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onR
       </div>
     </>
   );
+
+  // 비회원: 목록 대신 로그인 안내
+  if (!loggedIn)
+    return (
+      <div className="mr-col">
+        <div className="mr-list-top">
+          <span className="mr-list-title">칼럼</span>
+        </div>
+        <section className="mr-card mr-need-login">
+          <div className="mr-need-icon">🔒</div>
+          <h3 className="mr-need-title">칼럼은 회원만 볼 수 있어요</h3>
+          <p className="mr-need-sub">
+            로그인하면 초등·중학·고등 칼럼을 모두 읽을 수 있어요.
+          </p>
+          <button className="mr-btn mr-need-btn" onClick={requireLogin}>로그인하기</button>
+        </section>
+      </div>
+    );
 
   // 글쓰기 / 임시저장 이어쓰기
   if (view === "write")
@@ -2370,6 +2430,7 @@ function todayUnreadCount(exams, readIds) {
 
 function Exams(props) {
   const { initialSub, initialNo, pushUrl } = props;
+  const allRates = useAllExamRates(); // null=로딩중, false=서버에 함수 없음, {}=결과
   // 주소가 /exam/310001 이면 그 시험의 종류로 시작
   const byNo = initialNo ? findByNo(props.exams, initialNo) : null;
   const startType =
@@ -2382,7 +2443,7 @@ function Exams(props) {
   if (!examType) return <ExamChooser onPick={pick} todayUnread={todayUnreadCount((props.exams || []).filter(isPublished), props.readIds || new Set())} />;
   const filtered = (props.exams || []).filter((e) => (e.examType || "level") === examType);
   const onBackToChooser = () => { setExamType(null); goUrl("/exam"); };
-  const shared = { ...props, examType, onBackToChooser, initialNo, goUrl };
+  const shared = { ...props, examType, onBackToChooser, initialNo, goUrl, allRates };
   if (props.role === "admin")
     return <ExamsAdmin {...shared} exams={filtered} />;
   // 학생/비회원: 공개 시각이 지난 시험만 노출
@@ -2391,7 +2452,7 @@ function Exams(props) {
 }
 
 /* ---------- 관리자: 시험 목록 / 출제 / 채점 / (남의 시험) 응시 ---------- */
-function ExamsAdmin({ exams, isSuper, onAddExam, onEditExam, onDeleteExam, subs, onGradeSub, onAddSub, myId, student, loggedIn, guestSubs, examType, onBackToChooser, users, readIds, onView, initialNo, goUrl }) {
+function ExamsAdmin({ exams, isSuper, allRates, onAddExam, onEditExam, onDeleteExam, subs, onGradeSub, onAddSub, myId, student, loggedIn, guestSubs, examType, onBackToChooser, users, readIds, onView, initialNo, goUrl }) {
   const [mode, setMode] = useState("list");
   const [activeExam, setActiveExam] = useState(null);
   const [taking, setTaking] = useState(() => (initialNo ? findByNo(exams, initialNo) || null : null));
@@ -2492,6 +2553,10 @@ function ExamsAdmin({ exams, isSuper, onAddExam, onEditExam, onDeleteExam, subs,
                 <span>만점 {maxScore(ex)}점</span>
                 <span>·</span>
                 <span>제출 {exSubs.length}건</span>
+                <span>·</span>
+                {allRates && allRates !== true
+                  ? <ExamAvgRate stat={allRates[ex.id]} />
+                  : <ExamAvgRateSolo examId={ex.id} questions={ex.questions} />}
                 {pending > 0 && <span className="mr-badge-red">채점 대기 {pending}</span>}
               </div>
               <div className="mr-row-between" style={{ marginTop: "14px" }}>
@@ -2748,6 +2813,7 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
 function GradePanel({ exam, subs, guestSubs, users, onBack, onSaveGrade }) {
   const [openId, setOpenId] = useState(null);
   const guests = guestSubs || [];
+  const rates = useExamRates(exam.id);
 
   return (
     <div className="mr-col">
@@ -2768,17 +2834,15 @@ function GradePanel({ exam, subs, guestSubs, users, onBack, onSaveGrade }) {
         </div>
         <div className="mr-qrate-list">
           {exam.questions.map((q, qi) => {
-            const mTotal = subs.length;
-            const mCorrect = subs.filter((s) => isQCorrect(q, s)).length;
-            const mRate = mTotal ? Math.round((100 * mCorrect) / mTotal) : null;
-            const gTotal = guests.length;
-            const gWrong = guests.filter((s) => !isQCorrect(q, s)).length;
-            const gWrongRate = gTotal ? Math.round((100 * gWrong) / gTotal) : null;
+            // 응시 화면·채점 결과와 같은 서버 집계를 사용해 숫자가 어긋나지 않게 함
+            const st = rates[q.id];
+            const mRate = st && st.total ? Math.round((100 * st.correct) / st.total) : null;
+            const gRate = st && st.gtotal ? Math.round((100 * st.gcorrect) / st.gtotal) : null;
             return (
               <div className="mr-qrate-row" key={q.id}>
                 <span className="mr-qnum-sm">Q{qi + 1}</span>
-                <span className="mr-qrate-val" style={{ color: rateColor(mRate) }}>회원정답률 {mTotal ? mRate + "%" : "—"}</span>
-                <span className="mr-qrate-wrong">비회원 오답률 {gTotal ? gWrongRate + "%" : "—"}</span>
+                <span className="mr-qrate-val" style={{ color: rateColor(mRate) }}>회원정답률 {mRate === null ? "—" : mRate + "%"}</span>
+                <span className="mr-qrate-wrong" style={{ color: rateColor(gRate) }}>비회원정답률 {gRate === null ? "—" : gRate + "%"}</span>
               </div>
             );
           })}
@@ -2935,7 +2999,7 @@ function SubmissionRow({ exam, sub, users, open, onToggle, onSaveGrade }) {
 }
 
 /* ---------- 참여자: 시험 목록 / 응시 / 결과 ---------- */
-function ExamsStudent({ student, loggedIn, requireLogin, exams, subs, onAddSub, onGuestSubmit, examType, onBackToChooser, readIds, onView, initialNo, goUrl }) {
+function ExamsStudent({ student, loggedIn, allRates, requireLogin, exams, subs, onAddSub, onGuestSubmit, examType, onBackToChooser, readIds, onView, initialNo, goUrl }) {
   const [taking, setTaking] = useState(() => (initialNo ? findByNo(exams, initialNo) || null : null));
   const url = (p) => { if (goUrl) goUrl(p); };
   const openExam = (ex) => { if (onView) onView(ex.id); setTaking(ex); if (ex.no) url("/exam/" + ex.no); };
@@ -2972,6 +3036,10 @@ function ExamsStudent({ student, loggedIn, requireLogin, exams, subs, onAddSub, 
                 <span>문항 {ex.questions.length}개</span>
                 <span>·</span>
                 <span>만점 {maxScore(ex)}점</span>
+                <span>·</span>
+                {allRates && allRates !== true
+                  ? <ExamAvgRate stat={allRates[ex.id]} />
+                  : <ExamAvgRateSolo examId={ex.id} questions={ex.questions} />}
               </div>
               <div className="mr-row-end">
                 {mine ? (
@@ -3588,6 +3656,54 @@ function useExamRates(examId) {
     return () => { active = false; };
   }, [examId]);
   return rates;
+}
+
+/* 시험 목록의 정답률: 모든 시험 통계를 한 번에 받아온다.
+   서버에 exam_stats_all 이 없으면 null 을 돌려주고, 화면은 예전 방식으로 넘어간다. */
+function useAllExamRates() {
+  const [map, setMap] = useState(null); // null = 아직 모름/사용 불가
+  useEffect(() => {
+    let active = true;
+    sb.rpc("exam_stats_all")
+      .then(({ data, error }) => {
+        if (!active) return;
+        if (error || !data) { setMap(false); return; }
+        const o = {};
+        data.forEach((r) => { o[r.exam_id] = r; });
+        setMap(o);
+      })
+      .catch(() => { if (active) setMap(false); });
+    return () => { active = false; };
+  }, []);
+  return map;
+}
+
+function rateSpan(avg) {
+  return (
+    <span style={{ color: rateColor(avg), fontWeight: 700 }}>
+      평균정답률 {avg === null ? "—" : avg + "%"}
+    </span>
+  );
+}
+
+// 한꺼번에 받아온 통계로 표시
+function ExamAvgRate({ stat }) {
+  const tot = stat ? Number(stat.total || 0) + Number(stat.gtotal || 0) : 0;
+  const cor = stat ? Number(stat.correct || 0) + Number(stat.gcorrect || 0) : 0;
+  return rateSpan(tot ? Math.round((100 * cor) / tot) : null);
+}
+
+// 예비용: 시험 하나씩 따로 집계 (exam_stats_all 이 없을 때)
+function ExamAvgRateSolo({ examId, questions }) {
+  const rates = useExamRates(examId);
+  let tot = 0, cor = 0;
+  (questions || []).forEach((q) => {
+    const st = rates[q.id];
+    if (!st) return;
+    tot += (st.total || 0) + (st.gtotal || 0);
+    cor += (st.correct || 0) + (st.gcorrect || 0);
+  });
+  return rateSpan(tot ? Math.round((100 * cor) / tot) : null);
 }
 
 /* 해설이 실제로 작성돼 있는지 (빈 조각뿐이면 없음으로 처리) */
@@ -4623,6 +4739,11 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-explain-none{margin-top:14px; font-size:12.5px; color:var(--t3); font-weight:600; line-height:1.6; background:var(--bg); border-radius:11px; padding:11px 13px}
 .mr-explain-none b{color:var(--t2); font-weight:800}
 .mr-search{margin-top:0}
+.mr-need-login{text-align:center; padding:34px 22px}
+.mr-need-icon{font-size:40px; line-height:1; margin-bottom:14px}
+.mr-need-title{font-size:18px; font-weight:800; color:var(--t1); letter-spacing:-0.4px; margin:0 0 10px}
+.mr-need-sub{font-size:13.5px; color:var(--t2); line-height:1.75; margin:0 0 20px}
+.mr-need-btn{width:100%; padding:14px; font-size:15.5px}
 .mr-wrong-hint{font-size:12.5px; color:var(--t3); font-weight:600; padding:2px 4px; line-height:1.6}
 .mr-wrong-from{font-size:12px; font-weight:700; color:var(--blue); background:var(--blue-bg); display:inline-block; padding:4px 10px; border-radius:8px; margin-bottom:10px}
 .mr-take-opt.sel{background:var(--blue-bg); border-color:var(--blue); color:var(--blue); font-weight:700}
