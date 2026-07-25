@@ -340,9 +340,28 @@ function App() {
       return { error: "로그인 중 오류가 났어요. 잠시 후 다시 시도해 주세요." };
     }
   };
+  /* 채팅방 닉네임 중복 검사 (빈 값은 여러 명이 써도 됨).
+     화면 검사는 안내용이고, 최종 방어는 DB 유니크 인덱스가 함 */
+  const KAKAO_DUP_MSG = "이미 다른 회원이 쓰고 있는 닉네임이에요. 다른 이름을 써주세요.";
+  const isDupError = (err) =>
+    !!err && (err.code === "23505" || /duplicate key|unique constraint|profiles_kakao/i.test(err.message || ""));
+  const kakaoTaken = async (kakao, exceptId) => {
+    const v = (kakao || "").trim();
+    if (!v) return false; // 닉네임 안 쓰는 건 자유
+    try {
+      const { data, error } = await sb.from("profiles").select("id,kakao_id");
+      if (error || !data) return false; // 조회 실패 시엔 DB 제약에 맡김
+      return data.some(
+        (r) => (r.kakao_id || "").trim().toLowerCase() === v.toLowerCase() && r.id !== exceptId
+      );
+    } catch (e) {
+      return false;
+    }
+  };
   const onSignup = async (id, pw, kakao) => {
     const uname = id.trim();
     if (!uname) return { error: "아이디를 입력하세요." };
+    if (await kakaoTaken(kakao, null)) return { error: KAKAO_DUP_MSG };
     try {
       const { data, error } = await sb.auth.signUp({
         email: emailOf(uname),
@@ -350,6 +369,8 @@ function App() {
         options: { data: { username: uname, kakao_id: (kakao || "").trim() } },
       });
       if (error) {
+        if (isDupError(error) || /Database error saving new user/i.test(error.message || ""))
+          return { error: KAKAO_DUP_MSG };
         const dup = /registered|already|exists|duplicate/i.test(error.message || "");
         return { error: dup ? "이미 사용 중인 아이디예요." : error.message };
       }
@@ -379,9 +400,11 @@ function App() {
   };
   const onUpdateKakao = async (kakao) => {
     if (!auth) return { error: "로그인이 필요해요." };
-    const { error } = await sb.from("profiles").update({ kakao_id: kakao }).eq("id", auth.id);
-    if (error) return { error: error.message };
-    setAuth({ ...auth, kakaoId: kakao });
+    const v = (kakao || "").trim();
+    if (v && (await kakaoTaken(v, auth.id))) return { error: KAKAO_DUP_MSG };
+    const { error } = await sb.from("profiles").update({ kakao_id: v }).eq("id", auth.id);
+    if (error) return { error: isDupError(error) ? KAKAO_DUP_MSG : error.message };
+    setAuth({ ...auth, kakaoId: v });
     await refresh();
     return {};
   };
