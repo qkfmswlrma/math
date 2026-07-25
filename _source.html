@@ -22,10 +22,11 @@
 <meta name="twitter:description" content="칼럼과 시험으로 함께 공부하는 수학 커뮤니티" />
 <meta name="twitter:image" content="https://suhakjilmoon.pages.dev/og-image.png" />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%239b6cff'/%3E%3Cstop offset='1' stop-color='%23ff8fc8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='15' fill='url(%23g)'/%3E%3Ctext x='32' y='44' font-size='38' font-weight='800' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E2%88%AB%3C/text%3E%3C/svg%3E" />
-<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%239b6cff'/%3E%3Cstop offset='1' stop-color='%23ff8fc8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='15' fill='url(%23g)'/%3E%3Ctext x='32' y='44' font-size='38' font-weight='800' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E2%88%AB%3C/text%3E%3C/svg%3E" />
+<link rel="apple-touch-icon" href="/icon-180.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="manifest" href="/manifest.json" />
 <style>
   html,body,#root{margin:0;padding:0;min-height:100%;background:linear-gradient(165deg,#f4e9ff 0%,#fde9f4 46%,#e9eeff 100%)}
   .mr-splash{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:'Pretendard',-apple-system,sans-serif;color:#4E5968}
@@ -33,7 +34,15 @@
   .mr-splash .tx{font-weight:700;font-size:15px;letter-spacing:-0.3px}
   .mr-splash .sp{width:22px;height:22px;border:3px solid #E5E8EB;border-top-color:#9b6cff;border-radius:50%;animation:mrsp .7s linear infinite}
   @keyframes mrsp{to{transform:rotate(360deg)}}
+  /* 어두운 화면 모드: 앱이 뜨기 전 스플래시·배경도 어둡게 (깜빡임 방지) */
+  html[data-theme="dark"],html[data-theme="dark"] body,html[data-theme="dark"] #root{background:linear-gradient(165deg,#1a1626 0%,#221a2b 46%,#181a2b 100%)}
+  html[data-theme="dark"] .mr-splash{color:#b3a9cc}
+  html[data-theme="dark"] .mr-splash .sp{border-color:rgba(255,255,255,0.14);border-top-color:#b18cff}
 </style>
+<script>
+  /* 저장된 화면 모드를 렌더 전에 미리 적용 (없으면 기기 설정을 따름) */
+  try{var mrT=localStorage.getItem('mr-theme');if(mrT!=='dark'&&mrT!=='light')mrT=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=mrT;}catch(e){}
+</script>
 <script defer crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script defer crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -90,8 +99,20 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.5.2";
+const APP_VERSION = "2.6.0";
 const CHANGELOG = [
+  {
+    v: "2.6.0",
+    date: "2026.7.25",
+    items: [
+      "어두운 화면 모드가 생겼어요. 회원정보 화면에서 켜고 끌 수 있어요",
+      "시험을 제목이나 출제자로 검색하고 정답률순으로 정렬할 수 있어요",
+      "시험마다 쉬움·보통·어려움 난이도가 정답률에 따라 표시돼요",
+      "내 시험 기록에서 평균 점수와 최근 점수 흐름을 한눈에 볼 수 있어요",
+      "홈 화면에 앱처럼 추가해서 바로 열 수 있어요",
+    ],
+    adminItems: [],
+  },
   {
     v: "2.5.2",
     date: "2026.7.25",
@@ -391,6 +412,28 @@ function rateColor(rate) {
   if (rate >= 10) return "#F04452"; // 빨강
   return "#6A0012"; // 10% 미만: 가장 어려운 색(짙은 빨강)
 }
+// 시험 통계(회원+비회원)를 합친 평균 정답률 하나로. 데이터 없으면 null
+function combinedRate(stat) {
+  if (!stat) return null;
+  const tot = Number(stat.total || 0) + Number(stat.gtotal || 0);
+  const cor = Number(stat.correct || 0) + Number(stat.gcorrect || 0);
+  return tot ? Math.round((100 * cor) / tot) : null;
+}
+// 평균 정답률로 난이도를 나눔 (높을수록 쉬움). 데이터 없으면 null
+function difficultyOf(rate) {
+  if (rate === null || rate === undefined) return null;
+  if (rate >= 70) return { label: "쉬움", cls: "easy" };
+  if (rate >= 40) return { label: "보통", cls: "mid" };
+  return { label: "어려움", cls: "hard" };
+}
+// 저장된 화면 모드 (없으면 기기 설정을 따름)
+function getTheme() {
+  try {
+    const t = localStorage.getItem("mr-theme");
+    if (t === "dark" || t === "light") return t;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  } catch (e) { return "light"; }
+}
 
 /* ============================================================ */
 function App() {
@@ -403,6 +446,17 @@ function App() {
   const [nav, setNav] = useState(0); // 뒤로가기 때 화면을 다시 그리기 위한 카운터
   // 화면 이동 + 주소 갱신 (뒤로가기 처리에선 쓰지 않음)
   const go = (t) => { setTab(t); pushUrl(pathOfTab(t)); };
+  // 어두운 화면 모드
+  const [theme, setTheme] = useState(getTheme);
+  useEffect(() => {
+    try {
+      document.documentElement.dataset.theme = theme;
+      localStorage.setItem("mr-theme", theme);
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute("content", theme === "dark" ? "#1a1626" : "#b388ff");
+    } catch (e) {}
+  }, [theme]);
+  const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
   useEffect(() => {
     const onPop = () => {
       const r = parsePath();
@@ -857,7 +911,7 @@ function App() {
     switch (key) {
       case "records": return loggedIn ? <MyRecords key={"r" + nav} initialSub={route && route.tab === "records" ? route.sub : null} pushUrl={pushUrl} student={student} exams={exams} subs={subs} /> : homeView;
       case "admin": return role === "admin" ? <Admin key={"a" + nav} initialSub={route && route.tab === "admin" ? route.sub : null} pushUrl={pushUrl} auth={auth} isSuper={isSuper} users={users} notices={notices} exams={exams} subs={subs} auditLog={auditLog} onToggleAdmin={onToggleAdmin} onDeleteUser={onDeleteUser} onResetPassword={onResetPassword} /> : homeView;
-      case "account": return loggedIn ? <Account auth={auth} onChangePassword={onChangePassword} onUpdateKakao={onUpdateKakao} onDeleteMe={onDeleteMe} onLogout={onLogout} /> : homeView;
+      case "account": return loggedIn ? <Account auth={auth} theme={theme} onToggleTheme={toggleTheme} onChangePassword={onChangePassword} onUpdateKakao={onUpdateKakao} onDeleteMe={onDeleteMe} onLogout={onLogout} /> : homeView;
       case "notices": return <Notices key={"c" + nav} loggedIn={loggedIn} requireLogin={requireLogin} initialNo={route && route.tab === "notices" ? route.no : null} initialCat={route && route.tab === "notices" ? route.sub : null} urlBase="column" pushUrl={pushUrl} role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} notices={columnPosts} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} readIds={readColIds} onRead={markColumnRead} />;
       case "announce": return <Announcements key={"n" + nav} initialNo={route && route.tab === "announce" ? route.no : null} urlBase="notice" pushUrl={pushUrl} role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} posts={noticePosts} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} readIds={readColIds} onRead={markColumnRead} />;
       case "privacy": return <Privacy onBack={() => go("home")} />;
@@ -958,7 +1012,7 @@ function PersonIcon() {
 }
 
 /* ===================== 회원정보 ===================== */
-function Account({ auth, onChangePassword, onUpdateKakao, onDeleteMe, onLogout }) {
+function Account({ auth, theme, onToggleTheme, onChangePassword, onUpdateKakao, onDeleteMe, onLogout }) {
   const [curPw, setCurPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [done, setDone] = useState(false);
@@ -1000,6 +1054,25 @@ function Account({ auth, onChangePassword, onUpdateKakao, onDeleteMe, onLogout }
         <div className="mr-account-role">
           {auth.isSuper ? "root" : auth.isAdmin ? "관리자" : "일반 회원"}
           {!auth.isAdmin && auth.kakaoId ? ` · 채팅방 ${auth.kakaoId}` : ""}
+        </div>
+      </section>
+
+      <section className="mr-card">
+        <div className="mr-card-tag">화면 설정</div>
+        <div className="mr-setting-row">
+          <div className="mr-setting-text">
+            <div className="mr-setting-name">어두운 화면 모드</div>
+            <div className="mr-setting-desc">{theme === "dark" ? "지금은 어두운 화면이에요" : "지금은 밝은 화면이에요"}</div>
+          </div>
+          <button
+            className={"mr-switch" + (theme === "dark" ? " on" : "")}
+            onClick={onToggleTheme}
+            role="switch"
+            aria-checked={theme === "dark"}
+            aria-label="어두운 화면 모드"
+          >
+            <span className="mr-switch-dot" />
+          </button>
         </div>
       </section>
 
@@ -1105,6 +1178,15 @@ function MyRecords({ student, exams, subs, initialSub, pushUrl }) {
     });
   });
 
+  // 대시보드용 통계 (점수 비율 %)
+  const recStats = mine.map(({ sub, exam }) => {
+    const m = maxScore(exam);
+    return m ? Math.round((totalScore(exam, sub) / m) * 100) : 0;
+  });
+  const avgPct = recStats.length ? Math.round(recStats.reduce((s, x) => s + x, 0) / recStats.length) : 0;
+  const bestPct = recStats.length ? Math.max.apply(null, recStats) : 0;
+  const trend = recStats.slice(0, 10).reverse(); // 오래된→최근 순으로 표시
+
   if (open) {
     const { sub, exam } = open;
     const score = totalScore(exam, sub);
@@ -1197,26 +1279,48 @@ function MyRecords({ student, exams, subs, initialSub, pushUrl }) {
       ) : mine.length === 0 ? (
         <Empty text="아직 응시한 시험이 없어요." />
       ) : (
-        <div className="mr-postlist">
-          {mine.map(({ sub, exam }, i) => {
-            const score = totalScore(exam, sub);
-            const max = maxScore(exam);
-            const ratio = max ? score / max : 0;
-            const tone = ratio >= 0.8 ? "good" : ratio >= 0.5 ? "mid" : "low";
-            return (
-              <button className="mr-record mr-record-btn" key={sub.id} style={{ animationDelay: `${i * 30}ms` }} onClick={() => setOpen({ sub, exam })}>
-                <div className="mr-record-info">
-                  <div className="mr-record-title">{exam.title}</div>
-                  <div className="mr-record-meta">{fmtDate(sub.submittedAt)} · 채점 결과 보기</div>
-                </div>
-                <div className={"mr-record-score " + tone}>
-                  {score}
-                  <span className="mr-record-max"> / {max}</span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
+        <>
+          <div className="mr-stat-grid">
+            <div className="mr-stat"><div className="mr-stat-num">{mine.length}</div><div className="mr-stat-label">응시</div></div>
+            <div className="mr-stat"><div className="mr-stat-num">{avgPct}%</div><div className="mr-stat-label">평균</div></div>
+            <div className="mr-stat"><div className="mr-stat-num">{bestPct}%</div><div className="mr-stat-label">최고</div></div>
+            <div className="mr-stat"><div className="mr-stat-num">{wrong.length}</div><div className="mr-stat-label">오답</div></div>
+          </div>
+          {trend.length >= 2 && (
+            <>
+              <div className="mr-dash-title">최근 점수 흐름</div>
+              <div className="mr-spark">
+                {trend.map((pct, i) => (
+                  <div className="mr-spark-col" key={i}>
+                    <div className="mr-spark-bar" style={{ height: pct + "%" }} />
+                    <span className="mr-spark-cap">{pct}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          <div className="mr-dash-title">시험별 기록</div>
+          <div className="mr-postlist">
+            {mine.map(({ sub, exam }, i) => {
+              const score = totalScore(exam, sub);
+              const max = maxScore(exam);
+              const ratio = max ? score / max : 0;
+              const tone = ratio >= 0.8 ? "good" : ratio >= 0.5 ? "mid" : "low";
+              return (
+                <button className="mr-record mr-record-btn" key={sub.id} style={{ animationDelay: `${i * 30}ms` }} onClick={() => setOpen({ sub, exam })}>
+                  <div className="mr-record-info">
+                    <div className="mr-record-title">{exam.title}</div>
+                    <div className="mr-record-meta">{fmtDate(sub.submittedAt)} · 채점 결과 보기</div>
+                  </div>
+                  <div className={"mr-record-score " + tone}>
+                    {score}
+                    <span className="mr-record-max"> / {max}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );
@@ -3005,6 +3109,24 @@ function ExamsStudent({ student, loggedIn, allRates, requireLogin, exams, subs, 
   const openExam = (ex) => { if (onView) onView(ex.id); setTaking(ex); if (ex.no) url("/exam/" + ex.no); };
   const closeExam = () => { setTaking(null); url("/exam/" + examType); };
 
+  const [q, setQ] = useState("");
+  const [sort, setSort] = useState("recent");
+  const rateOf = (ex) => (allRates && typeof allRates === "object" ? combinedRate(allRates[ex.id]) : null);
+  const kw = q.trim().toLowerCase();
+  let shown = exams.filter((ex) =>
+    !kw || (ex.title || "").toLowerCase().includes(kw) || (ex.author || "").toLowerCase().includes(kw)
+  );
+  if (sort !== "recent") {
+    // 정답률 데이터가 없는 시험은 뒤로 보낸다
+    shown = shown.slice().sort((a, b) => {
+      const ra = rateOf(a), rb = rateOf(b);
+      if (ra === null && rb === null) return 0;
+      if (ra === null) return 1;
+      if (rb === null) return -1;
+      return sort === "hard" ? ra - rb : rb - ra;
+    });
+  }
+
   if (taking)
     return (
       <ExamTaker taking={taking} setTaking={closeExam} student={student} loggedIn={loggedIn} onAddSub={onAddSub} onGuestSubmit={onGuestSubmit} />
@@ -3021,47 +3143,70 @@ function ExamsStudent({ student, loggedIn, allRates, requireLogin, exams, subs, 
       {exams.length === 0 ? (
         <Empty text="아직 응시할 시험이 없어요." />
       ) : (
-        exams.map((ex, i) => {
-          const mine = subs.find((s) => s.examId === ex.id && s.student === student && student);
-          const unread = examType === "today" && !isExamViewed(ex, readIds);
-          return (
-            <article className="mr-card" key={ex.id} style={{ animationDelay: `${i * 40}ms` }}>
-              <div className="mr-notice-head">
-                <h3>{unread && <span className="mr-unread-dot" />}{ex.title}</h3>
-                <span className="mr-date">{fmtDate(ex.createdAt)}</span>
+        <>
+          {exams.length > 1 && (
+            <div className="mr-listtools">
+              <input
+                className="mr-input mr-search"
+                placeholder="제목이나 출제자로 검색"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+              <div className="mr-sortseg">
+                <button className={sort === "recent" ? "on" : ""} onClick={() => setSort("recent")}>최신순</button>
+                <button className={sort === "easy" ? "on" : ""} onClick={() => setSort("easy")}>쉬운순</button>
+                <button className={sort === "hard" ? "on" : ""} onClick={() => setSort("hard")}>어려운순</button>
               </div>
-              <div className="mr-exam-meta">
-                <span>출제자 {ex.author || "관리자"}</span>
-                <span>·</span>
-                <span>문항 {ex.questions.length}개</span>
-                <span>·</span>
-                <span>만점 {maxScore(ex)}점</span>
-                <span>·</span>
-                {allRates && allRates !== true
-                  ? <ExamAvgRate stat={allRates[ex.id]} />
-                  : <ExamAvgRateSolo examId={ex.id} questions={ex.questions} />}
-              </div>
-              <div className="mr-row-end">
-                {mine ? (
-                  mine.graded ? (
-                    <span className="mr-result-pill">
-                      내 점수 {totalScore(ex, mine)} / {maxScore(ex)}
-                    </span>
-                  ) : (
-                    <span className="mr-badge-red">채점 중…</span>
-                  )
-                ) : (
-                  <button
-                    className="mr-btn"
-                    onClick={() => openExam(ex)}
-                  >
-                    응시하기
-                  </button>
-                )}
-              </div>
-            </article>
-          );
-        })
+            </div>
+          )}
+          {shown.length === 0 ? (
+            <Empty text="검색 결과가 없어요." />
+          ) : (
+            shown.map((ex, i) => {
+              const mine = subs.find((s) => s.examId === ex.id && s.student === student && student);
+              const unread = examType === "today" && !isExamViewed(ex, readIds);
+              const diff = difficultyOf(rateOf(ex));
+              return (
+                <article className="mr-card" key={ex.id} style={{ animationDelay: `${Math.min(i, 12) * 40}ms` }}>
+                  <div className="mr-notice-head">
+                    <h3>{unread && <span className="mr-unread-dot" />}{ex.title}</h3>
+                    <span className="mr-date">{fmtDate(ex.createdAt)}</span>
+                  </div>
+                  <div className="mr-exam-meta">
+                    <span>출제자 {ex.author || "관리자"}</span>
+                    <span>·</span>
+                    <span>문항 {ex.questions.length}개</span>
+                    <span>·</span>
+                    <span>만점 {maxScore(ex)}점</span>
+                    <span>·</span>
+                    {allRates && allRates !== true
+                      ? <ExamAvgRate stat={allRates[ex.id]} />
+                      : <ExamAvgRateSolo examId={ex.id} questions={ex.questions} />}
+                    {diff && <b className={"mr-diff " + diff.cls}>{diff.label}</b>}
+                  </div>
+                  <div className="mr-row-end">
+                    {mine ? (
+                      mine.graded ? (
+                        <span className="mr-result-pill">
+                          내 점수 {totalScore(ex, mine)} / {maxScore(ex)}
+                        </span>
+                      ) : (
+                        <span className="mr-badge-red">채점 중…</span>
+                      )
+                    ) : (
+                      <button
+                        className="mr-btn"
+                        onClick={() => openExam(ex)}
+                      >
+                        응시하기
+                      </button>
+                    )}
+                  </div>
+                </article>
+              );
+            })
+          )}
+        </>
       )}
     </div>
   );
@@ -4884,6 +5029,92 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
   display:grid; place-items:center; transition:opacity .25s ease; -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px)}
 @keyframes screenIn{from{opacity:0; transform:translateY(20px) scale(.985)}to{opacity:1; transform:none}}
 .mr-screen-in{animation:screenIn .44s cubic-bezier(.22,1,.36,1)}
+
+/* ===== 화면 설정: 토글 스위치 ===== */
+.mr-setting-row{display:flex; align-items:center; justify-content:space-between; gap:14px}
+.mr-setting-text{min-width:0}
+.mr-setting-name{font-size:15px; font-weight:700; color:var(--t1)}
+.mr-setting-desc{font-size:12.5px; color:var(--t3); font-weight:600; margin-top:3px}
+.mr-switch{position:relative; width:52px; height:30px; border-radius:999px; border:0; background:rgba(140,92,180,0.28); cursor:pointer; padding:0; flex:none; transition:background .2s}
+.mr-switch.on{background:var(--blue)}
+.mr-switch-dot{position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25); transition:transform .2s}
+.mr-switch.on .mr-switch-dot{transform:translateX(22px)}
+
+/* ===== 시험 난이도 뱃지 ===== */
+.mr-diff{display:inline-block; font-size:11px; font-weight:800; padding:3px 9px; border-radius:7px; letter-spacing:-0.2px; vertical-align:middle; white-space:nowrap}
+.mr-diff.easy{color:var(--green); background:var(--green-bg)}
+.mr-diff.mid{color:#C2810A; background:rgba(229,163,0,0.14)}
+.mr-diff.hard{color:var(--red); background:var(--red-bg)}
+
+/* ===== 시험 목록 검색·정렬 ===== */
+.mr-listtools{display:flex; flex-direction:column; gap:8px; margin-bottom:2px}
+.mr-listtools .mr-input{margin-top:0}
+.mr-sortseg{display:flex; background:var(--bg); border-radius:11px; padding:3px; gap:2px}
+.mr-sortseg button{flex:1; border:0; background:transparent; padding:9px; font-size:13px; cursor:pointer; font-family:inherit; color:var(--t3); font-weight:700; border-radius:8px; white-space:nowrap; transition:background .15s,color .15s}
+.mr-sortseg button.on{background:#fff; color:var(--t1); box-shadow:0 1px 3px rgba(0,0,0,.08)}
+
+/* ===== 내 기록 대시보드 ===== */
+.mr-dash-title{font-size:12.5px; font-weight:700; color:var(--t3); margin:14px 2px 8px}
+.mr-spark{display:flex; align-items:flex-end; gap:5px; height:82px; padding:12px 12px 8px; background:var(--card); border-radius:20px; border:1px solid var(--line); box-shadow:var(--glass-sh)}
+.mr-spark-col{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:5px; height:100%; min-width:0}
+.mr-spark-bar{width:100%; max-width:28px; min-height:4px; border-radius:6px 6px 3px 3px; background:var(--grad)}
+.mr-spark-cap{font-size:10px; font-weight:800; color:var(--t3)}
+
+/* ============ 어두운 화면 모드 ============ */
+html[data-theme="dark"] .mr-root{
+  --bg:rgba(255,255,255,0.06); --card:rgba(255,255,255,0.05); --t1:#ece8f5; --t2:#b3a9cc; --t3:#877b9f;
+  --blue:#b18cff; --blue-d:#c4a6ff; --blue-bg:rgba(160,120,255,0.20);
+  --line:rgba(255,255,255,0.10); --line-soft:rgba(180,150,230,0.13);
+  --green:#3dd7b0; --green-bg:rgba(45,190,150,0.18); --red:#ff6fa0; --red-bg:rgba(240,90,140,0.18);
+  --glass-sh:0 14px 34px rgba(0,0,0,0.45), inset 0 1px 1px rgba(255,255,255,0.05);
+}
+html[data-theme="dark"] .mr-root::before{
+  background:
+   radial-gradient(320px 320px at 12% 6%, rgba(130,90,220,0.28), transparent 64%),
+   radial-gradient(320px 320px at 88% 82%, rgba(210,90,160,0.22), transparent 64%),
+   radial-gradient(280px 280px at 62% 42%, rgba(90,110,210,0.20), transparent 66%);
+}
+html[data-theme="dark"] .mr-card,
+html[data-theme="dark"] .mr-sector,
+html[data-theme="dark"] .mr-pick-card,
+html[data-theme="dark"] .mr-empty,
+html[data-theme="dark"] .mr-post-item{background:rgba(255,255,255,0.05); border-color:rgba(255,255,255,0.09)}
+html[data-theme="dark"] .mr-sector:hover,
+html[data-theme="dark"] .mr-pick-card:hover{box-shadow:0 18px 40px rgba(0,0,0,0.5)}
+html[data-theme="dark"] .mr-header{background:rgba(26,22,38,0.72)}
+html[data-theme="dark"] .mr-modal{background:rgba(34,26,46,0.94); border-color:var(--line)}
+html[data-theme="dark"] .mr-input,
+html[data-theme="dark"] .mr-textarea{background:rgba(255,255,255,0.07); border-color:var(--line)}
+html[data-theme="dark"] .mr-input:focus,
+html[data-theme="dark"] .mr-textarea:focus{background:rgba(255,255,255,0.11)}
+html[data-theme="dark"] .mr-subtabs button.on,
+html[data-theme="dark"] .mr-seg button.on,
+html[data-theme="dark"] .mr-cat-seg button.on,
+html[data-theme="dark"] .mr-sortseg button.on{background:rgba(255,255,255,0.14); color:var(--t1)}
+html[data-theme="dark"] .mr-back{background:rgba(255,255,255,0.06)}
+html[data-theme="dark"] .mr-back:hover{background:rgba(255,255,255,0.13)}
+html[data-theme="dark"] .mr-ov-scrim{background:linear-gradient(165deg,#1a1626,#221a2b 46%,#181a2b)}
+html[data-theme="dark"] .mr-ov{background:linear-gradient(165deg,#1a1626 0%,#221a2b 46%,#181a2b 100%)}
+html[data-theme="dark"] .mr-ov-back{background:rgba(255,255,255,0.08); color:var(--t1); border-color:var(--line)}
+html[data-theme="dark"] math-field{background:rgba(255,255,255,0.08); color:var(--t1)}
+html[data-theme="dark"] math-field:focus-within{background:rgba(255,255,255,0.12)}
+html[data-theme="dark"] .mr-rte-wrap,
+html[data-theme="dark"] .mr-rte-toolbar{background:#241d30}
+html[data-theme="dark"] .mr-rte-toolbar::after{background:linear-gradient(to left,#241d30 25%,rgba(36,29,48,0))}
+html[data-theme="dark"] .mr-rte-color{border-color:#241d30}
+html[data-theme="dark"] .mr-notice-body{color:var(--t2)}
+html[data-theme="dark"] .mr-opt-flag.ans,
+html[data-theme="dark"] .mr-opt-flag.mine{background:rgba(255,255,255,0.12)}
+html[data-theme="dark"] .mr-diff.mid{color:#f0b74e; background:rgba(230,165,0,0.18)}
+html[data-theme="dark"] .mr-sched-tag{background:rgba(210,130,30,0.22); color:#ffcf95}
+html[data-theme="dark"] .mr-draft-badge{background:rgba(210,150,20,0.22); color:#ffd98f}
+html[data-theme="dark"] .mr-img-drop{border-color:rgba(255,255,255,0.18)}
+html[data-theme="dark"] .mr-pp-title{border-bottom-color:var(--t2)}
+/* 홈·시험 아이콘 타일: 밝은 파스텔 대신 어두운 테마에 맞는 톤다운 보라 계열 */
+html[data-theme="dark"] .mr-sector-icon.blue,
+html[data-theme="dark"] .mr-pick-icon.blue{background:linear-gradient(140deg,#7b52c9,#b96a97)}
+html[data-theme="dark"] .mr-sector-icon.green,
+html[data-theme="dark"] .mr-pick-icon.green{background:linear-gradient(140deg,#5a54b4,#8a72c9)}
 `;
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
