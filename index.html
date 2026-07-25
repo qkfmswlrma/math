@@ -78,7 +78,9 @@ const mapProfile = (r) => ({
 });
 
 /* ====== 앱 버전 ======
-   업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요. */
+   업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
+   items      = 모든 이용자에게 보임
+   adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
 const APP_VERSION = "1.6.0";
 const CHANGELOG = [
   {
@@ -87,17 +89,21 @@ const CHANGELOG = [
     items: [
       "공지사항 탭이 생겼어요",
       "채점 결과에서 문항별 정답률과 해설을 볼 수 있어요",
-      "출제할 때 문항마다 해설을 달 수 있어요",
       "시험 목록과 응시 화면에 출제자가 표시돼요",
       "채팅방 닉네임 중복을 막았어요",
-      "root 등급이 생겼어요 (회원 권한·삭제는 root만 가능)",
       "앱 버전과 업데이트 내역을 볼 수 있어요",
+    ],
+    adminItems: [
+      "출제할 때 문항마다 해설을 달 수 있어요",
+      "root 등급이 생겼어요 — 회원 권한·삭제·비밀번호 초기화는 root만 가능",
+      "root는 다른 사람이 낸 시험도 수정·삭제할 수 있어요",
     ],
   },
   {
     v: "1.5.0",
     date: "2026.7",
-    items: [
+    items: [],
+    adminItems: [
       "수식 입력기를 새로 바꿨어요 — 수식 모양 그대로 보면서 편집돼요",
       "휴대폰에서 입력창을 누르면 수식 전용 키패드가 열려요",
       "LaTeX 붙여넣기도 돼요",
@@ -111,6 +117,7 @@ const CHANGELOG = [
       "홈에서 카드를 누르면 그 자리에서 화면이 펼쳐져요",
       "칼럼·오늘의 문제에 안 읽음 표시(빨간 점)가 생겼어요",
     ],
+    adminItems: [],
   },
   {
     v: "1.3.0",
@@ -121,17 +128,20 @@ const CHANGELOG = [
       "개인정보 처리방침이 추가됐어요",
       "회원 탈퇴를 직접 할 수 있어요",
     ],
+    adminItems: [],
   },
   {
     v: "1.2.0",
     date: "2026.6",
     items: [
       "칼럼을 초등·중학·고등으로 나눠서 볼 수 있어요",
-      "관리자가 칼럼 순서를 바꿀 수 있어요",
       "문항별 회원정답률이 표시돼요",
-      "비회원 풀이도 익명으로 집계돼요 (같은 IP는 24시간에 한 번)",
+      "시험이 레벨테스트 / 오늘의 문제로 나뉘었어요",
+    ],
+    adminItems: [
+      "칼럼 순서를 바꿀 수 있어요",
       "시험을 예약 공개할 수 있어요",
-      "시험 종류가 레벨테스트 / 오늘의 문제로 나뉘었어요",
+      "비회원 풀이도 익명으로 집계돼요 (같은 IP는 24시간에 한 번)",
     ],
   },
   {
@@ -141,18 +151,19 @@ const CHANGELOG = [
       "시험 푸는 중에 답안이 자동 저장돼요",
       "안 푼 문항이 있으면 제출 전에 알려줘요",
       "제출이 실패하면 알림이 떠요",
-      "칼럼을 임시저장할 수 있어요",
       "채팅방 닉네임을 등록·수정할 수 있어요",
     ],
+    adminItems: ["칼럼을 임시저장할 수 있어요"],
   },
   {
     v: "1.0.0",
     date: "2026.6",
     items: [
       "수학질문방 시작",
-      "회원가입·로그인, 칼럼 읽기·쓰기",
-      "시험 출제·응시·자동 채점",
+      "회원가입·로그인, 칼럼 읽기",
+      "시험 응시와 자동 채점",
     ],
+    adminItems: ["칼럼 작성, 시험 출제·채점"],
   },
 ];
 
@@ -642,7 +653,7 @@ function App() {
       case "notices": return <Notices role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} notices={columnPosts} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} readIds={readColIds} onRead={markColumnRead} />;
       case "announce": return <Announcements role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} posts={noticePosts} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} readIds={readColIds} onRead={markColumnRead} />;
       case "privacy": return <Privacy onBack={() => setTab("home")} />;
-      case "changelog": return <Changelog onBack={() => setTab("home")} />;
+      case "changelog": return <Changelog onBack={() => setTab("home")} isAdmin={role === "admin"} />;
       case "game": return <SpeedGame onBack={closeOver} auth={auth} onGoAccount={() => { closeOver(); setTab("account"); }} onLogin={() => setAuthOpen(true)} />;
       case "exams": return <Exams role={role} isSuper={isSuper} student={student} myId={auth ? auth.id : null} users={users} loggedIn={loggedIn} requireLogin={requireLogin} exams={exams} subs={subs} onAddExam={onAddExam} onEditExam={onEditExam} onDeleteExam={onDeleteExam} onGradeSub={onGradeSub} onAddSub={onAddSub} onGuestSubmit={onGuestSubmit} guestSubs={guestSubs} readIds={readExamIds} onView={markExamRead} />;
       default: return homeView;
@@ -3458,7 +3469,18 @@ function Privacy({ onBack }) {
   );
 }
 
-function Changelog({ onBack }) {
+function Changelog({ onBack, isAdmin }) {
+  // 관리자 항목: 관리자에겐 내용 그대로, 일반 회원에겐 건수만 한 줄로 요약
+  const blocks = CHANGELOG.map((c) => {
+    const admin = c.adminItems || [];
+    return {
+      ...c,
+      show: c.items || [],
+      showAdmin: isAdmin ? admin : [],
+      adminCount: isAdmin ? 0 : admin.length,
+    };
+  }).filter((c) => c.show.length || c.showAdmin.length || c.adminCount);
+
   return (
     <div className="mr-col">
       <button className="mr-back" onClick={onBack}>홈</button>
@@ -3467,7 +3489,7 @@ function Changelog({ onBack }) {
       </div>
       <section className="mr-card">
         <div className="mr-cl-now">현재 버전 v{APP_VERSION}</div>
-        {CHANGELOG.map((c, i) => (
+        {blocks.map((c, i) => (
           <div className="mr-cl-block" key={c.v}>
             <div className="mr-cl-head">
               <span className="mr-cl-ver">v{c.v}</span>
@@ -3475,7 +3497,16 @@ function Changelog({ onBack }) {
               <span className="mr-cl-date">{c.date}</span>
             </div>
             <ul className="mr-cl-list">
-              {c.items.map((t, j) => <li key={j}>{t}</li>)}
+              {c.show.map((t, j) => <li key={"u" + j}>{t}</li>)}
+              {c.showAdmin.map((t, j) => (
+                <li key={"a" + j}>
+                  <span className="mr-cl-admin">관리자</span>
+                  {t}
+                </li>
+              ))}
+              {c.adminCount > 0 && (
+                <li className="mr-cl-hidden">관리 기능 업데이트 {c.adminCount}건</li>
+              )}
             </ul>
           </div>
         ))}
@@ -4354,6 +4385,8 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-cl-date{margin-left:auto; font-size:12px; color:var(--t3); font-weight:600}
 .mr-cl-list{margin:9px 0 0; padding-left:18px}
 .mr-cl-list li{font-size:13.5px; color:var(--t2); line-height:1.7; margin:5px 0}
+.mr-cl-admin{display:inline-block; font-size:10px; font-weight:800; color:var(--blue); background:var(--blue-bg); padding:2px 6px; border-radius:5px; margin-right:6px; vertical-align:middle}
+.mr-cl-hidden{color:var(--t3); font-style:italic}
 .mr-pp-title{font-size:21px; font-weight:800; color:var(--t1); letter-spacing:-0.5px; padding-bottom:12px; border-bottom:2px solid var(--t1); margin:0 0 14px}
 .mr-pp-intro{font-size:13.5px; color:var(--t2); line-height:1.7; margin:0}
 .mr-pp-h2{font-size:16px; font-weight:800; color:var(--blue); margin:26px 0 9px; letter-spacing:-0.3px}
