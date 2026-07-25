@@ -107,8 +107,13 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.4.1";
+const APP_VERSION = "2.4.2";
 const CHANGELOG = [{
+  v: "2.4.2",
+  date: "2026.7.25",
+  items: ["공지사항은 로그인 없이도 볼 수 있어요", "칼럼은 회원 전용이라, 비회원에겐 로그인 안내가 떠요 (전에는 글이 없는 것처럼 보였어요)"],
+  adminItems: []
+}, {
   v: "2.4.1",
   date: "2026.7.25",
   items: ["내가 쓴 글과 내가 낸 시험에는 안 읽음 표시가 붙지 않아요"],
@@ -1041,6 +1046,8 @@ function App() {
       case "notices":
         return /*#__PURE__*/React.createElement(Notices, {
           key: "c" + nav,
+          loggedIn: loggedIn,
+          requireLogin: requireLogin,
           initialNo: route && route.tab === "notices" ? route.no : null,
           initialCat: route && route.tab === "notices" ? route.sub : null,
           urlBase: "column",
@@ -1927,7 +1934,7 @@ function Home({
     icon: "✍️",
     title: "칼럼",
     desc: "수학 이야기와 공부 팁",
-    meta: `${noticeCount}개의 글`,
+    meta: loggedIn ? `${noticeCount}개의 글` : "로그인하고 읽기",
     tone: "blue",
     dot: columnUnread > 0
   }, {
@@ -2015,7 +2022,9 @@ function Notices({
   initialNo,
   initialCat,
   urlBase,
-  pushUrl
+  pushUrl,
+  loggedIn,
+  requireLogin
 }) {
   const goUrl = path => {
     if (pushUrl) pushUrl(path);
@@ -2142,6 +2151,26 @@ function Notices({
     className: editCat === k ? "on" : "",
     onClick: () => setEditCat(k)
   }, CAT[k]))));
+
+  // 비회원: 목록 대신 로그인 안내
+  if (!loggedIn) return /*#__PURE__*/React.createElement("div", {
+    className: "mr-col"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "mr-list-top"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "mr-list-title"
+  }, "칼럼")), /*#__PURE__*/React.createElement("section", {
+    className: "mr-card mr-need-login"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "mr-need-icon"
+  }, "🔒"), /*#__PURE__*/React.createElement("h3", {
+    className: "mr-need-title"
+  }, "칼럼은 회원만 볼 수 있어요"), /*#__PURE__*/React.createElement("p", {
+    className: "mr-need-sub"
+  }, "로그인하면 초등·중학·고등 칼럼을 모두 읽을 수 있어요."), /*#__PURE__*/React.createElement("button", {
+    className: "mr-btn mr-need-btn",
+    onClick: requireLogin
+  }, "로그인하기")));
 
   // 글쓰기 / 임시저장 이어쓰기
   if (view === "write") return /*#__PURE__*/React.createElement("div", {
@@ -5552,6 +5581,11 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-explain-none{margin-top:14px; font-size:12.5px; color:var(--t3); font-weight:600; line-height:1.6; background:var(--bg); border-radius:11px; padding:11px 13px}
 .mr-explain-none b{color:var(--t2); font-weight:800}
 .mr-search{margin-top:0}
+.mr-need-login{text-align:center; padding:34px 22px}
+.mr-need-icon{font-size:40px; line-height:1; margin-bottom:14px}
+.mr-need-title{font-size:18px; font-weight:800; color:var(--t1); letter-spacing:-0.4px; margin:0 0 10px}
+.mr-need-sub{font-size:13.5px; color:var(--t2); line-height:1.75; margin:0 0 20px}
+.mr-need-btn{width:100%; padding:14px; font-size:15.5px}
 .mr-wrong-hint{font-size:12.5px; color:var(--t3); font-weight:600; padding:2px 4px; line-height:1.6}
 .mr-wrong-from{font-size:12px; font-weight:700; color:var(--blue); background:var(--blue-bg); display:inline-block; padding:4px 10px; border-radius:8px; margin-bottom:10px}
 .mr-take-opt.sel{background:var(--blue-bg); border-color:var(--blue); color:var(--blue); font-weight:700}
