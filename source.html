@@ -1,0 +1,4483 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>수학질문방</title>
+<meta name="description" content="수학질문방 - 칼럼과 시험으로 함께 공부하는 수학 커뮤니티" />
+<meta name="theme-color" content="#b388ff" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="수학질문방" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="수학질문방" />
+<meta property="og:description" content="칼럼과 시험으로 함께 공부하는 수학 커뮤니티" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%239b6cff'/%3E%3Cstop offset='1' stop-color='%23ff8fc8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='15' fill='url(%23g)'/%3E%3Ctext x='32' y='44' font-size='38' font-weight='800' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E2%88%AB%3C/text%3E%3C/svg%3E" />
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%239b6cff'/%3E%3Cstop offset='1' stop-color='%23ff8fc8'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='15' fill='url(%23g)'/%3E%3Ctext x='32' y='44' font-size='38' font-weight='800' text-anchor='middle' fill='white' font-family='sans-serif'%3E%E2%88%AB%3C/text%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  html,body,#root{margin:0;padding:0;min-height:100%;background:linear-gradient(165deg,#f4e9ff 0%,#fde9f4 46%,#e9eeff 100%)}
+  .mr-splash{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:'Pretendard',-apple-system,sans-serif;color:#4E5968}
+  .mr-splash .lg{width:52px;height:52px;border-radius:15px;background:linear-gradient(140deg,#9b6cff,#ff8fc8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800}
+  .mr-splash .tx{font-weight:700;font-size:15px;letter-spacing:-0.3px}
+  .mr-splash .sp{width:22px;height:22px;border:3px solid #E5E8EB;border-top-color:#9b6cff;border-radius:50%;animation:mrsp .7s linear infinite}
+  @keyframes mrsp{to{transform:rotate(360deg)}}
+</style>
+<script defer crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script defer crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/mathlive@0.110.0"></script>
+<script defer src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>
+</head>
+<body>
+<div id="root">
+  <div class="mr-splash">
+    <div class="lg">∫</div>
+    <div class="tx">수학질문방 불러오는 중…</div>
+    <div class="sp"></div>
+  </div>
+</div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useCallback } = React;
+
+/* ====== Supabase 설정 ====== */
+const SUPABASE_URL = "https://fhdwwqlvosbjonrenpqz.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZoZHd3cWx2b3Niam9ucmVucHF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMTk4NzYsImV4cCI6MjA5NTg5NTg3Nn0.JgUEKxDRioqKvhSaOPxJMH9tuo0wdFv0-kkc0s5mJ8U";
+const EMAIL_DOMAIN = "mathroom.app";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+/* MathLive(수식 입력기) 전역 설정: 키 입력 효과음 끔 */
+try { if (window.MathfieldElement) window.MathfieldElement.soundsDirectory = null; } catch (e) {}
+const emailOf = (id) => `${String(id).trim().toLowerCase()}@${EMAIL_DOMAIN}`;
+const padPw = (pw) => String(pw) + "__mr__";
+
+const mapColumn = (r) => ({
+  id: r.id, title: r.title, body: r.body || "", author: r.author || "",
+  isDraft: !!r.is_draft, category: r.category || "elem", sortOrder: r.sort_order || 0,
+  createdAt: r.created_at ? Date.parse(r.created_at) : 0,
+});
+const mapExam = (r) => ({
+  id: r.id, title: r.title, questions: r.questions || [],
+  author: r.author || "", authorId: r.author_id || null,
+  examType: r.exam_type || "level",
+  publishAt: r.publish_at ? Date.parse(r.publish_at) : null,
+  createdAt: r.created_at ? Date.parse(r.created_at) : 0,
+});
+const mapSub = (r) => ({
+  id: r.id, examId: r.exam_id, student: r.student, answers: r.answers || {},
+  manualScores: r.manual_scores || {}, graded: !!r.graded,
+  submittedAt: r.submitted_at ? Date.parse(r.submitted_at) : 0,
+});
+const mapProfile = (r) => ({
+  username: r.username, kakaoId: r.kakao_id || "", isAdmin: !!r.is_admin || !!r.is_super,
+  isSuper: !!r.is_super,
+  createdAt: r.created_at ? Date.parse(r.created_at) : 0,
+});
+
+/* ====== 앱 버전 ======
+   업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
+   items      = 모든 이용자에게 보임
+   adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
+const APP_VERSION = "2.2.0";
+const CHANGELOG = [
+  {
+    v: "2.2.0",
+    date: "2026.7.25",
+    items: [
+      "공지사항 탭이 생겼어요",
+      "채점 결과에서 문항별 정답률과 해설을 볼 수 있어요",
+      "시험 목록과 응시 화면에 출제자가 표시돼요",
+      "채팅방 닉네임 중복을 막았어요",
+      "앱 버전과 업데이트 내역을 볼 수 있어요",
+    ],
+    adminItems: [
+      "출제할 때 문항마다 해설을 달 수 있어요",
+      "수식 입력기 버전을 고정했어요 (자동 업데이트로 깨지는 것 방지)",
+    ],
+  },
+  {
+    v: "2.1.0",
+    date: "2026.7.19",
+    items: [],
+    adminItems: [
+      "수식 입력기를 새로 바꿨어요 — 수식 모양 그대로 보면서 편집돼요",
+      "휴대폰에서 입력창을 누르면 수식 전용 키패드가 열려요",
+      "LaTeX 붙여넣기도 돼요",
+    ],
+  },
+  {
+    v: "2.0.1",
+    date: "2026.7.13",
+    items: [
+      "지난해에 쓴 글은 날짜에 연도가 함께 나와요",
+      "로그인 창에서 엔터로 바로 로그인돼요",
+      "시험 통계 화면이 가끔 멈추던 문제를 고쳤어요",
+    ],
+    adminItems: ["칼럼 저장이 실패해도 쓰던 내용이 사라지지 않아요"],
+  },
+  {
+    v: "2.0.0",
+    date: "2026.6.22",
+    items: [
+      "디자인을 유리 느낌(글래스모피즘)으로 전면 개편했어요",
+      "홈에서 카드를 누르면 그 자리에서 화면이 펼쳐져요",
+      "뒤로가기 버튼 모양을 하나로 통일했어요",
+    ],
+    adminItems: [],
+  },
+  {
+    v: "1.5.2",
+    date: "2026.6.19",
+    items: ["화면이 하얗게 안 뜨던 문제를 긴급 수정했어요"],
+    adminItems: [],
+  },
+  {
+    v: "1.5.1",
+    date: "2026.6.13",
+    items: ["화면 곳곳을 다듬었어요"],
+    adminItems: [],
+  },
+  {
+    v: "1.5.0",
+    date: "2026.6.10",
+    items: [],
+    adminItems: [
+      "수식 입력기가 생겼어요 — 글 속에 수식을 바로 넣을 수 있어요",
+      "수식 전용 키패드가 추가됐어요",
+    ],
+  },
+  {
+    v: "1.4.0",
+    date: "2026.6.8",
+    items: [
+      "칼럼·오늘의 문제에 안 읽음 표시(빨간 점)가 생겼어요",
+      "로그인하면 기기를 바꿔도 읽음 기록이 유지돼요",
+    ],
+    adminItems: [],
+  },
+  {
+    v: "1.3.0",
+    date: "2026.6.7",
+    items: ["게임 랭킹 TOP 50과 내 순위를 볼 수 있어요"],
+    adminItems: ["시험을 예약 공개할 수 있어요"],
+  },
+  {
+    v: "1.2.0",
+    date: "2026.6.6",
+    items: [
+      "스피드 연산 게임이 생겼어요",
+      "시험 푸는 중에 답안이 자동 저장돼요",
+      "시험이 레벨테스트 / 오늘의 문제로 나뉘었어요",
+      "개인정보 처리방침이 추가됐어요",
+      "회원 탈퇴를 직접 할 수 있어요",
+    ],
+    adminItems: [
+      "비회원 풀이도 익명으로 집계돼요",
+      "같은 IP는 24시간에 한 번만 집계돼요 (정답률 조작 방지)",
+    ],
+  },
+  {
+    v: "1.1.0",
+    date: "2026.6.5",
+    items: [
+      "칼럼을 초등·중학·고등으로 나눠서 볼 수 있어요",
+      "문항별 회원정답률이 표시돼요",
+    ],
+    adminItems: [
+      "칼럼을 임시저장할 수 있어요",
+      "칼럼 순서를 바꿀 수 있어요",
+    ],
+  },
+  {
+    v: "1.0.0",
+    date: "2026.6.3",
+    items: [
+      "수학질문방 시작",
+      "회원가입·로그인, 칼럼 읽기",
+      "시험 응시와 자동 채점",
+    ],
+    adminItems: ["칼럼 작성, 시험 출제·채점", "관리자 활동 기록"],
+  },
+];
+
+const uid = () => Math.random().toString(36).slice(2, 10);
+const fmtDate = (ts) => {
+  const d = new Date(ts);
+  const y = d.getFullYear() !== new Date().getFullYear() ? d.getFullYear() + "." : "";
+  return `${y}${d.getMonth() + 1}.${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(
+    d.getMinutes()
+  ).padStart(2, "0")}`;
+};
+
+function maxScore(exam) {
+  return exam.questions.reduce((s, q) => s + (Number(q.points) || 0), 0);
+}
+function isShortCorrect(q, ans) {
+  const key = String(q.accept ?? "").trim();
+  if (key === "") return false;
+  return String(ans ?? "").trim() === key;
+}
+function questionScore(q, sub) {
+  const a = sub.answers[q.id];
+  const ov = sub.manualScores?.[q.id];
+  if (ov !== undefined && ov !== null && ov !== "") {
+    return Math.max(0, Math.min(Number(q.points) || 0, Number(ov) || 0));
+  }
+  if (q.type === "mc") return a === q.answer ? Number(q.points) || 0 : 0;
+  return isShortCorrect(q, a) ? Number(q.points) || 0 : 0;
+}
+function autoScore(exam, answers) {
+  return exam.questions.reduce((s, q) => {
+    if (q.type === "mc") return s + (answers[q.id] === q.answer ? Number(q.points) || 0 : 0);
+    return s + (isShortCorrect(q, answers[q.id]) ? Number(q.points) || 0 : 0);
+  }, 0);
+}
+function totalScore(exam, sub) {
+  return exam.questions.reduce((s, q) => s + questionScore(q, sub), 0);
+}
+// 한 문항을 '맞춤'으로 볼지 (회원정답률 계산용) — 자동 정답 또는 보정으로 만점인 경우
+function isQCorrect(q, sub) {
+  const answers = (sub && sub.answers) || {}; // 비회원 집계 행은 answers가 null일 수 있음 → 크래시 방지
+  if (q.type === "mc") return answers[q.id] === q.answer;
+  const ov = sub.manualScores && sub.manualScores[q.id];
+  if (ov !== undefined && ov !== null && ov !== "") return Number(ov) >= (Number(q.points) || 0) && (Number(q.points) || 0) > 0;
+  return isShortCorrect(q, answers[q.id]);
+}
+// 표시용 이름: 현재 회원 목록에 없으면 '탈퇴한 회원 (원래아이디)'
+function studentName(name, users) {
+  if (!name) return "익명";
+  if (users && users.some((u) => u.username === name)) return name;
+  return "탈퇴한 회원 (" + name + ")";
+}
+// 정답률 구간별 색
+function rateColor(rate) {
+  if (rate === null || rate === undefined) return "#8B95A1"; // 데이터 없음(회색)
+  if (rate >= 80) return "#00B262"; // 초록
+  if (rate >= 50) return "#E5A300"; // 노랑
+  if (rate >= 20) return "#F97316"; // 주황
+  if (rate >= 10) return "#F04452"; // 빨강
+  return "#6A0012"; // 10% 미만: 가장 어려운 색(짙은 빨강)
+}
+
+/* ============================================================ */
+function App() {
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState("home");
+  const [over, setOver] = useState(null); // {key, rect, expanded}
+  const openOver = (key, rect) => {
+    setOver({ key, rect, expanded: false });
+    requestAnimationFrame(() => requestAnimationFrame(() => setOver((o) => (o ? { ...o, expanded: true } : o))));
+  };
+  const closeOver = () => {
+    setOver((o) => (o ? { ...o, expanded: false } : o));
+    setTimeout(() => setOver(null), 520);
+  };
+  const [readColIds, setReadColIds] = useState(() => getReadColIds());
+  const [readExamIds, setReadExamIds] = useState(() => getReadExamIds());
+  const markColumnRead = (id) => {
+    setReadColIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      saveReadColIds(next);
+      return next;
+    });
+    // 회원이면 서버에도 조용히 기록 (표시는 위에서 즉시 반영됨)
+    if (auth) {
+      sb.from("column_reads")
+        .upsert({ user_id: auth.id, column_id: id }, { onConflict: "user_id,column_id" })
+        .then(() => {}, () => {});
+    }
+  };
+  const markExamRead = (id) => {
+    setReadExamIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      saveReadExamIds(next);
+      return next;
+    });
+    if (auth) {
+      sb.from("exam_reads")
+        .upsert({ user_id: auth.id, exam_id: id }, { onConflict: "user_id,exam_id" })
+        .then(() => {}, () => {});
+    }
+  };
+  useEffect(() => {
+    try { window.scrollTo(0, 0); } catch (e) {}
+  }, [tab]);
+  const [auth, setAuth] = useState(null);
+  // 로그인하면 서버의 칼럼 읽음 기록을 불러와 로컬과 합침 (기기 간 동기화)
+  useEffect(() => {
+    if (!auth) return;
+    (async () => {
+      try {
+        const { data } = await sb.from("column_reads").select("column_id").eq("user_id", auth.id);
+        if (data && data.length) {
+          setReadColIds((prev) => {
+            const next = new Set(prev);
+            data.forEach((r) => next.add(r.column_id));
+            saveReadColIds(next);
+            return next;
+          });
+        }
+      } catch (e) {}
+    })();
+  }, [auth]);
+  // 로그인하면 서버의 시험 확인 기록도 불러와 합침
+  useEffect(() => {
+    if (!auth) return;
+    (async () => {
+      try {
+        const { data } = await sb.from("exam_reads").select("exam_id").eq("user_id", auth.id);
+        if (data && data.length) {
+          setReadExamIds((prev) => {
+            const next = new Set(prev);
+            data.forEach((r) => next.add(r.exam_id));
+            saveReadExamIds(next);
+            return next;
+          });
+        }
+      } catch (e) {}
+    })();
+  }, [auth]);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [notices, setNotices] = useState([]);
+  const [exams, setExams] = useState([]);
+  const [subs, setSubs] = useState([]);
+  // 이미 제출한 시험은 '확인함'으로 간주 (빨간 점 제거)
+  useEffect(() => {
+    if (!auth || !auth.username) return;
+    subs.forEach((s) => {
+      if (s.student === auth.username && !readExamIds.has(s.examId)) markExamRead(s.examId);
+    });
+  }, [subs, auth]);
+  const [auditLog, setAuditLog] = useState([]);
+  const [guestSubs, setGuestSubs] = useState([]);
+
+  const role = auth && auth.isAdmin ? "admin" : "student";
+  const isSuper = !!(auth && auth.isSuper);
+  const student = auth ? auth.username : "";
+  const loggedIn = !!auth;
+  const requireLogin = () => setAuthOpen(true);
+
+  const loadProfile = async (userId) => {
+    let res = await sb.from("profiles").select("*").eq("id", userId).maybeSingle();
+    let data = res.data;
+    if (!data) {
+      const u = await sb.auth.getUser();
+      const usr = u.data && u.data.user;
+      const meta = (usr && usr.user_metadata) || {};
+      const email = (usr && usr.email) || "";
+      const uname = meta.username || email.split("@")[0] || "user";
+      await sb.from("profiles").insert({ id: userId, username: uname, kakao_id: meta.kakao_id || "", is_admin: false });
+      res = await sb.from("profiles").select("*").eq("id", userId).maybeSingle();
+      data = res.data;
+    }
+    return data ? { ...mapProfile(data), id: data.id } : null;
+  };
+
+  const refresh = useCallback(async () => {
+    try {
+      const [c, e, s, p] = await Promise.all([
+        sb.from("columns").select("*").order("created_at", { ascending: false }),
+        sb.from("exams").select("*").order("created_at", { ascending: false }),
+        sb.from("submissions").select("*").order("submitted_at", { ascending: false }),
+        sb.from("profiles").select("*").order("created_at", { ascending: false }),
+      ]);
+      setNotices((c.data || []).map(mapColumn));
+      setExams((e.data || []).map(mapExam));
+      setSubs((s.data || []).map(mapSub));
+      setUsers((p.data || []).map(mapProfile));
+    } catch (err) {
+      console.warn("데이터 불러오기 실패:", err);
+    }
+    // 활동 기록은 관리자만 읽을 수 있으니 따로 불러온다 (실패해도 칼럼·시험엔 영향 없음)
+    try {
+      const l = await sb.from("audit_log").select("*").order("created_at", { ascending: false }).limit(300);
+      setAuditLog(l.data || []);
+    } catch (err) {
+      setAuditLog([]);
+    }
+    // 비회원 익명 집계(관리자만 읽힘)
+    try {
+      const g = await sb.from("guest_submissions").select("*").order("created_at", { ascending: false }).limit(5000);
+      setGuestSubs(g.data || []);
+    } catch (err) {
+      setGuestSubs([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const safety = setTimeout(() => active && setLoading(false), 5000);
+    (async () => {
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        if (active && session && session.user) {
+          const p = await loadProfile(session.user.id);
+          if (active) setAuth(p);
+        }
+      } catch (err) {
+        console.warn("세션 확인 실패:", err);
+      }
+      if (active) setLoading(false);
+      clearTimeout(safety);
+      refresh();
+    })();
+    const { data: listener } = sb.auth.onAuthStateChange((_evt, session) => {
+      setTimeout(async () => {
+        if (session && session.user) {
+          const p = await loadProfile(session.user.id);
+          if (p) setAuth(p);
+        } else {
+          setAuth(null);
+        }
+        refresh();
+      }, 0);
+    });
+    return () => {
+      active = false;
+      clearTimeout(safety);
+      listener.subscription.unsubscribe();
+    };
+  }, [refresh]);
+
+  const currentId = async () => {
+    const { data } = await sb.auth.getUser();
+    return data && data.user ? data.user.id : null;
+  };
+
+  /* ---- 인증 ---- */
+  const onLogin = async (id, pw) => {
+    try {
+      const { data, error } = await sb.auth.signInWithPassword({ email: emailOf(id), password: padPw(pw) });
+      if (error || !data || !data.user) return { error: "아이디 또는 비밀번호가 올바르지 않아요." };
+      setAuth({ id: data.user.id, username: id.trim(), kakaoId: "", isAdmin: false });
+      setAuthOpen(false);
+      loadProfile(data.user.id).then((p) => { if (p) setAuth(p); }).catch(() => {});
+      return {};
+    } catch (e) {
+      console.warn("login error:", e);
+      return { error: "로그인 중 오류가 났어요. 잠시 후 다시 시도해 주세요." };
+    }
+  };
+  /* 채팅방 닉네임 중복 검사 (빈 값은 여러 명이 써도 됨).
+     화면 검사는 안내용이고, 최종 방어는 DB 유니크 인덱스가 함 */
+  const KAKAO_DUP_MSG = "이미 다른 회원이 쓰고 있는 닉네임이에요. 다른 이름을 써주세요.";
+  const isDupError = (err) =>
+    !!err && (err.code === "23505" || /duplicate key|unique constraint|profiles_kakao/i.test(err.message || ""));
+  const kakaoTaken = async (kakao, exceptId) => {
+    const v = (kakao || "").trim();
+    if (!v) return false; // 닉네임 안 쓰는 건 자유
+    try {
+      const { data, error } = await sb.from("profiles").select("id,kakao_id");
+      if (error || !data) return false; // 조회 실패 시엔 DB 제약에 맡김
+      return data.some(
+        (r) => (r.kakao_id || "").trim().toLowerCase() === v.toLowerCase() && r.id !== exceptId
+      );
+    } catch (e) {
+      return false;
+    }
+  };
+  const onSignup = async (id, pw, kakao) => {
+    const uname = id.trim();
+    if (!uname) return { error: "아이디를 입력하세요." };
+    if (await kakaoTaken(kakao, null)) return { error: KAKAO_DUP_MSG };
+    try {
+      const { data, error } = await sb.auth.signUp({
+        email: emailOf(uname),
+        password: padPw(pw),
+        options: { data: { username: uname, kakao_id: (kakao || "").trim() } },
+      });
+      if (error) {
+        if (isDupError(error) || /Database error saving new user/i.test(error.message || ""))
+          return { error: KAKAO_DUP_MSG };
+        const dup = /registered|already|exists|duplicate/i.test(error.message || "");
+        return { error: dup ? "이미 사용 중인 아이디예요." : error.message };
+      }
+      if (!data || !data.session || !data.user) {
+        return { error: "가입은 됐어요. 로그인이 안 되면 Supabase에서 'Confirm email'을 꺼주세요." };
+      }
+      setAuth({ id: data.user.id, username: uname, kakaoId: (kakao || "").trim(), isAdmin: false });
+      setAuthOpen(false);
+      loadProfile(data.user.id).then((p) => { if (p) setAuth(p); }).catch(() => {});
+      return {};
+    } catch (e) {
+      console.warn("signup error:", e);
+      return { error: "가입 중 오류가 났어요. 잠시 후 다시 시도해 주세요." };
+    }
+  };
+  const onLogout = async () => {
+    await sb.auth.signOut();
+    setTab("home");
+  };
+  const onChangePassword = async (curPw, newPw) => {
+    if (!auth) return { error: "로그인이 필요해요." };
+    const check = await sb.auth.signInWithPassword({ email: emailOf(auth.username), password: padPw(curPw) });
+    if (check.error) return { error: "현재 비밀번호가 올바르지 않아요." };
+    const { error } = await sb.auth.updateUser({ password: padPw(newPw) });
+    if (error) return { error: error.message };
+    return {};
+  };
+  const onUpdateKakao = async (kakao) => {
+    if (!auth) return { error: "로그인이 필요해요." };
+    const v = (kakao || "").trim();
+    if (v && (await kakaoTaken(v, auth.id))) return { error: KAKAO_DUP_MSG };
+    const { error } = await sb.from("profiles").update({ kakao_id: v }).eq("id", auth.id);
+    if (error) return { error: isDupError(error) ? KAKAO_DUP_MSG : error.message };
+    setAuth({ ...auth, kakaoId: v });
+    await refresh();
+    return {};
+  };
+  const onDeleteMe = async (pw) => {
+    if (!auth) return { error: "로그인이 필요해요." };
+    const check = await sb.auth.signInWithPassword({ email: emailOf(auth.username), password: padPw(pw) });
+    if (check.error) return { error: "비밀번호가 올바르지 않아요." };
+    const { error } = await sb.rpc("delete_my_account");
+    if (error) return { error: error.message };
+    await sb.auth.signOut();
+    setAuth(null);
+    return {};
+  };
+
+  /* ---- 데이터 ---- */
+  const logAction = async (action, target) => {
+    try {
+      await sb.from("audit_log").insert({
+        actor: auth ? auth.username : "?",
+        actor_id: auth ? auth.id : null,
+        action,
+        target: target || "",
+      });
+    } catch (e) {
+      console.warn("로그 기록 실패:", e);
+    }
+  };
+  const onAddColumn = async (post) => {
+    const id = await currentId();
+    const { data, error } = await sb.from("columns")
+      .insert({ title: post.title, body: post.body, author: post.author, author_id: id, is_draft: !!post.isDraft, category: post.category || "elem" })
+      .select().maybeSingle();
+    if (error) { alert("칼럼 저장에 실패했어요: " + error.message); return null; }
+    await logAction(post.isDraft ? "칼럼 임시저장" : "칼럼 작성", post.title);
+    await refresh();
+    return data ? data.id : true; // id를 못 받아도 insert 자체는 성공 → 실패로 오인하지 않기
+  };
+  const onDeleteColumn = async (id) => {
+    const n = notices.find((x) => x.id === id);
+    const { error } = await sb.from("columns").delete().eq("id", id);
+    if (error) { alert("칼럼 삭제에 실패했어요: " + error.message); return; }
+    await logAction("칼럼 삭제", n ? n.title : id);
+    await refresh();
+  };
+  const onEditColumn = async (id, title, body, isDraft, category) => {
+    const patch = { title, body };
+    if (typeof isDraft === "boolean") patch.is_draft = isDraft;
+    if (category) patch.category = category;
+    const { error } = await sb.from("columns").update(patch).eq("id", id);
+    if (error) { alert("칼럼 수정에 실패했어요: " + error.message); return null; }
+    await logAction(isDraft ? "칼럼 임시저장" : "칼럼 수정", title);
+    await refresh();
+    return true;
+  };
+  const onReorderColumns = async (ids) => {
+    const results = await Promise.all(ids.map((cid, i) => sb.from("columns").update({ sort_order: i + 1 }).eq("id", cid)));
+    const failed = results.find((r) => r && r.error);
+    if (failed) { alert("순서 변경에 실패했어요: " + failed.error.message); await refresh(); return; }
+    await logAction("칼럼 순서변경", "");
+    await refresh();
+  };
+  const onAddExam = async (exam) => {
+    const id = await currentId();
+    const author = auth ? ((auth.kakaoId || "").trim() || auth.username || "") : "";
+    const { error } = await sb.from("exams").insert({ title: exam.title, questions: exam.questions, author_id: id, author, exam_type: exam.examType || "level", publish_at: exam.publishAt ? new Date(exam.publishAt).toISOString() : null });
+    if (error) { alert("시험 저장에 실패했어요: " + error.message); return; }
+    await logAction("시험 출제", exam.title);
+    await refresh();
+  };
+  const onEditExam = async (id, exam) => {
+    const { error } = await sb.from("exams").update({ title: exam.title, questions: exam.questions, exam_type: exam.examType || "level", publish_at: exam.publishAt ? new Date(exam.publishAt).toISOString() : null }).eq("id", id);
+    if (error) { alert("시험 수정에 실패했어요: " + error.message); return; }
+    await logAction("시험 수정", exam.title);
+    await refresh();
+  };
+  const onDeleteExam = async (id) => {
+    const ex = exams.find((e) => e.id === id);
+    const { error } = await sb.from("exams").delete().eq("id", id);
+    if (error) { alert("시험 삭제에 실패했어요: " + error.message); return; }
+    await logAction("시험 삭제", ex ? ex.title : id);
+    await refresh();
+  };
+  const onGradeSub = async (sub) => {
+    const { error } = await sb.from("submissions").update({ manual_scores: sub.manualScores || {}, graded: true }).eq("id", sub.id);
+    if (error) { alert("채점 저장에 실패했어요: " + error.message); return; }
+    await logAction("채점 수정", sub.student);
+    await refresh();
+  };
+  const onAddSub = async (sub) => {
+    const id = await currentId();
+    const { error } = await sb.from("submissions").insert({
+      exam_id: sub.examId, student: sub.student, student_id: id,
+      answers: sub.answers, manual_scores: sub.manualScores || {}, graded: sub.graded,
+    });
+    if (error) return { error: error.message };
+    await refresh();
+    return {};
+  };
+  // 비회원: IP 기준 24시간 중복 방지 함수로 보냄 (개인정보 없이 익명 집계)
+  const onGuestSubmit = async (examId, answers) => {
+    try {
+      await sb.rpc("submit_guest_attempt", { p_exam_id: examId, p_answers: answers });
+    } catch (e) {
+      console.warn("비회원 집계 실패:", e);
+    }
+  };
+  // root 전용 동작 검사 (일반 관리자는 시도조차 못 하게)
+  const superOnly = () => {
+    if (!auth || !auth.isSuper) { alert("root만 할 수 있는 작업이에요."); return false; }
+    return true;
+  };
+  const isSuperUser = (username) => users.some((u) => u.username === username && u.isSuper);
+  const onToggleAdmin = async (username, next) => {
+    if (!superOnly()) return;
+    if (isSuperUser(username)) { alert("root의 권한은 바꿀 수 없어요."); return; }
+    const { error } = await sb.from("profiles").update({ is_admin: next }).eq("username", username);
+    if (error) { alert("권한 변경에 실패했어요: " + error.message); return; }
+    await logAction(next ? "관리자 지정" : "관리자 해제", username);
+    await refresh();
+  };
+  const onDeleteUser = async (username) => {
+    if (!superOnly()) return;
+    if (isSuperUser(username)) { alert("root 계정은 삭제할 수 없어요."); return; }
+    const { error } = await sb.rpc("admin_delete_user", { p_username: username });
+    if (error) {
+      // 함수가 아직 없거나 실패하면, 최소한 프로필이라도 제거
+      await sb.from("profiles").delete().eq("username", username);
+      alert("인증 계정 삭제에 실패했어요(프로필만 제거됨): " + error.message);
+    }
+    await logAction("회원 삭제", username);
+    await refresh();
+  };
+  const onResetPassword = async (username) => {
+    if (!superOnly()) return;
+    if (isSuperUser(username)) { alert("root의 비밀번호는 여기서 바꿀 수 없어요."); return; }
+    const { data, error } = await sb.rpc("admin_reset_password", { p_username: username });
+    if (error) { alert("초기화 실패: " + error.message); return; }
+    if (data === false) { alert("해당 회원을 찾지 못했어요."); return; }
+    await logAction("비밀번호 초기화", username);
+    alert(username + " 님의 비밀번호를 0000 으로 초기화했어요.\n로그인 후 계정 화면에서 바꾸도록 안내해주세요.");
+  };
+
+  // 같은 columns 테이블을 쓰되 category 로 칼럼/공지사항을 구분
+  const columnPosts = notices.filter((n) => (n.category || "elem") !== "notice");
+  const noticePosts = notices.filter((n) => n.category === "notice");
+
+  const homeView = (
+    <Home role={role} student={student} loggedIn={loggedIn} noticeCount={columnPosts.filter((n) => !n.isDraft).length} columnUnread={columnUnreadCount(columnPosts, readColIds)} announceCount={noticePosts.filter((n) => !n.isDraft).length} announceUnread={columnUnreadCount(noticePosts, readColIds)} examUnread={todayUnreadCount(exams.filter(isPublished), readExamIds)} examCount={role === "admin" ? exams.length : exams.filter(isPublished).length} onGo={openOver} />
+  );
+
+  const screenFor = (key) => {
+    switch (key) {
+      case "records": return loggedIn ? <MyRecords student={student} exams={exams} subs={subs} /> : homeView;
+      case "admin": return role === "admin" ? <Admin auth={auth} isSuper={isSuper} users={users} notices={notices} exams={exams} subs={subs} auditLog={auditLog} onToggleAdmin={onToggleAdmin} onDeleteUser={onDeleteUser} onResetPassword={onResetPassword} /> : homeView;
+      case "account": return loggedIn ? <Account auth={auth} onChangePassword={onChangePassword} onUpdateKakao={onUpdateKakao} onDeleteMe={onDeleteMe} onLogout={onLogout} /> : homeView;
+      case "notices": return <Notices role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} notices={columnPosts} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} readIds={readColIds} onRead={markColumnRead} />;
+      case "announce": return <Announcements role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} posts={noticePosts} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} readIds={readColIds} onRead={markColumnRead} />;
+      case "privacy": return <Privacy onBack={() => setTab("home")} />;
+      case "changelog": return <Changelog onBack={() => setTab("home")} isAdmin={role === "admin"} />;
+      case "game": return <SpeedGame onBack={closeOver} auth={auth} onGoAccount={() => { closeOver(); setTab("account"); }} onLogin={() => setAuthOpen(true)} />;
+      case "exams": return <Exams role={role} isSuper={isSuper} student={student} myId={auth ? auth.id : null} users={users} loggedIn={loggedIn} requireLogin={requireLogin} exams={exams} subs={subs} onAddExam={onAddExam} onEditExam={onEditExam} onDeleteExam={onDeleteExam} onGradeSub={onGradeSub} onAddSub={onAddSub} onGuestSubmit={onGuestSubmit} guestSubs={guestSubs} readIds={readExamIds} onView={markExamRead} />;
+      default: return homeView;
+    }
+  };
+
+  return (
+    <div className="mr-root">
+      <style>{CSS}</style>
+      {over && (
+        <div className="mr-ov-scrim" style={{ opacity: over.expanded ? 1 : 0 }} onClick={closeOver} />
+      )}
+      {over && (
+        <div
+          className="mr-ov"
+          style={over.expanded
+            ? { position: "fixed", zIndex: 150, overflow: "hidden", top: "74px", left: "0px", width: "100vw", height: "calc(100vh - 74px)", borderRadius: "0px" }
+            : { position: "fixed", zIndex: 150, overflow: "hidden", top: over.rect.top + "px", left: over.rect.left + "px", width: over.rect.width + "px", height: over.rect.height + "px", borderRadius: "26px" }}
+        >
+          <button className="mr-ov-back" onClick={closeOver} style={{ opacity: over.expanded ? 1 : 0 }} aria-label="뒤로">←</button>
+          <div
+            className="mr-ov-inner"
+            style={{
+              opacity: over.expanded ? 1 : 0,
+              transform: over.expanded ? "none" : "translateY(10px)",
+              transition: over.expanded ? "opacity .34s ease .15s, transform .42s cubic-bezier(.22,1,.36,1) .12s" : "opacity .15s ease, transform .15s ease",
+            }}
+          >
+            <main className="mr-main">{screenFor(over.key)}</main>
+          </div>
+        </div>
+      )}
+
+      <header className="mr-header">
+        <div className="mr-brand" onClick={() => { closeOver(); setTab("home"); }} role="button">
+          <span className="mr-logo">∫</span>
+          <div>
+            <div className="mr-brand-name">수학질문방</div>
+          </div>
+        </div>
+
+        <div className="mr-rolebox">
+          {loggedIn ? (
+            <button
+              className={"mr-account-btn" + (tab === "account" ? " active" : "")}
+              onClick={() => { closeOver(); setTab("account"); }}
+              aria-label="회원정보"
+            >
+              <PersonIcon />
+            </button>
+          ) : (
+            <button className="mr-login-btn" onClick={() => setAuthOpen(true)}>
+              로그인
+            </button>
+          )}
+        </div>
+      </header>
+
+      <main className="mr-main">
+        <div className="mr-screen-in" key={tab}>
+        {loading ? (
+          <div className="mr-loading">불러오는 중…</div>
+        ) : tab === "home" ? (
+          homeView
+        ) : (
+          screenFor(tab)
+        )}
+        </div>
+      </main>
+
+      <footer className="mr-foot">
+        <span className="mr-foot-copy">© suhakjilmoon</span>
+        <span className="mr-foot-sep">·</span>
+        <button className="mr-foot-link" onClick={() => setTab("changelog")}>v{APP_VERSION}</button>
+        <span className="mr-foot-sep">·</span>
+        <button className="mr-foot-link" onClick={() => setTab("privacy")}>개인정보 처리방침</button>
+      </footer>
+
+      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onLogin={onLogin} onSignup={onSignup} />}
+    </div>
+  );
+}
+
+function PersonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true">
+      <circle cx="12" cy="8" r="4" fill="currentColor" />
+      <path
+        d="M4 20c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+/* ===================== 회원정보 ===================== */
+function Account({ auth, onChangePassword, onUpdateKakao, onDeleteMe, onLogout }) {
+  const [curPw, setCurPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [done, setDone] = useState(false);
+  const [kakao, setKakao] = useState(auth.kakaoId || "");
+  const [kakaoDone, setKakaoDone] = useState(false);
+  const [withdraw, setWithdraw] = useState(false);
+  const [delPw, setDelPw] = useState("");
+
+  const changePw = async () => {
+    if (!curPw || !newPw) return alert("현재 비밀번호와 새 비밀번호를 입력하세요.");
+    const { error } = await onChangePassword(curPw, newPw);
+    if (error) return alert(error);
+    setCurPw("");
+    setNewPw("");
+    setDone(true);
+  };
+
+  const saveKakao = async () => {
+    const { error } = await onUpdateKakao(kakao.trim());
+    if (error) return alert(error);
+    setKakaoDone(true);
+  };
+
+  const deleteMe = async () => {
+    if (!delPw) return alert("비밀번호를 입력하세요.");
+    if (!confirm("정말 탈퇴할까요? 계정과 기록이 삭제되며 되돌릴 수 없어요.")) return;
+    const { error } = await onDeleteMe(delPw);
+    if (error) return alert(error);
+    alert("탈퇴가 완료됐어요. 그동안 이용해주셔서 감사합니다.");
+  };
+
+  return (
+    <div className="mr-col">
+      <section className="mr-card mr-account-card">
+        <div className="mr-account-avatar">
+          <PersonIcon />
+        </div>
+        <div className="mr-account-name">{auth.username}</div>
+        <div className="mr-account-role">
+          {auth.isSuper ? "root" : auth.isAdmin ? "관리자" : "일반 회원"}
+          {!auth.isAdmin && auth.kakaoId ? ` · 채팅방 ${auth.kakaoId}` : ""}
+        </div>
+      </section>
+
+      <section className="mr-card">
+        <div className="mr-card-tag">내 정보</div>
+        <div className="mr-cat-label">채팅방 닉네임</div>
+        <input
+          className="mr-input"
+          placeholder="채팅방에서 쓰는 이름"
+          value={kakao}
+          onChange={(e) => { setKakao(e.target.value); setKakaoDone(false); }}
+        />
+        <div className="mr-row-between" style={{ marginTop: "14px" }}>
+          <span className="mr-ok-msg">{kakaoDone ? "저장됐어요" : ""}</span>
+          <button className="mr-btn" onClick={saveKakao}>저장</button>
+        </div>
+      </section>
+
+      <section className="mr-card">
+        <div className="mr-card-tag">비밀번호 변경</div>
+        <input
+          className="mr-input"
+          type="password"
+          placeholder="현재 비밀번호"
+          value={curPw}
+          onChange={(e) => {
+            setCurPw(e.target.value);
+            setDone(false);
+          }}
+        />
+        <input
+          className="mr-input"
+          type="password"
+          placeholder="새 비밀번호"
+          value={newPw}
+          onChange={(e) => {
+            setNewPw(e.target.value);
+            setDone(false);
+          }}
+        />
+        <div className="mr-row-between" style={{ marginTop: "14px" }}>
+          <span className="mr-ok-msg">{done ? "비밀번호가 변경됐어요" : ""}</span>
+          <button className="mr-btn" onClick={changePw}>
+            변경하기
+          </button>
+        </div>
+      </section>
+
+      <button className="mr-logout-full" onClick={onLogout}>
+        로그아웃
+      </button>
+
+      {!withdraw ? (
+        <button className="mr-withdraw-link" onClick={() => setWithdraw(true)}>
+          회원 탈퇴
+        </button>
+      ) : (
+        <section className="mr-card mr-withdraw-card">
+          <div className="mr-card-tag">회원 탈퇴</div>
+          <p className="mr-withdraw-warn">탈퇴하면 계정과 시험 기록이 삭제되며 되돌릴 수 없어요. 계속하려면 비밀번호를 입력하세요.</p>
+          <input
+            className="mr-input"
+            type="password"
+            placeholder="비밀번호 확인"
+            value={delPw}
+            onChange={(e) => setDelPw(e.target.value)}
+          />
+          <div className="mr-row-end" style={{ marginTop: "14px", gap: "8px" }}>
+            <button className="mr-btn-ghost" onClick={() => { setWithdraw(false); setDelPw(""); }}>
+              취소
+            </button>
+            <button className="mr-btn mr-btn-danger" onClick={deleteMe}>
+              탈퇴하기
+            </button>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+/* ===================== 내 시험 기록 ===================== */
+function MyRecords({ student, exams, subs }) {
+  const [open, setOpen] = useState(null);
+  const mine = subs
+    .filter((s) => s.student === student)
+    .map((s) => ({ sub: s, exam: exams.find((e) => e.id === s.examId) }))
+    .filter((r) => r.exam)
+    .sort((a, b) => (b.sub.submittedAt || 0) - (a.sub.submittedAt || 0));
+
+  if (open) {
+    const { sub, exam } = open;
+    const score = totalScore(exam, sub);
+    const max = maxScore(exam);
+    const ratio = max ? score / max : 0;
+    const tone = ratio >= 0.8 ? "good" : ratio >= 0.5 ? "mid" : "low";
+    return (
+      <div className="mr-col">
+        <button className="mr-back" onClick={() => setOpen(null)}>내 시험 기록</button>
+        <section className="mr-card" style={{ textAlign: "center", padding: "28px 20px" }}>
+          <div className="mr-card-tag" style={{ marginBottom: "10px" }}>{exam.title}</div>
+          <div className={"mr-record-score " + tone} style={{ fontSize: "40px" }}>
+            {score}
+            <span className="mr-record-max"> / {max}</span>
+          </div>
+          <div className="mr-record-meta" style={{ marginTop: "10px" }}>{fmtDate(sub.submittedAt)}</div>
+        </section>
+        <div className="mr-list-top">
+          <span className="mr-list-title">채점 결과</span>
+        </div>
+        <ReviewList exam={exam} sub={sub} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="mr-col">
+      <div className="mr-list-top">
+        <span className="mr-list-title">내 시험 기록</span>
+      </div>
+      {mine.length === 0 ? (
+        <Empty text="아직 응시한 시험이 없어요." />
+      ) : (
+        <div className="mr-postlist">
+          {mine.map(({ sub, exam }, i) => {
+            const score = totalScore(exam, sub);
+            const max = maxScore(exam);
+            const ratio = max ? score / max : 0;
+            const tone = ratio >= 0.8 ? "good" : ratio >= 0.5 ? "mid" : "low";
+            return (
+              <button className="mr-record mr-record-btn" key={sub.id} style={{ animationDelay: `${i * 30}ms` }} onClick={() => setOpen({ sub, exam })}>
+                <div className="mr-record-info">
+                  <div className="mr-record-title">{exam.title}</div>
+                  <div className="mr-record-meta">{fmtDate(sub.submittedAt)} · 채점 결과 보기</div>
+                </div>
+                <div className={"mr-record-score " + tone}>
+                  {score}
+                  <span className="mr-record-max"> / {max}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ===================== 관리자 페이지 ===================== */
+function Admin({ auth, isSuper, users, notices, exams, subs, auditLog, onToggleAdmin, onDeleteUser, onResetPassword }) {
+  const [subtab, setSubtab] = useState("dash");
+  const [selUser, setSelUser] = useState(null);
+  const [q, setQ] = useState("");
+
+  const stats = [
+    { label: "회원", value: users.length },
+    { label: "칼럼", value: notices.length },
+    { label: "시험", value: exams.length },
+    { label: "제출", value: subs.length },
+  ];
+
+  const toggleAdmin = async (username) => {
+    const u = users.find((x) => x.username === username);
+    await onToggleAdmin(username, !(u && u.isAdmin));
+  };
+  const removeUser = async (username) => {
+    if (!confirm(`'${username}' 회원을 삭제할까요?`)) return;
+    await onDeleteUser(username);
+    if (selUser === username) setSelUser(null);
+  };
+  const resetPw = async (username) => {
+    if (!confirm(`'${username}' 회원의 비밀번호를 0000 으로 초기화할까요?`)) return;
+    await onResetPassword(username);
+  };
+
+  const sorted = [...users].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const kw = q.trim().toLowerCase();
+  const filtered = kw
+    ? sorted.filter(
+        (u) =>
+          u.username.toLowerCase().includes(kw) || (u.kakaoId || "").toLowerCase().includes(kw)
+      )
+    : sorted;
+
+  const scoreTone = (ratio) => (ratio >= 0.8 ? "good" : ratio >= 0.5 ? "mid" : "low");
+
+  if (selUser) {
+    const u = users.find((x) => x.username === selUser);
+    const theirs = subs
+      .filter((s) => s.student === selUser)
+      .map((s) => ({ sub: s, exam: exams.find((e) => e.id === s.examId) }))
+      .filter((r) => r.exam)
+      .sort((a, b) => (b.sub.submittedAt || 0) - (a.sub.submittedAt || 0));
+
+    return (
+      <div className="mr-col">
+        <button className="mr-back" onClick={() => setSelUser(null)}>
+          회원 목록
+        </button>
+        {!u ? (
+          <Empty text="회원을 찾을 수 없어요." />
+        ) : (
+          <>
+            <section className="mr-card mr-account-card">
+              <div className="mr-account-avatar">
+                <PersonIcon />
+              </div>
+              <div className="mr-account-name">
+                {u.username}
+                {u.isSuper ? <span className="mr-user-badge super">root</span> : u.isAdmin && <span className="mr-user-badge">관리자</span>}
+              </div>
+              <div className="mr-account-role">
+                {u.kakaoId ? `채팅방 ${u.kakaoId}` : "채팅방 미입력"}
+                {u.createdAt ? ` · 가입 ${fmtDate(u.createdAt)}` : ""}
+              </div>
+              {isSuper && !u.isSuper ? (
+                <div className="mr-detail-actions">
+                  <button className="mr-mini-btn" onClick={() => toggleAdmin(u.username)}>
+                    {u.isAdmin ? "관리자 해제" : "관리자 지정"}
+                  </button>
+                  <button className="mr-mini-btn" onClick={() => resetPw(u.username)}>
+                    비밀번호 초기화
+                  </button>
+                  <button className="mr-mini-btn danger" onClick={() => removeUser(u.username)}>
+                    회원 삭제
+                  </button>
+                </div>
+              ) : (
+                <div className="mr-super-note">
+                  {u.isSuper ? "root 계정이라 권한·삭제가 잠겨 있어요." : "회원 권한 관리는 root만 할 수 있어요."}
+                </div>
+              )}
+            </section>
+
+            <section className="mr-card">
+              <div className="mr-card-tag">시험 결과 ({theirs.length}건)</div>
+              {theirs.length === 0 ? (
+                <p className="mr-muted" style={{ fontSize: "14px" }}>
+                  아직 응시한 시험이 없어요.
+                </p>
+              ) : (
+                <div className="mr-member-list">
+                  {theirs.map(({ sub, exam }) => {
+                    const score = totalScore(exam, sub);
+                    const max = maxScore(exam);
+                    const tone = scoreTone(max ? score / max : 0);
+                    return (
+                      <div className="mr-record" key={sub.id}>
+                        <div className="mr-record-info">
+                          <div className="mr-record-title">{exam.title}</div>
+                          <div className="mr-record-meta">{fmtDate(sub.submittedAt)}</div>
+                        </div>
+                        <div className={"mr-record-score " + tone}>
+                          {score}
+                          <span className="mr-record-max"> / {max}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mr-col">
+      <div className="mr-list-top">
+        <span className="mr-list-title">관리자 페이지</span>
+      </div>
+
+      <div className="mr-subtabs">
+        <button className={subtab === "dash" ? "on" : ""} onClick={() => setSubtab("dash")}>
+          대시보드
+        </button>
+        <button className={subtab === "members" ? "on" : ""} onClick={() => setSubtab("members")}>
+          회원 {users.length}
+        </button>
+        <button className={subtab === "log" ? "on" : ""} onClick={() => setSubtab("log")}>
+          활동 기록
+        </button>
+      </div>
+
+      {subtab === "dash" ? (
+        <>
+          <section className="mr-card">
+            <div className="mr-stat-grid">
+              {stats.map((s) => (
+                <div className="mr-stat" key={s.label}>
+                  <div className="mr-stat-num">{s.value}</div>
+                  <div className="mr-stat-label">{s.label}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="mr-card">
+            <div className="mr-card-tag">시험별 제출 현황</div>
+            {exams.length === 0 ? (
+              <p className="mr-muted" style={{ fontSize: "14px" }}>
+                출제된 시험이 없어요.
+              </p>
+            ) : (
+              <div className="mr-exam-summary">
+                {exams.map((ex) => {
+                  const es = subs.filter((s) => s.examId === ex.id);
+                  const avg = es.length
+                    ? Math.round(es.reduce((sum, s) => sum + totalScore(ex, s), 0) / es.length)
+                    : 0;
+                  return (
+                    <div className="mr-exam-sum-row" key={ex.id}>
+                      <div className="mr-exam-sum-title">{ex.title}</div>
+                      <div className="mr-exam-sum-meta">
+                        제출 {es.length}건{es.length > 0 ? ` · 평균 ${avg}/${maxScore(ex)}점` : ""}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </>
+      ) : subtab === "members" ? (
+        <>
+          <input
+            className="mr-input"
+            placeholder="아이디 · 채팅방 닉네임 검색"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            style={{ marginTop: 0 }}
+          />
+          {filtered.length === 0 ? (
+            <Empty text={users.length === 0 ? "아직 가입한 회원이 없어요." : "검색 결과가 없어요."} />
+          ) : (
+            <div className="mr-postlist">
+              {filtered.map((u) => (
+                <button
+                  className="mr-member-row"
+                  key={u.username}
+                  onClick={() => setSelUser(u.username)}
+                >
+                  <span className="mr-avatar sm">{u.username[0]}</span>
+                  <span className="mr-member-info">
+                    <span className="mr-member-name">
+                      {u.username}
+                      {u.isSuper ? <span className="mr-user-badge super">root</span> : u.isAdmin && <span className="mr-user-badge">관리자</span>}
+                    </span>
+                    <span className="mr-member-meta">
+                      {u.kakaoId ? <strong className="mr-member-nick">{u.kakaoId}</strong> : "닉네임 미입력"}
+                      {u.createdAt ? ` · ${fmtDate(u.createdAt)}` : ""}
+                    </span>
+                  </span>
+                  <span className="mr-sector-arrow">→</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <section className="mr-card">
+          <div className="mr-card-tag">활동 기록</div>
+          {(!auditLog || auditLog.length === 0) ? (
+            <p className="mr-muted" style={{ fontSize: "14px" }}>아직 기록이 없어요.</p>
+          ) : (
+            <div className="mr-log-list">
+              {auditLog.map((g) => (
+                <div className="mr-log-row" key={g.id}>
+                  <div className="mr-log-main">
+                    <span className="mr-log-actor">{g.actor || "?"}</span>
+                    <span className="mr-log-action">{g.action}</span>
+                    {g.target ? <span className="mr-log-target">{g.target}</span> : null}
+                  </div>
+                  <div className="mr-log-time">{g.created_at ? fmtDate(Date.parse(g.created_at)) : ""}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+/* ===================== 로그인 / 회원가입 ===================== */
+function AuthModal({ onClose, onLogin, onSignup }) {
+  const [mode, setMode] = useState("login");
+  const [id, setId] = useState("");
+  const [pw, setPw] = useState("");
+  const [kakao, setKakao] = useState("");
+  const [agree, setAgree] = useState(false);
+  const [showPolicy, setShowPolicy] = useState(false);
+
+  const doLogin = async () => {
+    const { error } = await onLogin(id, pw);
+    if (error) alert(error);
+  };
+
+  const doSignup = async () => {
+    if (!agree) {
+      alert("개인정보 수집·이용에 동의해주세요.");
+      return;
+    }
+    const { error } = await onSignup(id, pw, kakao);
+    if (error) alert(error);
+  };
+
+  const onEnter = (e) => {
+    if (e.key === "Enter" && !e.nativeEvent.isComposing) (mode === "login" ? doLogin : doSignup)();
+  };
+
+  return (
+    <div className="mr-modal-overlay" onClick={onClose}>
+      <div className="mr-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="mr-modal-head">
+          <span className="mr-modal-title">{mode === "login" ? "로그인" : "회원가입"}</span>
+          <button className="mr-modal-x" onClick={onClose}>
+            ×
+          </button>
+        </div>
+
+        <input
+          className="mr-input"
+          placeholder="아이디"
+          value={id}
+          onChange={(e) => setId(e.target.value)}
+          onKeyDown={onEnter}
+        />
+        <input
+          className="mr-input"
+          type="password"
+          placeholder="비밀번호"
+          value={pw}
+          onChange={(e) => setPw(e.target.value)}
+          onKeyDown={onEnter}
+        />
+        {mode === "signup" && (
+          <input
+            className="mr-input"
+            placeholder="채팅방 닉네임 (선택)"
+            value={kakao}
+            onChange={(e) => setKakao(e.target.value)}
+            onKeyDown={onEnter}
+          />
+        )}
+
+        {mode === "signup" && (
+          <label className="mr-consent">
+            <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
+            <span>
+              <button type="button" className="mr-consent-link" onClick={() => setShowPolicy(true)}>개인정보 처리방침</button>
+              에 동의하며, 만 14세 이상이고 개인정보 수집·이용에 동의합니다. (필수)
+            </span>
+          </label>
+        )}
+
+        <button
+          className="mr-btn mr-modal-submit"
+          onClick={mode === "login" ? doLogin : doSignup}
+        >
+          {mode === "login" ? "로그인" : "가입하고 시작하기"}
+        </button>
+
+        <div className="mr-modal-switch">
+          {mode === "login" ? (
+            <>
+              아직 회원이 아니신가요?{" "}
+              <button onClick={() => setMode("signup")}>회원가입</button>
+            </>
+          ) : (
+            <>
+              이미 계정이 있나요?{" "}
+              <button onClick={() => setMode("login")}>로그인</button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {showPolicy && <PolicyModal onClose={() => setShowPolicy(false)} />}
+    </div>
+  );
+}
+
+/* ===================== 홈 ===================== */
+function Home({ role, student, loggedIn, noticeCount, columnUnread, announceCount, announceUnread, examUnread, examCount, onGo }) {
+  const greet = !loggedIn
+    ? "로그인하고 함께 시작해요"
+    : role === "admin"
+    ? "관리자 모드예요"
+    : `${student}님, 환영해요`;
+
+  const sectors = [
+    {
+      key: "announce",
+      icon: "📢",
+      title: "공지사항",
+      desc: "꼭 확인해야 할 소식",
+      meta: `${announceCount}개의 공지`,
+      tone: "green",
+      dot: announceUnread > 0,
+    },
+    {
+      key: "notices",
+      icon: "✍️",
+      title: "칼럼",
+      desc: "수학 이야기와 공부 팁",
+      meta: `${noticeCount}개의 글`,
+      tone: "blue",
+      dot: columnUnread > 0,
+    },
+    {
+      key: "exams",
+      icon: "🧮",
+      title: "시험",
+      desc: "수학질문방 레벨테스트",
+      meta: `${examCount}개의 시험`,
+      tone: "green",
+      dot: examUnread > 0,
+    },
+    {
+      key: "game",
+      icon: "⚡",
+      title: "스피드 연산",
+      desc: "무한 모드 · 콤보로 점수 폭발",
+      meta: "지금 도전하기",
+      tone: "blue",
+    },
+  ];
+  if (loggedIn) {
+    sectors.push({
+      key: "records",
+      icon: "📊",
+      title: "내 시험 기록",
+      desc: "내가 응시한 시험과 점수",
+      meta: "내 점수 모아보기",
+      tone: "blue",
+    });
+  }
+  if (role === "admin") {
+    sectors.push({
+      key: "admin",
+      icon: "🛠️",
+      title: "관리자 페이지",
+      desc: "회원 · 시험 제출 관리",
+      meta: "관리자 전용",
+      tone: "gray",
+    });
+  }
+
+  return (
+    <div className="mr-col">
+      <section className="mr-hero">
+        <div className="mr-hero-greet">{greet}</div>
+        <h1 className="mr-hero-title">
+          수학질문방에 오신 것을
+          <br />
+          환영합니다!
+        </h1>
+      </section>
+
+      <div className="mr-sectors">
+        {sectors.map((s, i) => (
+          <button
+            key={s.key}
+            className="mr-sector"
+            style={{ animationDelay: `${i * 60}ms` }}
+            onClick={(e) => onGo(s.key, e.currentTarget.getBoundingClientRect())}
+          >
+            <span className={"mr-sector-icon " + s.tone}>
+              {s.icon}
+              {s.dot && <span className="mr-sector-dot" />}
+            </span>
+            <span className="mr-sector-text">
+              <span className="mr-sector-title">{s.title}</span>
+              <span className="mr-sector-desc">{s.desc}</span>
+              <span className="mr-sector-meta">{s.meta}</span>
+            </span>
+            <span className="mr-sector-arrow">→</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ===================== 칼럼 ===================== */
+function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onReorder, readIds, onRead }) {
+  const CAT = { elem: "초등학교", mid: "중학교", high: "고등학교" };
+  const CATS = ["elem", "mid", "high"];
+  const [view, setView] = useState("list"); // list | write | read | edit
+  const [cat, setCat] = useState("elem"); // 목록에서 보고 있는 분류 탭
+  const [editCat, setEditCat] = useState("elem"); // 글 작성/수정 시 선택한 분류
+  const [openId, setOpenId] = useState(null);
+  const [draftId, setDraftId] = useState(null);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [savedNote, setSavedNote] = useState("");
+
+  const authorName = () => (kakaoId || "").trim() || (student || "").trim() || "익명";
+
+  const newWrite = () => {
+    setTitle("");
+    setBody("");
+    setDraftId(null);
+    setEditCat(cat);
+    setSavedNote("");
+    setView("write");
+  };
+  const resumeDraft = (d) => {
+    setTitle(d.title === "(제목 없음)" ? "" : d.title);
+    setBody(d.body);
+    setDraftId(d.id);
+    setEditCat(d.category || "elem");
+    setSavedNote("");
+    setView("write");
+  };
+
+  // 임시저장 (발행 안 함)
+  const saveDraft = async () => {
+    if (!title.trim() && !body.trim()) return alert("내용을 입력하세요.");
+    let ok;
+    if (draftId) {
+      ok = await onEdit(draftId, title.trim() || "(제목 없음)", body, true, editCat);
+    } else {
+      const newId = await onAdd({ title: title.trim() || "(제목 없음)", body, author: authorName(), isDraft: true, category: editCat });
+      if (newId && newId !== true) setDraftId(newId);
+      ok = !!newId;
+    }
+    if (ok) setSavedNote("임시저장됐어요"); // 실패하면 alert만 뜨고 작성 내용은 그대로 유지
+  };
+
+  // 발행 (목록에 공개)
+  const post = async () => {
+    if (!title.trim()) return alert("제목을 입력하세요.");
+    let ok;
+    if (draftId) {
+      ok = await onEdit(draftId, title.trim(), body, false, editCat);
+    } else {
+      ok = await onAdd({ title: title.trim(), body, author: authorName(), isDraft: false, category: editCat });
+    }
+    if (!ok) return; // 발행 실패: 작성 내용을 지우지 않고 화면 유지
+    setTitle("");
+    setBody("");
+    setDraftId(null);
+    setCat(editCat);
+    setView("list");
+  };
+
+  const remove = async (id) => {
+    if (!confirm("이 칼럼을 삭제할까요?")) return;
+    await onDelete(id);
+    setOpenId(null);
+    setView("list");
+  };
+
+  const saveEdit = async () => {
+    if (!title.trim()) return alert("제목을 입력하세요.");
+    const ok = await onEdit(openId, title.trim(), body, false, editCat);
+    if (ok) setView("read"); // 실패 시 수정 화면 유지 (내용 보존)
+  };
+
+  const CatPicker = (
+    <>
+      <div className="mr-cat-label">대상</div>
+      <div className="mr-cat-seg">
+        {CATS.map((k) => (
+          <button key={k} className={editCat === k ? "on" : ""} onClick={() => setEditCat(k)}>
+            {CAT[k]}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+
+  // 글쓰기 / 임시저장 이어쓰기
+  if (view === "write")
+    return (
+      <div className="mr-col">
+        <button className="mr-back" onClick={() => setView("list")}>
+          칼럼 목록
+        </button>
+        <section className="mr-card mr-writer">
+          <div className="mr-card-tag">{draftId ? "임시저장 이어쓰기" : "새 칼럼 쓰기"}</div>
+          <input
+            className="mr-input mr-title-input"
+            placeholder="제목"
+            value={title}
+            onChange={(e) => { setTitle(e.target.value); setSavedNote(""); }}
+          />
+          {CatPicker}
+          <RichEditor
+            value={body}
+            onChange={(v) => { setBody(v); setSavedNote(""); }}
+            placeholder="이야기를 자유롭게 풀어보세요. 풀이 접근법, 개념 정리, 공부 팁 무엇이든 좋아요."
+          />
+          <div className="mr-row-between" style={{ marginTop: "14px" }}>
+            <span className="mr-ok-msg">{savedNote}</span>
+            <div className="mr-gap">
+              <button className="mr-btn-ghost" onClick={saveDraft}>
+                임시저장
+              </button>
+              <button className="mr-btn" onClick={post}>
+                발행하기
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+
+  // 글 수정하기 (발행된 글)
+  if (view === "edit")
+    return (
+      <div className="mr-col">
+        <button className="mr-back" onClick={() => setView("read")}>
+          칼럼 보기
+        </button>
+        <section className="mr-card mr-writer">
+          <div className="mr-card-tag">칼럼 수정하기</div>
+          <input
+            className="mr-input mr-title-input"
+            placeholder="제목"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          {CatPicker}
+          <RichEditor
+            value={body}
+            onChange={setBody}
+            placeholder="내용을 입력하세요."
+          />
+          <div className="mr-row-end">
+            <button className="mr-btn" onClick={saveEdit}>
+              수정 완료
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+
+  // 글 보기
+  if (view === "read") {
+    const n = notices.find((x) => x.id === openId);
+    return (
+      <div className="mr-col">
+        <button className="mr-back" onClick={() => setView("list")}>
+          칼럼 목록
+        </button>
+        {!n ? (
+          <Empty text="글을 찾을 수 없어요." />
+        ) : (
+          <article className="mr-card mr-notice mr-post">
+            <h1 className="mr-post-title">{n.title}</h1>
+            <div className="mr-post-byline">
+              <span className="mr-avatar sm">{(n.author || "익")[0]}</span>
+              {n.author || "익명"} · {fmtDate(n.createdAt)}
+            </div>
+            <div className="mr-post-divider" />
+            {n.body ? <div className="mr-notice-body" dangerouslySetInnerHTML={{ __html: n.body }} /> : <p className="mr-muted">내용이 없어요.</p>}
+            {role === "admin" && (
+              <div className="mr-detail-actions" style={{ marginTop: "20px", justifyContent: "flex-end" }}>
+                <button className="mr-mini-btn" onClick={() => { setTitle(n.title); setBody(n.body); setEditCat(n.category || "elem"); setDraftId(null); setView("edit"); }}>
+                  수정
+                </button>
+                <button className="mr-mini-btn danger" onClick={() => remove(n.id)}>
+                  삭제
+                </button>
+              </div>
+            )}
+          </article>
+        )}
+      </div>
+    );
+  }
+
+  // 목록
+  const inCat = (n) => (n.category || "elem") === cat;
+  const published = notices
+    .filter((n) => !n.isDraft && inCat(n))
+    .sort((a, b) => (a.sortOrder - b.sortOrder) || (b.createdAt - a.createdAt));
+  const drafts = notices.filter((n) => n.isDraft && inCat(n));
+
+  const move = async (idx, dir) => {
+    const j = idx + dir;
+    if (j < 0 || j >= published.length) return;
+    const ids = published.map((n) => n.id);
+    const t = ids[idx];
+    ids[idx] = ids[j];
+    ids[j] = t;
+    await onReorder(ids);
+  };
+
+  return (
+    <div className="mr-col">
+      <div className="mr-list-top">
+        <span className="mr-list-title">칼럼</span>
+        {role === "admin" && (
+          <button className="mr-btn" onClick={newWrite}>
+            글쓰기
+          </button>
+        )}
+      </div>
+
+      <div className="mr-subtabs">
+        {CATS.map((k) => (
+          <button key={k} className={cat === k ? "on" : ""} onClick={() => setCat(k)}>
+            {CAT[k]}
+          </button>
+        ))}
+      </div>
+
+      {role === "admin" && drafts.length > 0 && (
+        <>
+          <div className="mr-draft-head">임시저장 {drafts.length}</div>
+          <div className="mr-postlist">
+            {drafts.map((n) => (
+              <button key={n.id} className="mr-post-row" onClick={() => resumeDraft(n)}>
+                <span className="mr-post-row-title">
+                  {n.title}
+                  <span className="mr-draft-badge">임시저장</span>
+                </span>
+                <span className="mr-post-row-meta">{fmtDate(n.createdAt)}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {published.length === 0 ? (
+        <Empty text="아직 발행된 칼럼이 없어요." />
+      ) : (
+        <div className="mr-postlist">
+          {published.map((n, i) => {
+            const unread = readIds && !readIds.has(n.id);
+            return (
+            <div className="mr-post-item" key={n.id}>
+              <button
+                className="mr-post-row"
+                onClick={() => {
+                  if (onRead) onRead(n.id);
+                  setOpenId(n.id);
+                  setView("read");
+                }}
+              >
+                <span className="mr-post-row-title">
+                  {unread && <span className="mr-unread-dot" />}
+                  {n.title}
+                </span>
+                <span className="mr-post-row-meta">
+                  {n.author || "익명"} · {fmtDate(n.createdAt)}
+                </span>
+              </button>
+              {role === "admin" && (
+                <div className="mr-reorder">
+                  <button onClick={() => move(i, -1)} disabled={i === 0} title="위로">▲</button>
+                  <button onClick={() => move(i, 1)} disabled={i === published.length - 1} title="아래로">▼</button>
+                </div>
+              )}
+            </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ===================== 공지사항 =====================
+   칼럼과 같은 columns 테이블을 쓰고 category 를 'notice' 로 저장한다.
+   분류 탭이 없고, 최신 글이 위로 오는 단순한 게시판. */
+function Announcements({ role, student, kakaoId, posts, onAdd, onDelete, onEdit, onReorder, readIds, onRead }) {
+  const [view, setView] = useState("list"); // list | write | read | edit
+  const [openId, setOpenId] = useState(null);
+  const [draftId, setDraftId] = useState(null);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [savedNote, setSavedNote] = useState("");
+
+  const authorName = () => (kakaoId || "").trim() || (student || "").trim() || "익명";
+
+  const newWrite = () => {
+    setTitle(""); setBody(""); setDraftId(null); setSavedNote(""); setView("write");
+  };
+  const resumeDraft = (d) => {
+    setTitle(d.title === "(제목 없음)" ? "" : d.title);
+    setBody(d.body); setDraftId(d.id); setSavedNote(""); setView("write");
+  };
+
+  const saveDraft = async () => {
+    if (!title.trim() && !body.trim()) return alert("내용을 입력하세요.");
+    let ok;
+    if (draftId) {
+      ok = await onEdit(draftId, title.trim() || "(제목 없음)", body, true, "notice");
+    } else {
+      const newId = await onAdd({ title: title.trim() || "(제목 없음)", body, author: authorName(), isDraft: true, category: "notice" });
+      if (newId && newId !== true) setDraftId(newId);
+      ok = !!newId;
+    }
+    if (ok) setSavedNote("임시저장됐어요");
+  };
+
+  const post = async () => {
+    if (!title.trim()) return alert("제목을 입력하세요.");
+    let ok;
+    if (draftId) {
+      ok = await onEdit(draftId, title.trim(), body, false, "notice");
+    } else {
+      ok = await onAdd({ title: title.trim(), body, author: authorName(), isDraft: false, category: "notice" });
+    }
+    if (!ok) return; // 실패 시 작성 내용 보존
+    setTitle(""); setBody(""); setDraftId(null); setView("list");
+  };
+
+  const remove = async (id) => {
+    if (!confirm("이 공지를 삭제할까요?")) return;
+    await onDelete(id);
+    setOpenId(null);
+    setView("list");
+  };
+
+  const saveEdit = async () => {
+    if (!title.trim()) return alert("제목을 입력하세요.");
+    const ok = await onEdit(openId, title.trim(), body, false, "notice");
+    if (ok) setView("read");
+  };
+
+  if (view === "write")
+    return (
+      <div className="mr-col">
+        <button className="mr-back" onClick={() => setView("list")}>공지사항</button>
+        <section className="mr-card mr-writer">
+          <div className="mr-card-tag">{draftId ? "임시저장 이어쓰기" : "새 공지 쓰기"}</div>
+          <input className="mr-input mr-title-input" placeholder="제목" value={title}
+            onChange={(e) => { setTitle(e.target.value); setSavedNote(""); }} />
+          <RichEditor value={body} onChange={(v) => { setBody(v); setSavedNote(""); }}
+            placeholder="회원들에게 알릴 내용을 적어주세요." />
+          <div className="mr-row-between" style={{ marginTop: "14px" }}>
+            <span className="mr-ok-msg">{savedNote}</span>
+            <div className="mr-gap">
+              <button className="mr-btn-ghost" onClick={saveDraft}>임시저장</button>
+              <button className="mr-btn" onClick={post}>발행하기</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+
+  if (view === "edit")
+    return (
+      <div className="mr-col">
+        <button className="mr-back" onClick={() => setView("read")}>공지 보기</button>
+        <section className="mr-card mr-writer">
+          <div className="mr-card-tag">공지 수정하기</div>
+          <input className="mr-input mr-title-input" placeholder="제목" value={title}
+            onChange={(e) => setTitle(e.target.value)} />
+          <RichEditor value={body} onChange={setBody} placeholder="내용을 입력하세요." />
+          <div className="mr-row-end">
+            <button className="mr-btn" onClick={saveEdit}>수정 완료</button>
+          </div>
+        </section>
+      </div>
+    );
+
+  if (view === "read") {
+    const n = posts.find((x) => x.id === openId);
+    return (
+      <div className="mr-col">
+        <button className="mr-back" onClick={() => setView("list")}>공지사항</button>
+        {!n ? (
+          <Empty text="공지를 찾을 수 없어요." />
+        ) : (
+          <article className="mr-card mr-notice mr-post">
+            <h1 className="mr-post-title">{n.title}</h1>
+            <div className="mr-post-byline">
+              <span className="mr-avatar sm">{(n.author || "익")[0]}</span>
+              {n.author || "익명"} · {fmtDate(n.createdAt)}
+            </div>
+            <div className="mr-post-divider" />
+            {n.body ? <div className="mr-notice-body" dangerouslySetInnerHTML={{ __html: n.body }} /> : <p className="mr-muted">내용이 없어요.</p>}
+            {role === "admin" && (
+              <div className="mr-detail-actions" style={{ marginTop: "20px", justifyContent: "flex-end" }}>
+                <button className="mr-mini-btn" onClick={() => { setTitle(n.title); setBody(n.body); setDraftId(null); setView("edit"); }}>수정</button>
+                <button className="mr-mini-btn danger" onClick={() => remove(n.id)}>삭제</button>
+              </div>
+            )}
+          </article>
+        )}
+      </div>
+    );
+  }
+
+  // 목록
+  const published = posts
+    .filter((n) => !n.isDraft)
+    .sort((a, b) => (a.sortOrder - b.sortOrder) || (b.createdAt - a.createdAt));
+  const drafts = posts.filter((n) => n.isDraft);
+
+  const move = async (idx, dir) => {
+    const j = idx + dir;
+    if (j < 0 || j >= published.length) return;
+    const ids = published.map((n) => n.id);
+    const t = ids[idx];
+    ids[idx] = ids[j];
+    ids[j] = t;
+    await onReorder(ids);
+  };
+
+  return (
+    <div className="mr-col">
+      <div className="mr-list-top">
+        <span className="mr-list-title">공지사항</span>
+        {role === "admin" && <button className="mr-btn" onClick={newWrite}>공지 쓰기</button>}
+      </div>
+
+      {role === "admin" && drafts.length > 0 && (
+        <>
+          <div className="mr-draft-head">임시저장 {drafts.length}</div>
+          <div className="mr-postlist">
+            {drafts.map((n) => (
+              <button key={n.id} className="mr-post-row" onClick={() => resumeDraft(n)}>
+                <span className="mr-post-row-title">
+                  {n.title}
+                  <span className="mr-draft-badge">임시저장</span>
+                </span>
+                <span className="mr-post-row-meta">{fmtDate(n.createdAt)}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {published.length === 0 ? (
+        <Empty text="아직 등록된 공지가 없어요." />
+      ) : (
+        <div className="mr-postlist">
+          {published.map((n, i) => {
+            const unread = readIds && !readIds.has(n.id);
+            return (
+              <div className="mr-post-item" key={n.id}>
+                <button
+                  className="mr-post-row"
+                  onClick={() => { if (onRead) onRead(n.id); setOpenId(n.id); setView("read"); }}
+                >
+                  <span className="mr-post-row-title">
+                    {unread && <span className="mr-unread-dot" />}
+                    {n.title}
+                  </span>
+                  <span className="mr-post-row-meta">{n.author || "익명"} · {fmtDate(n.createdAt)}</span>
+                </button>
+                {role === "admin" && (
+                  <div className="mr-reorder">
+                    <button onClick={() => move(i, -1)} disabled={i === 0} title="위로">▲</button>
+                    <button onClick={() => move(i, 1)} disabled={i === published.length - 1} title="아래로">▼</button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ===================== 서식 입력기 (칼럼용) ===================== */
+function RichEditor({ value, onChange, placeholder }) {
+  const ref = React.useRef(null);
+  const lastRange = React.useRef(null);
+  const draft = React.useRef({ latex: "", tree: null });
+  const [building, setBuilding] = useState(null);
+  React.useEffect(() => {
+    if (ref.current && (value || "") !== ref.current.innerHTML) {
+      ref.current.innerHTML = value || "";
+    }
+    // 최초 1회만 초기화 (입력 중 커서 유지)
+  }, []);
+  const sync = () => {
+    if (ref.current) onChange(ref.current.innerHTML);
+  };
+  const exec = (cmd, arg) => {
+    document.execCommand(cmd, false, arg);
+    if (ref.current) ref.current.focus();
+    sync();
+  };
+  const tool = (e, cmd, arg) => {
+    e.preventDefault(); // 선택 영역 유지
+    exec(cmd, arg);
+  };
+  const saveRange = () => {
+    const sel = document.getSelection();
+    if (sel && sel.rangeCount && ref.current && ref.current.contains(sel.anchorNode)) {
+      lastRange.current = sel.getRangeAt(0).cloneRange();
+    }
+  };
+  const openNewMath = (e) => { e.preventDefault(); saveRange(); draft.current = { latex: "", tree: null }; setBuilding({ mode: "new" }); };
+  const openEditMath = (chip) => {
+    draft.current = { latex: chip.dataset.latex || "", tree: null };
+    setBuilding({ mode: "edit", chip });
+  };
+  const onBoxClick = (e) => {
+    const chip = e.target && e.target.closest ? e.target.closest(".mchip") : null;
+    if (chip) { e.preventDefault(); openEditMath(chip); }
+  };
+  const finishMath = () => {
+    if (!building) return;
+    const { latex } = draft.current;
+    if (!String(latex || "").trim()) {
+      // 비워서 완료하면: 수정 중이던 수식 칩은 삭제 (지우기 동작)
+      if (building.mode === "edit" && building.chip && building.chip.parentNode) building.chip.parentNode.removeChild(building.chip);
+      setBuilding(null);
+      sync();
+      return;
+    }
+    if (building.mode === "edit" && building.chip) {
+      const chip = building.chip;
+      chip.dataset.latex = latex;
+      chip.dataset.tree = "";
+      chip.innerHTML = chipInnerHtml(latex);
+    } else {
+      const el = ref.current;
+      const frag = buildMixedFragment([{ type: "math", latex, tree: null }]);
+      const sp = document.createTextNode("\u00A0");
+      frag.appendChild(sp);
+      const range = lastRange.current && el && el.contains(lastRange.current.commonAncestorContainer) ? lastRange.current : null;
+      if (range) {
+        range.collapse(false);
+        range.insertNode(frag);
+        const r2 = document.createRange();
+        r2.setStartAfter(sp); r2.collapse(true);
+        const sel = document.getSelection(); sel.removeAllRanges(); sel.addRange(r2);
+      } else if (el) {
+        el.appendChild(frag);
+      }
+    }
+    setBuilding(null);
+    sync();
+    if (ref.current) ref.current.focus();
+  };
+  const colors = ["#2c2347", "#8a8398", "#b23b5e", "#2f6f8f", "#3f7d5a", "#8a5cf0"];
+  return (
+    <div className="mr-rte-wrap">
+      <div className="mr-rte-toolbar">
+        <div className="mr-rte-tools">
+          <button type="button" className="mr-rte-btn sm mathbtn" title="수식 넣기" onMouseDown={openNewMath}>＋수식</button>
+          <span className="mr-rte-div" />
+          <button type="button" className="mr-rte-btn" style={{ fontWeight: 800 }} title="굵게" onMouseDown={(e) => tool(e, "bold")}>가</button>
+          <button type="button" className="mr-rte-btn" style={{ fontStyle: "italic" }} title="기울임" onMouseDown={(e) => tool(e, "italic")}>가</button>
+          <button type="button" className="mr-rte-btn" style={{ textDecoration: "underline" }} title="밑줄" onMouseDown={(e) => tool(e, "underline")}>가</button>
+          <button type="button" className="mr-rte-btn" style={{ textDecoration: "line-through" }} title="취소선" onMouseDown={(e) => tool(e, "strikeThrough")}>가</button>
+          <span className="mr-rte-div" />
+          <button type="button" className="mr-rte-btn sm" title="작게" onMouseDown={(e) => tool(e, "fontSize", "2")}>작게</button>
+          <button type="button" className="mr-rte-btn sm" title="보통" onMouseDown={(e) => tool(e, "fontSize", "4")}>보통</button>
+          <button type="button" className="mr-rte-btn sm" title="크게" onMouseDown={(e) => tool(e, "fontSize", "6")}>크게</button>
+          <span className="mr-rte-div" />
+          <button type="button" className="mr-rte-btn sm" title="고딕체" onMouseDown={(e) => tool(e, "fontName", "'Pretendard', sans-serif")}>고딕</button>
+          <button type="button" className="mr-rte-btn sm" style={{ fontFamily: "serif" }} title="명조체" onMouseDown={(e) => tool(e, "fontName", "serif")}>명조</button>
+          <span className="mr-rte-div" />
+          {colors.map((c) => (
+            <button
+              type="button"
+              key={c}
+              className="mr-rte-color"
+              style={{ background: c }}
+              title="글자색"
+              onMouseDown={(e) => tool(e, "foreColor", c)}
+            />
+          ))}
+          <span className="mr-rte-div" />
+          <button type="button" className="mr-rte-btn sm" title="색·크기 등 서식 지우기" onMouseDown={(e) => tool(e, "removeFormat")}>지우기</button>
+        </div>
+      </div>
+      {building && (
+        <div className="mr-rte-mathedit">
+          <MathField initialLatex={draft.current.latex} onChange={(latex) => { draft.current = { latex, tree: null }; }} />
+          <div className="mr-rich-mrow">
+            <button type="button" className="mr-btn" onClick={finishMath}>{building.mode === "edit" ? "수정 완료" : "이 수식 넣기"}</button>
+            <button type="button" className="mr-btn-text" onClick={() => setBuilding(null)}>취소</button>
+          </div>
+        </div>
+      )}
+      <div
+        ref={ref}
+        className="mr-rte"
+        contentEditable
+        suppressContentEditableWarning
+        data-placeholder={placeholder || ""}
+        onInput={sync}
+        onBlur={() => { saveRange(); sync(); }}
+        onKeyUp={saveRange}
+        onMouseUp={saveRange}
+        onClick={onBoxClick}
+      />
+    </div>
+  );
+}
+
+/* ===================== 시험 ===================== */
+const EXAM_TYPES = { level: "레벨테스트", today: "오늘의 문제" };
+
+function ExamChooser({ onPick, todayUnread }) {
+  return (
+    <div className="mr-col">
+      <div className="mr-list-top">
+        <span className="mr-list-title">시험</span>
+      </div>
+      <div className="mr-pick2">
+        <button className="mr-pick-card" onClick={() => onPick("level")}>
+          <span className="mr-pick-icon blue">🎯</span>
+          <span className="mr-pick-title">레벨테스트</span>
+          <span className="mr-pick-desc">내 실력 진단</span>
+        </button>
+        <button className="mr-pick-card" onClick={() => onPick("today")}>
+          <span className="mr-pick-icon green">📅{todayUnread > 0 && <span className="mr-sector-dot" />}</span>
+          <span className="mr-pick-title">오늘의 문제</span>
+          <span className="mr-pick-desc">매일 풀어보기</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* 시험 응시 래퍼 (관리자/학생 공용 - TakeExam 연결을 한 곳에서 관리) */
+function ExamTaker({ taking, setTaking, student, loggedIn, onAddSub, onGuestSubmit }) {
+  return (
+    <TakeExam
+      exam={taking}
+      student={student}
+      loggedIn={loggedIn}
+      onGuestSubmit={onGuestSubmit}
+      onCancel={() => setTaking(null)}
+      onSubmit={onAddSub}
+    />
+  );
+}
+
+function isPublished(exam) {
+  return !exam.publishAt || exam.publishAt <= Date.now();
+}
+
+/* 칼럼 읽음 추적 (기기에 저장) */
+const COL_READ_KEY = "mrreadcols";
+function getReadColIds() {
+  try { return new Set(JSON.parse(localStorage.getItem(COL_READ_KEY) || "[]")); } catch (e) { return new Set(); }
+}
+function saveReadColIds(set) {
+  try { localStorage.setItem(COL_READ_KEY, JSON.stringify([...set])); } catch (e) {}
+}
+/* 시험 확인 추적 (기기에 저장) */
+const EXAM_READ_KEY = "mrreadexams";
+function getReadExamIds() {
+  try { return new Set(JSON.parse(localStorage.getItem(EXAM_READ_KEY) || "[]")); } catch (e) { return new Set(); }
+}
+function saveReadExamIds(set) {
+  try { localStorage.setItem(EXAM_READ_KEY, JSON.stringify([...set])); } catch (e) {}
+}
+function columnUnreadCount(notices, readIds) {
+  return (notices || []).filter((n) => !n.isDraft && !readIds.has(n.id)).length;
+}
+
+/* 오늘의 문제 안 본 것 추적: 칼럼 읽음과 동일하게 "확인(열어봄)" 기준 (readIds 공용) */
+function isExamViewed(exam, readIds) {
+  return readIds && readIds.has(exam.id);
+}
+function todayUnreadCount(exams, readIds) {
+  return (exams || []).filter(
+    (e) => (e.examType || "level") === "today" && isPublished(e) && !isExamViewed(e, readIds)
+  ).length;
+}
+
+function Exams(props) {
+  const [examType, setExamType] = useState(null); // null=선택화면, 'level' | 'today'
+  if (!examType) return <ExamChooser onPick={setExamType} todayUnread={todayUnreadCount((props.exams || []).filter(isPublished), props.readIds || new Set())} />;
+  const filtered = (props.exams || []).filter((e) => (e.examType || "level") === examType);
+  const onBackToChooser = () => setExamType(null);
+  if (props.role === "admin")
+    return <ExamsAdmin {...props} exams={filtered} examType={examType} onBackToChooser={onBackToChooser} />;
+  // 학생/비회원: 공개 시각이 지난 시험만 노출
+  const visible = filtered.filter(isPublished);
+  return <ExamsStudent {...props} exams={visible} examType={examType} onBackToChooser={onBackToChooser} />;
+}
+
+/* ---------- 관리자: 시험 목록 / 출제 / 채점 / (남의 시험) 응시 ---------- */
+function ExamsAdmin({ exams, isSuper, onAddExam, onEditExam, onDeleteExam, subs, onGradeSub, onAddSub, myId, student, loggedIn, guestSubs, examType, onBackToChooser, users, readIds, onView }) {
+  const [mode, setMode] = useState("list");
+  const [activeExam, setActiveExam] = useState(null);
+  const [taking, setTaking] = useState(null);
+
+  const openGrade = (exam) => {
+    setActiveExam(exam);
+    setMode("grade");
+  };
+  const openEdit = (exam) => {
+    setActiveExam(exam);
+    setMode("edit");
+  };
+  const removeExam = async (exam) => {
+    if (!confirm(`'${exam.title}' 시험을 삭제할까요? 되돌릴 수 없어요.`)) return;
+    await onDeleteExam(exam.id);
+  };
+
+  if (taking)
+    return (
+      <ExamTaker taking={taking} setTaking={setTaking} student={student} loggedIn={loggedIn} onAddSub={onAddSub} />
+    );
+
+  if (mode === "create")
+    return (
+      <ExamEditor
+        defaultType={examType}
+        onCancel={() => setMode("list")}
+        onSave={async (exam) => {
+          await onAddExam(exam);
+          setMode("list");
+        }}
+      />
+    );
+
+  if (mode === "edit" && activeExam)
+    return (
+      <ExamEditor
+        initial={activeExam}
+        onCancel={() => setMode("list")}
+        onSave={async (exam) => {
+          await onEditExam(activeExam.id, exam);
+          setMode("list");
+        }}
+      />
+    );
+
+  if (mode === "grade" && activeExam)
+    return (
+      <GradePanel
+        exam={activeExam}
+        subs={subs.filter((s) => s.examId === activeExam.id)}
+        guestSubs={(guestSubs || []).filter((g) => g.exam_id === activeExam.id)}
+        users={users}
+        onBack={() => setMode("list")}
+        onSaveGrade={async (updated) => {
+          await onGradeSub(updated);
+        }}
+      />
+    );
+
+  return (
+    <div className="mr-col">
+      <button className="mr-back" onClick={onBackToChooser}>
+        시험 종류
+      </button>
+      <div className="mr-list-top">
+        <span className="mr-list-title">{EXAM_TYPES[examType]}</span>
+        <button className="mr-btn" onClick={() => setMode("create")}>
+          + 새 시험 출제
+        </button>
+      </div>
+      {exams.length === 0 ? (
+        <Empty text="아직 출제된 시험이 없어요." />
+      ) : (
+        exams.map((ex, i) => {
+          const exSubs = subs.filter((s) => s.examId === ex.id);
+          const pending = exSubs.filter((s) => !s.graded).length;
+          const isMine = ex.authorId && myId && ex.authorId === myId;
+          const canEdit = isSuper || isMine || !ex.authorId;
+          const myTake = subs.find((s) => s.examId === ex.id && s.student === student && student);
+          const unread = examType === "today" && !isExamViewed(ex, readIds);
+          return (
+            <article className="mr-card" key={ex.id} style={{ animationDelay: `${i * 40}ms` }}>
+              <div className="mr-notice-head">
+                <h3>{unread && <span className="mr-unread-dot" />}{ex.title}</h3>
+                <span className="mr-date">{fmtDate(ex.createdAt)}</span>
+              </div>
+              {!isPublished(ex) && (
+                <div className="mr-sched-tag">⏰ 예약됨 · {new Date(ex.publishAt).getMonth() + 1}월 {new Date(ex.publishAt).getDate()}일 공개</div>
+              )}
+              <div className="mr-exam-meta">
+                <span>출제자 {ex.author || "관리자"}{isMine ? " (나)" : ""}</span>
+                <span>·</span>
+                <span>문항 {ex.questions.length}개</span>
+                <span>·</span>
+                <span>만점 {maxScore(ex)}점</span>
+                <span>·</span>
+                <span>제출 {exSubs.length}건</span>
+                {pending > 0 && <span className="mr-badge-red">채점 대기 {pending}</span>}
+              </div>
+              <div className="mr-row-between" style={{ marginTop: "14px" }}>
+                <div>
+                  {!isMine && (myTake ? (
+                    <span className="mr-result-pill">
+                      내 점수 {totalScore(ex, myTake)} / {maxScore(ex)}
+                    </span>
+                  ) : (
+                    <button className="mr-btn" onClick={() => { if (onView) onView(ex.id); setTaking(ex); }}>
+                      응시하기
+                    </button>
+                  ))}
+                </div>
+                <div className="mr-gap">
+                  {canEdit && (
+                    <button className="mr-btn-ghost" onClick={() => openEdit(ex)}>
+                      수정
+                    </button>
+                  )}
+                  {canEdit && (
+                    <button className="mr-btn-ghost danger" onClick={() => removeExam(ex)}>
+                      삭제
+                    </button>
+                  )}
+                  <button className="mr-btn-ghost" onClick={() => openGrade(ex)}>
+                    제출/채점 보기
+                  </button>
+                </div>
+              </div>
+            </article>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+/* ---------- 시험 출제/수정 에디터 ---------- */
+function ExamEditor({ initial, defaultType, onCancel, onSave }) {
+  function blankQ() {
+    return { id: uid(), type: "mc", text: "", image: "", latex: "", mathTree: null, body: [{ id: segId(), type: "text", v: "" }], points: 10, options: ["", ""], answer: 0, accept: "", explain: null };
+  }
+  const [title, setTitle] = useState(initial ? initial.title : "");
+  const [examType, setExamType] = useState(initial ? (initial.examType || "level") : (defaultType || "level"));
+  const toLocalInput = (ts) => {
+    const d = new Date(ts);
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  };
+  const [scheduled, setScheduled] = useState(initial ? !!initial.publishAt : false);
+  const [publishStr, setPublishStr] = useState(initial && initial.publishAt ? toLocalInput(initial.publishAt) : "");
+  const [questions, setQuestions] = useState(
+    initial && initial.questions && initial.questions.length
+      ? initial.questions.map((q) => {
+          const m = { options: ["", ""], accept: "", answer: 0, latex: "", mathTree: null, body: null, explain: null, ...q };
+          if (!m.body || !m.body.length) {
+            const segs = [];
+            if (m.text) segs.push({ id: segId(), type: "text", v: m.text });
+            if (m.latex) segs.push({ id: segId(), type: "math", latex: m.latex, tree: m.mathTree || null });
+            m.body = segs.length ? segs : null;
+          }
+          return m;
+        })
+      : [blankQ()]
+  );
+  const [expOpen, setExpOpen] = useState({}); // 해설 입력칸 펼침 상태 (문항별)
+  const update = (id, patch) => setQuestions((qs) => qs.map((q) => (q.id === id ? { ...q, ...patch } : q)));
+  const addQ = () => setQuestions((qs) => [...qs, blankQ()]);
+  const delQ = (id) => setQuestions((qs) => (qs.length > 1 ? qs.filter((q) => q.id !== id) : qs));
+
+  const setOption = (qid, idx, val) =>
+    setQuestions((qs) =>
+      qs.map((q) => (q.id === qid ? { ...q, options: q.options.map((o, i) => (i === idx ? val : o)) } : q))
+    );
+  const addOption = (qid) =>
+    setQuestions((qs) => qs.map((q) => (q.id === qid ? { ...q, options: [...q.options, ""] } : q)));
+  const delOption = (qid, idx) =>
+    setQuestions((qs) =>
+      qs.map((q) => {
+        if (q.id !== qid || q.options.length <= 2) return q;
+        const options = q.options.filter((_, i) => i !== idx);
+        let answer = q.answer;
+        if (idx < answer) answer -= 1; // 정답보다 앞 보기를 지우면 정답이 같은 보기를 계속 가리키게 당김
+        if (answer >= options.length) answer = options.length - 1;
+        if (answer < 0) answer = 0;
+        return { ...q, options, answer };
+      })
+    );
+
+  const save = () => {
+    if (!title.trim()) return alert("시험 제목을 입력하세요.");
+    const final = questions.map((q) => ({ ...q, points: Number(q.points) || 0 }));
+    for (const q of final) {
+      const bodyText = (q.body || []).map((s) => (s.type === "text" ? s.v : s.latex || "")).join("");
+      if (!q.image && !bodyText.trim())
+        return alert("각 문항에 문제 본문(텍스트·수식) 또는 사진을 넣어주세요.");
+      if (q.type === "mc" && q.options.some((o) => !o.trim()))
+        return alert("객관식 보기를 모두 입력하세요.");
+      if (q.type === "short" && !String(q.accept || "").trim())
+        return alert("주관식 문항의 정답을 입력하세요. (자동 채점에 사용됩니다)");
+    }
+    let publishAt = null;
+    if (scheduled) {
+      if (!publishStr) return alert("공개 날짜를 선택하세요.");
+      const [y, m, d] = publishStr.split("-").map(Number);
+      publishAt = new Date(y, m - 1, d, 0, 0, 0, 0).getTime(); // 그 날 자정(00:00)에 공개
+      if (isNaN(publishAt)) return alert("공개 날짜가 올바르지 않아요.");
+    }
+    onSave({ title: title.trim(), examType, publishAt, questions: final });
+  };
+
+  return (
+    <div className="mr-col">
+      <section className="mr-card mr-writer">
+        <div className="mr-card-tag">{initial ? "시험 수정" : "시험 출제"}</div>
+        <input
+          className="mr-input"
+          placeholder="시험 제목"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+        <div className="mr-cat-label">종류</div>
+        <div className="mr-cat-seg">
+          <button className={examType === "level" ? "on" : ""} onClick={() => setExamType("level")}>레벨테스트</button>
+          <button className={examType === "today" ? "on" : ""} onClick={() => setExamType("today")}>오늘의 문제</button>
+        </div>
+        <div className="mr-cat-label">공개 시점</div>
+        <div className="mr-cat-seg">
+          <button className={!scheduled ? "on" : ""} onClick={() => setScheduled(false)}>즉시 공개</button>
+          <button className={scheduled ? "on" : ""} onClick={() => setScheduled(true)}>예약 공개</button>
+        </div>
+        {scheduled && (
+          <>
+            <input
+              className="mr-input"
+              type="date"
+              value={publishStr}
+              onChange={(e) => setPublishStr(e.target.value)}
+            />
+            <p className="mr-sched-hint">선택한 날짜의 자정(00:00)부터 학생·비회원에게 공개돼요. 그 전까지는 관리자에게만 보여요.</p>
+          </>
+        )}
+      </section>
+
+      {questions.map((q, qi) => (
+        <section className="mr-card mr-qedit" key={q.id}>
+          <div className="mr-qedit-head">
+            <span className="mr-qnum">Q{qi + 1}</span>
+            <div className="mr-seg">
+              <button className={q.type === "mc" ? "on" : ""} onClick={() => update(q.id, { type: "mc" })}>
+                객관식
+              </button>
+              <button
+                className={q.type === "short" ? "on" : ""}
+                onClick={() => update(q.id, { type: "short" })}
+              >
+                주관식
+              </button>
+            </div>
+            <label className="mr-points">
+              배점
+              <input
+                type="number"
+                min={0}
+                value={q.points}
+                onChange={(e) => update(q.id, { points: e.target.value })}
+              />
+            </label>
+            <button className="mr-link-del" onClick={() => delQ(q.id)}>
+              삭제
+            </button>
+          </div>
+
+          <QuestionImage value={q.image} onChange={(img) => update(q.id, { image: img })} />
+          <div className="mr-cat-label">문제 본문 (텍스트 + 수식)</div>
+          <RichBody value={q.body} onChange={(body) => update(q.id, { body })} />
+
+          {q.type === "mc" ? (
+            <div className="mr-options">
+              {q.options.map((opt, oi) => (
+                <div className="mr-opt-row" key={oi}>
+                  <input
+                    type="radio"
+                    name={`ans-${q.id}`}
+                    checked={q.answer === oi}
+                    onChange={() => update(q.id, { answer: oi })}
+                    title="정답으로 지정"
+                  />
+                  <span className="mr-opt-label">{String.fromCharCode(9311 + oi + 1)}</span>
+                  <input
+                    className="mr-input mr-opt-input"
+                    placeholder={`보기 ${oi + 1}`}
+                    value={opt}
+                    onChange={(e) => setOption(q.id, oi, e.target.value)}
+                  />
+                  {q.options.length > 2 && (
+                    <button className="mr-x" onClick={() => delOption(q.id, oi)}>
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button className="mr-add-opt" onClick={() => addOption(q.id)}>
+                + 보기 추가
+              </button>
+              <div className="mr-hint">왼쪽 ○ 를 눌러 정답을 지정하세요.</div>
+            </div>
+          ) : (
+            <div className="mr-short-answer">
+              <input
+                className="mr-input"
+                placeholder="정답"
+                value={q.accept || ""}
+                onChange={(e) => update(q.id, { accept: e.target.value })}
+              />
+            </div>
+          )}
+          {expOpen[q.id] || hasExplain(q) ? (
+            <>
+              <div className="mr-cat-label">해설 (선택 — 채점 결과에서 보여요)</div>
+              <RichBody
+                value={q.explain}
+                onChange={(explain) => update(q.id, { explain })}
+                ph="해설을 입력하세요. 비워두면 학생에게 '출제자에게 문의하세요' 안내가 떠요."
+              />
+            </>
+          ) : (
+            <button type="button" className="mr-add-opt" style={{ marginTop: "12px" }} onClick={() => setExpOpen((o) => ({ ...o, [q.id]: true }))}>
+              ＋ 해설 달기 (선택)
+            </button>
+          )}
+        </section>
+      ))}
+
+      <div className="mr-row-between">
+        <button className="mr-btn-ghost" onClick={addQ}>
+          + 문항 추가
+        </button>
+        <div className="mr-gap">
+          <button className="mr-btn-text" onClick={onCancel}>
+            취소
+          </button>
+          <button className="mr-btn" onClick={save}>
+            {initial ? "수정 완료" : "시험 저장"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- 관리자: 채점 패널 ---------- */
+function GradePanel({ exam, subs, guestSubs, users, onBack, onSaveGrade }) {
+  const [openId, setOpenId] = useState(null);
+  const guests = guestSubs || [];
+
+  return (
+    <div className="mr-col">
+      <button className="mr-back" onClick={onBack}>
+        시험 목록
+      </button>
+      <section className="mr-card">
+        <div className="mr-notice-head">
+          <h3>{exam.title}</h3>
+          <span className="mr-date">만점 {maxScore(exam)}점</span>
+        </div>
+      </section>
+
+      <section className="mr-card">
+        <div className="mr-card-tag">문항별 통계</div>
+        <div className="mr-qrate-sub" style={{ marginBottom: "10px" }}>
+          회원 응시 {subs.length}명 · 비회원 참여 {guests.length}명
+        </div>
+        <div className="mr-qrate-list">
+          {exam.questions.map((q, qi) => {
+            const mTotal = subs.length;
+            const mCorrect = subs.filter((s) => isQCorrect(q, s)).length;
+            const mRate = mTotal ? Math.round((100 * mCorrect) / mTotal) : null;
+            const gTotal = guests.length;
+            const gWrong = guests.filter((s) => !isQCorrect(q, s)).length;
+            const gWrongRate = gTotal ? Math.round((100 * gWrong) / gTotal) : null;
+            return (
+              <div className="mr-qrate-row" key={q.id}>
+                <span className="mr-qnum-sm">Q{qi + 1}</span>
+                <span className="mr-qrate-val" style={{ color: rateColor(mRate) }}>회원정답률 {mTotal ? mRate + "%" : "—"}</span>
+                <span className="mr-qrate-wrong">비회원 오답률 {gTotal ? gWrongRate + "%" : "—"}</span>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {subs.length === 0 ? (
+        <Empty text="아직 제출된 답안이 없어요." />
+      ) : (
+        subs.map((s) => (
+          <SubmissionRow
+            key={s.id}
+            exam={exam}
+            sub={s}
+            users={users}
+            open={openId === s.id}
+            onToggle={() => setOpenId(openId === s.id ? null : s.id)}
+            onSaveGrade={onSaveGrade}
+          />
+        ))
+      )}
+    </div>
+  );
+}
+
+function SubmissionRow({ exam, sub, users, open, onToggle, onSaveGrade }) {
+  const [manual, setManual] = useState(sub.manualScores || {});
+  useEffect(() => setManual(sub.manualScores || {}), [sub]);
+
+  const save = () => {
+    const cleaned = {};
+    exam.questions
+      .filter((q) => q.type === "short")
+      .forEach((q) => {
+        const raw = manual[q.id];
+        if (raw === undefined || raw === null || raw === "") return;
+        cleaned[q.id] = Math.max(0, Math.min(Number(q.points) || 0, Number(raw) || 0));
+      });
+    onSaveGrade({ ...sub, manualScores: cleaned, graded: true });
+  };
+
+  const auto = autoScore(exam, sub.answers);
+  const total = totalScore(exam, { ...sub, manualScores: manual });
+
+  return (
+    <article className="mr-card mr-sub">
+      <div className="mr-sub-head" onClick={onToggle}>
+        <div className="mr-sub-name">
+          <span className="mr-avatar">{(sub.student || "?")[0]}</span>
+          <div>
+            <div className="mr-strong">{studentName(sub.student, users)}</div>
+            <div className="mr-date">{fmtDate(sub.submittedAt)}</div>
+          </div>
+        </div>
+        <div className="mr-sub-score">
+          {sub.graded ? (
+            <span className="mr-score-done">
+              {totalScore(exam, sub)} / {maxScore(exam)}
+            </span>
+          ) : (
+            <span className="mr-badge-red">채점 대기</span>
+          )}
+          <span className="mr-chevron">{open ? "▲" : "▼"}</span>
+        </div>
+      </div>
+
+      {open && (
+        <div className="mr-sub-body">
+          {exam.questions.map((q, qi) => {
+            const a = sub.answers[q.id];
+            if (q.type === "mc") {
+              const correct = a === q.answer;
+              return (
+                <div className="mr-grade-q" key={q.id}>
+                  <div className="mr-grade-qtext">
+                    <span className="mr-qnum-sm">Q{qi + 1}</span>
+                  </div>
+                  {q.image && <img className="mr-q-img sm" src={q.image} alt="문제" />}
+                  <QBody q={q} />
+                  <div className="mr-mc-review">
+                    {q.options.map((opt, oi) => (
+                      <div
+                        key={oi}
+                        className={
+                          "mr-mc-opt" +
+                          (oi === q.answer ? " is-answer" : "") +
+                          (oi === a && oi !== q.answer ? " is-wrong" : "")
+                        }
+                      >
+                        {String.fromCharCode(9311 + oi + 1)} {opt}
+                        {oi === q.answer && <span className="mr-tag-correct">정답</span>}
+                        {oi === a && <span className="mr-tag-chosen">선택</span>}
+                      </div>
+                    ))}
+                  </div>
+                  <div className={"mr-auto-mark " + (correct ? "ok" : "no")}>
+                    {correct ? `정답 +${q.points}점` : `오답 0점`} (자동)
+                  </div>
+                </div>
+              );
+            }
+            const scorrect = isShortCorrect(q, a);
+            const overridden = manual[q.id] !== undefined && manual[q.id] !== null && manual[q.id] !== "";
+            return (
+              <div className="mr-grade-q" key={q.id}>
+                <div className="mr-grade-qtext">
+                  <span className="mr-qnum-sm">Q{qi + 1}</span>
+                </div>
+                {q.image && <img className="mr-q-img sm" src={q.image} alt="문제" />}
+                <QBody q={q} />
+                <div className="mr-answer-box">
+                  <span className="mr-ans-label">학생 답안</span>
+                  {a ? a : <em className="mr-muted">미응답</em>}
+                </div>
+                <div className="mr-accept">
+                  정답: <strong>{q.accept || "(미설정)"}</strong>
+                </div>
+                <div className={"mr-auto-mark " + (scorrect ? "ok" : "no")}>
+                  {scorrect ? `정답 +${q.points}점` : `오답 0점`} (자동)
+                </div>
+                <label className="mr-manual">
+                  점수 보정
+                  <input
+                    type="number"
+                    min={0}
+                    max={q.points}
+                    placeholder={String(scorrect ? q.points : 0)}
+                    value={manual[q.id] ?? ""}
+                    onChange={(e) => setManual({ ...manual, [q.id]: e.target.value })}
+                  />
+                  <span className="mr-muted">/ {q.points}점</span>
+                  {overridden && (
+                    <button className="mr-reset" onClick={() => setManual({ ...manual, [q.id]: "" })}>
+                      자동으로
+                    </button>
+                  )}
+                </label>
+              </div>
+            );
+          })}
+          <div className="mr-row-between mr-grade-foot">
+            <span className="mr-muted">
+              자동 채점 {auto}점{total !== auto ? ` → 보정 후 ${total}점` : ""} ·{" "}
+              <strong className="mr-ink">최종 {total}점</strong> / {maxScore(exam)}점
+            </span>
+            <button className="mr-btn" onClick={save}>
+              보정 저장
+            </button>
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}
+
+/* ---------- 참여자: 시험 목록 / 응시 / 결과 ---------- */
+function ExamsStudent({ student, loggedIn, requireLogin, exams, subs, onAddSub, onGuestSubmit, examType, onBackToChooser, readIds, onView }) {
+  const [taking, setTaking] = useState(null);
+  const openExam = (ex) => { if (onView) onView(ex.id); setTaking(ex); };
+
+  if (taking)
+    return (
+      <ExamTaker taking={taking} setTaking={setTaking} student={student} loggedIn={loggedIn} onAddSub={onAddSub} onGuestSubmit={onGuestSubmit} />
+    );
+
+  return (
+    <div className="mr-col">
+      <button className="mr-back" onClick={onBackToChooser}>
+        시험 종류
+      </button>
+      <div className="mr-list-top">
+        <span className="mr-list-title">{EXAM_TYPES[examType]}</span>
+      </div>
+      {exams.length === 0 ? (
+        <Empty text="아직 응시할 시험이 없어요." />
+      ) : (
+        exams.map((ex, i) => {
+          const mine = subs.find((s) => s.examId === ex.id && s.student === student && student);
+          const unread = examType === "today" && !isExamViewed(ex, readIds);
+          return (
+            <article className="mr-card" key={ex.id} style={{ animationDelay: `${i * 40}ms` }}>
+              <div className="mr-notice-head">
+                <h3>{unread && <span className="mr-unread-dot" />}{ex.title}</h3>
+                <span className="mr-date">{fmtDate(ex.createdAt)}</span>
+              </div>
+              <div className="mr-exam-meta">
+                <span>출제자 {ex.author || "관리자"}</span>
+                <span>·</span>
+                <span>문항 {ex.questions.length}개</span>
+                <span>·</span>
+                <span>만점 {maxScore(ex)}점</span>
+              </div>
+              <div className="mr-row-end">
+                {mine ? (
+                  mine.graded ? (
+                    <span className="mr-result-pill">
+                      내 점수 {totalScore(ex, mine)} / {maxScore(ex)}
+                    </span>
+                  ) : (
+                    <span className="mr-badge-red">채점 중…</span>
+                  )
+                ) : (
+                  <button
+                    className="mr-btn"
+                    onClick={() => openExam(ex)}
+                  >
+                    응시하기
+                  </button>
+                )}
+              </div>
+            </article>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+function TakeExam({ exam, student, loggedIn, onGuestSubmit, onCancel, onSubmit }) {
+  const draftKey = "mrdraft:" + exam.id + ":" + ((student || "").trim() || "guest");
+  const [answers, setAnswers] = useState(() => {
+    try {
+      const raw = localStorage.getItem(draftKey);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+  const [result, setResult] = useState(null);
+  const rates = useExamRates(exam.id);
+  const [restored, setRestored] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const submitLock = React.useRef(false);
+  const set = (qid, val) => setAnswers((a) => ({ ...a, [qid]: val }));
+
+  // 마운트 시 임시저장된 답안이 있었는지 표시
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (raw && Object.keys(JSON.parse(raw) || {}).length > 0) setRestored(true);
+    } catch (e) {}
+  }, []);
+
+  // 답안이 바뀔 때마다 자동 임시저장 (제출 전까지)
+  useEffect(() => {
+    if (result) return;
+    try {
+      localStorage.setItem(draftKey, JSON.stringify(answers));
+    } catch (e) {}
+  }, [answers, result]);
+
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(draftKey);
+    } catch (e) {}
+  };
+
+  const memRate = (qid) => {
+    const st = rates[qid];
+    return st && st.total ? Math.round((100 * st.correct) / st.total) : null;
+  };
+  const guestRate = (qid) => {
+    const st = rates[qid];
+    return st && st.gtotal ? Math.round((100 * st.gcorrect) / st.gtotal) : null;
+  };
+
+  const submit = async () => {
+    if (submitLock.current) return; // 이미 제출 처리 중이면 무시 (중복 제출 방지)
+    const unanswered = exam.questions.filter((q) => {
+      const a = answers[q.id];
+      if (q.type === "mc") return a === undefined || a === null;
+      return !a || !String(a).trim();
+    }).length;
+    if (unanswered > 0 && !confirm(`아직 풀지 않은 문항이 ${unanswered}개 있어요. 그래도 제출할까요?`)) return;
+
+    submitLock.current = true;
+    setSubmitting(true);
+
+    const sub = {
+      id: uid(),
+      examId: exam.id,
+      student: (student || "").trim() || "비회원",
+      answers,
+      manualScores: {},
+      graded: true,
+      submittedAt: Date.now(),
+    };
+    if (loggedIn && student.trim()) {
+      const res = await onSubmit(sub); // 회원: 기록 저장 (목록 이동은 리뷰 화면에서)
+      if (res && res.error) {
+        alert("제출 저장에 실패했어요: " + res.error + "\n네트워크를 확인하고 다시 시도해주세요.");
+        submitLock.current = false;
+        setSubmitting(false);
+        return;
+      }
+    } else {
+      if (onGuestSubmit) onGuestSubmit(exam.id, answers); // 비회원: 익명 집계만
+    }
+    clearDraft(); // 제출 완료 → 임시저장 삭제
+    setResult(sub); // 회원·비회원 모두 채점 리뷰 화면 표시
+  };
+
+  if (result) {
+    const sub = result;
+    const score = totalScore(exam, sub);
+    const max = maxScore(exam);
+    const ratio = max ? score / max : 0;
+    const tone = ratio >= 0.8 ? "good" : ratio >= 0.5 ? "mid" : "low";
+    return (
+      <div className="mr-col">
+        <section className="mr-card" style={{ textAlign: "center", padding: "28px 20px" }}>
+          <div className="mr-card-tag" style={{ marginBottom: "10px" }}>{exam.title}</div>
+          <div className={"mr-record-score " + tone} style={{ fontSize: "40px" }}>
+            {score}
+            <span className="mr-record-max"> / {max}</span>
+          </div>
+          {!loggedIn && (
+            <p className="mr-guest-note" style={{ marginTop: "16px" }}>
+              비회원은 시험 기록이 저장되지 않습니다
+            </p>
+          )}
+        </section>
+
+        <div className="mr-list-top">
+          <span className="mr-list-title">채점 결과</span>
+        </div>
+
+        <ReviewList exam={exam} sub={sub} />
+
+        <div className="mr-row-end">
+          <button className="mr-btn" onClick={onCancel}>목록으로</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mr-col">
+      <button className="mr-back" onClick={onCancel}>
+        시험 목록
+      </button>
+      <section className="mr-card">
+        <div className="mr-notice-head">
+          <h3>{exam.title}</h3>
+          <span className="mr-date">만점 {maxScore(exam)}점</span>
+        </div>
+        <div className="mr-exam-meta">
+          <span>출제자 {exam.author || "관리자"}</span>
+        </div>
+      </section>
+
+      {restored && !result && (
+        <div className="mr-resume-note">이전에 풀던 답안을 불러왔어요. 이어서 풀 수 있어요.</div>
+      )}
+
+      {!loggedIn && (
+        <div className="mr-guest-note">비회원은 시험 기록이 저장되지 않습니다</div>
+      )}
+
+      {exam.questions.map((q, qi) => (
+        <section className="mr-card mr-take-q" key={q.id}>
+          <div className="mr-grade-qtext">
+            <span className="mr-qnum">Q{qi + 1}</span>
+            <span className="mr-pts-tag">{q.points}점</span>
+            <span className="mr-rate-tag" style={{ color: rateColor(memRate(q.id)) }}>회원정답률 {memRate(q.id) === null ? "—" : memRate(q.id) + "%"}</span>
+            <span className="mr-rate-tag" style={{ color: rateColor(guestRate(q.id)) }}>비회원정답률 {guestRate(q.id) === null ? "—" : guestRate(q.id) + "%"}</span>
+          </div>
+          {q.image && <img className="mr-q-img" src={q.image} alt={"문제 " + (qi + 1)} />}
+          <QBody q={q} />
+          {q.type === "mc" ? (
+            <div className="mr-take-options">
+              {q.options.map((opt, oi) => (
+                <label
+                  key={oi}
+                  className={"mr-take-opt" + (answers[q.id] === oi ? " sel" : "")}
+                >
+                  <input
+                    type="radio"
+                    name={`take-${q.id}`}
+                    checked={answers[q.id] === oi}
+                    onChange={() => set(q.id, oi)}
+                  />
+                  <span className="mr-opt-label">{String.fromCharCode(9311 + oi + 1)}</span>
+                  {opt}
+                </label>
+              ))}
+            </div>
+          ) : (
+            <textarea
+              className="mr-textarea"
+              rows={3}
+              placeholder="답안을 작성하세요"
+              value={answers[q.id] || ""}
+              onChange={(e) => set(q.id, e.target.value)}
+            />
+          )}
+        </section>
+      ))}
+
+      <div className="mr-row-end">
+        <button className="mr-btn" onClick={submit} disabled={submitting}>
+          {submitting ? "제출 중…" : "제출하기"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- 공통 ---------- */
+function Empty({ text }) {
+  return <div className="mr-empty">{text}</div>;
+}
+
+/* ---------- 스피드 연산 게임 (무한 모드 · 콤보 지수 배율) ---------- */
+/* 랭킹 카드 (랭킹 화면 + 게임 결과 화면 공용) */
+function RankingCard({ ranking, myRankBar, canRank, nickname, showGuestNote }) {
+  return (
+    <section className="mr-card">
+      <div className="mr-card-tag">🏆 랭킹 TOP 50</div>
+      {myRankBar}
+      {showGuestNote && (
+        <div className="mr-rank-empty">로그인하면 랭킹에 참여할 수 있어요.</div>
+      )}
+      {ranking === null ? (
+        <div className="mr-rank-empty">불러오는 중…</div>
+      ) : ranking.length === 0 ? (
+        <div className="mr-rank-empty">아직 랭킹이 없어요. 첫 주인공이 되어보세요!</div>
+      ) : (
+        <ol className="mr-rank-list">
+          {ranking.map((r, i) => (
+            <li key={i} className={"mr-rank-row" + (canRank && r.nickname === nickname ? " me" : "")}>
+              <span className="mr-rank-no">{i + 1}</span>
+              <span className="mr-rank-nick">{r.nickname}</span>
+              <span className="mr-rank-score">{Number(r.best_score).toLocaleString()}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+function SpeedGame({ onBack, auth, onGoAccount, onLogin }) {
+  const loggedIn = !!auth;
+  const nickname = auth && auth.kakaoId ? auth.kakaoId.trim() : "";
+  const canRank = loggedIn && !!nickname;
+  const START = 40;
+  const BONUS = 2; // 정답 +2초
+  const PENALTY = 5; // 오답 -5초 (4지선다 찍기 기댓값: 0.25*2 - 0.75*5 = -3.25초, 음수 유지)
+  const rand = (lo, hi) => Math.floor(Math.random() * (hi - lo + 1)) + lo;
+
+  // 우선순위 계산 (×,÷ 먼저). 나눗셈은 떨어지게 생성하므로 정수 보장.
+  const evalExpr = (nums, ops) => {
+    const n = nums.slice(), o = ops.slice();
+    for (let i = 0; i < o.length; ) {
+      if (o[i] === "×" || o[i] === "÷") {
+        const v = o[i] === "×" ? n[i] * n[i + 1] : n[i] / n[i + 1];
+        n.splice(i, 2, v); o.splice(i, 1);
+      } else i++;
+    }
+    let r = n[0];
+    for (let i = 0; i < o.length; i++) {
+      if (o[i] === "+") r += n[i + 1];
+      else if (o[i] === "−" || o[i] === "-") r -= n[i + 1]; // 뺄셈 기호를 명시적으로 처리 (연산자 추가에 안전)
+    }
+    return r;
+  };
+  // 자릿수 사다리 (○ = 사칙연산 아무거나). 콤보 오를수록 단계 상승.
+  const STAGES = [
+    [1, 1],       // 한자리 ○ 한자리
+    [1, 2],       // 한자리 ○ 두자리
+    [2, 2],       // 두자리 ○ 두자리
+    [2, 1, 1],    // 두자리 ○ 한자리 ○ 한자리
+    [2, 2, 1],    // 두자리 ○ 두자리 ○ 한자리
+    [2, 3],       // 두자리 ○ 세자리
+    [2, 2, 2],    // 두자리 ○ 두자리 ○ 두자리
+  ];
+  const numOfDigits = (d) => (d <= 1 ? rand(2, 9) : rand(Math.pow(10, d - 1), Math.pow(10, d) - 1));
+
+  const makeQ = (combo) => {
+    // 단계별 등장 콤보 기준 (뒤 어려운 단계는 한참 뒤에)
+    const THRESH = [0, 9, 18, 27, 36, 45, 54];
+    let stage = 0;
+    for (let i = 0; i < THRESH.length; i++) if (combo >= THRESH[i]) stage = i;
+    const digits = STAGES[stage];
+
+    let nums, ops, ans, guard = 0;
+    do {
+      guard++;
+      nums = [numOfDigits(digits[0])];
+      ops = [];
+      for (let i = 1; i < digits.length; i++) {
+        let pool = stage >= 3 ? ["+", "−", "×", "÷"] : ["+", "−", "×"]; // 나눗셈은 후반(단계4~)부터
+        if (ops[ops.length - 1] === "÷") pool = pool.filter((x) => x !== "÷"); // ÷ 연속이면 앞 나눗셈의 정수 보장이 깨져 재시도만 낭비됨
+        const op = pool[rand(0, pool.length - 1)];
+        ops.push(op);
+        if (op === "÷") {
+          // 직전 항을 (이번 항 × 몫)으로 다시 맞춰 정수 나눗셈 보장
+          const divisor = numOfDigits(digits[i]);
+          const quotient = rand(2, 9);
+          nums[i - 1] = divisor * quotient;
+          nums.push(divisor);
+        } else {
+          nums.push(numOfDigits(digits[i]));
+        }
+      }
+      ans = evalExpr(nums, ops);
+    } while ((ans < 0 || !Number.isInteger(ans)) && guard < 40);
+    if (ans < 0 || !Number.isInteger(ans)) { nums = [numOfDigits(digits[0]), numOfDigits(digits[digits.length - 1])]; ops = ["+"]; ans = nums[0] + nums[1]; }
+
+    let text = String(nums[0]);
+    for (let i = 0; i < ops.length; i++) text += " " + ops[i] + " " + nums[i + 1];
+
+    // 보기: 정답 + 정답 근처 오답 3개
+    const opts = new Set([ans]);
+    let g2 = 0;
+    while (opts.size < 4 && g2 < 80) {
+      g2++;
+      const spread = Math.max(2, Math.round(Math.abs(ans) * 0.08) + 1);
+      let cand = ans + rand(-spread, spread);
+      if (cand === ans || cand < 0) cand = ans + (rand(0, 1) ? 1 : -1) * rand(1, spread + 2);
+      if (cand !== ans && cand >= 0) opts.add(cand);
+    }
+    const options = Array.from(opts).sort(() => Math.random() - 0.5);
+    return { text, ans, options };
+  };
+
+  const [phase, setPhase] = useState("ready"); // ready | playing | over | rank
+  useEffect(() => {
+    try { window.scrollTo(0, 0); } catch (e) {}
+  }, [phase]);
+  const [q, setQ] = useState(null);
+  const [score, setScore] = useState(0);
+  const [combo, setCombo] = useState(0);
+  const [comboMax, setComboMax] = useState(0);
+  const [correctCount, setCorrectCount] = useState(0);
+  const startRef = React.useRef(0);
+  const [timeLeft, setTimeLeft] = useState(START);
+  const [flash, setFlash] = useState(""); // "" | "good" | "bad" | "crit"
+  const [best, setBest] = useState(0);
+  const [picked, setPicked] = useState(null); // 방금 누른 보기(잠깐 표시)
+  const [ranking, setRanking] = useState(null); // 랭킹 목록 (null=로딩전/미로드)
+  const [myRank, setMyRank] = useState(null); // {my_rank, best_score, total} | null
+  const [showGuestPopup, setShowGuestPopup] = useState(false);
+  const guestWarnHidden = () => {
+    try {
+      const t = Number(localStorage.getItem("mrspeedguestwarn") || 0);
+      return Date.now() - t < 24 * 60 * 60 * 1000; // 24시간 이내면 숨김
+    } catch (e) { return false; }
+  };
+  const dontShowGuestWarn = () => {
+    try { localStorage.setItem("mrspeedguestwarn", String(Date.now())); } catch (e) {}
+    setShowGuestPopup(false);
+    doStart();
+  };
+  const loadRanking = async () => {
+    setRanking(null);
+    setMyRank(null);
+    try {
+      const { data } = await sb.rpc("speed_ranking", { p_limit: 50 });
+      setRanking(data || []);
+    } catch (e) { setRanking([]); }
+    if (canRank) {
+      try {
+        const { data } = await sb.rpc("my_speed_rank");
+        if (data && data.length) setMyRank(data[0]);
+      } catch (e) {}
+    }
+  };
+  const openRanking = () => { setPhase("rank"); loadRanking(); };
+
+  useEffect(() => {
+    try { setBest(Number(localStorage.getItem("mrspeedbest") || 0)); } catch (e) {}
+  }, []);
+
+  // 타이머
+  useEffect(() => {
+    if (phase !== "playing") return;
+    const id = setInterval(() => {
+      setTimeLeft((t) => Math.max(0, +(t - 0.1).toFixed(1)));
+    }, 100);
+    return () => clearInterval(id);
+  }, [phase]);
+
+  // 시간 종료 감지
+  useEffect(() => {
+    if (phase === "playing" && timeLeft <= 0) {
+      setPhase("over");
+      setBest((b) => {
+        const nb = Math.max(b, score);
+        try { localStorage.setItem("mrspeedbest", String(nb)); } catch (e) {}
+        return nb;
+      });
+      // 랭킹 등록(닉네임 있는 회원만) 후 랭킹 불러오기
+      (async () => {
+        try {
+          if (canRank && score > 0) {
+            const seconds = startRef.current ? (Date.now() - startRef.current) / 1000 : 0;
+            await sb.rpc("submit_speed_score", {
+              p_score: score,
+              p_correct: correctCount,
+              p_combo: comboMax,
+              p_seconds: Math.round(seconds),
+            });
+          }
+        } catch (e) {}
+        if (loggedIn) await loadRanking();
+      })();
+    }
+  }, [timeLeft, phase, score]);
+
+  const doStart = () => {
+    setScore(0); setCombo(0); setComboMax(0); setCorrectCount(0); setTimeLeft(START);
+    startRef.current = Date.now();
+    setPicked(null); setFlash(""); setRanking(null); setQ(makeQ(0)); setPhase("playing");
+  };
+  const start = () => {
+    if (!canRank && !guestWarnHidden()) { setShowGuestPopup(true); return; } // 비회원/닉네임無 → 경고 팝업
+    doStart();
+  };
+
+  const flashFor = (kind) => {
+    setFlash(kind);
+    setTimeout(() => setFlash(""), 280);
+  };
+
+  const choose = (val) => {
+    if (phase !== "playing" || !q || picked !== null) return;
+    const correct = val === q.ans;
+    setPicked(val);
+    if (correct) {
+      const nc = combo + 1;
+      const mult = Math.pow(1.15, nc);
+      setScore((s) => s + Math.round(10 * mult));
+      setCombo(nc);
+      setComboMax((x) => Math.max(x, nc));
+      setCorrectCount((x) => x + 1);
+      setTimeLeft((t) => +(t + BONUS).toFixed(1));
+      flashFor(nc % 5 === 0 ? "crit" : "good");
+    } else {
+      setCombo(0);
+      setTimeLeft((t) => Math.max(0, +(t - PENALTY).toFixed(1)));
+      flashFor("bad");
+    }
+    setTimeout(() => {
+      setPicked(null);
+      setQ(makeQ(correct ? combo + 1 : 0));
+    }, 130);
+  };
+
+  const mult = Math.pow(1.15, combo);
+  const timePct = Math.max(0, Math.min(100, (timeLeft / START) * 100));
+
+  const guestPopup = showGuestPopup ? (
+    <div className="mr-modal-overlay" onClick={() => setShowGuestPopup(false)}>
+      <div className="mr-modal mr-warnpop" onClick={(e) => e.stopPropagation()}>
+        <div className="mr-warnpop-icon">⚠️</div>
+        <h3 className="mr-warnpop-title">
+          {loggedIn ? "닉네임을 등록해주세요" : "비회원은 랭킹에 못 올라가요"}
+        </h3>
+        <p className="mr-warnpop-sub">
+          {loggedIn
+            ? "채팅방 닉네임을 저장해야 기록이 랭킹에 등록돼요."
+            : "로그인하고 채팅방 닉네임을 저장하면 최고점이 랭킹에 올라가요."}
+        </p>
+        <div className="mr-warnpop-btns">
+          {loggedIn ? (
+            <button className="mr-btn mr-warnpop-primary" onClick={() => { setShowGuestPopup(false); onGoAccount(); }}>닉네임 등록하러 가기</button>
+          ) : (
+            <button className="mr-btn mr-warnpop-primary" onClick={() => { setShowGuestPopup(false); onLogin(); }}>로그인하기</button>
+          )}
+          <button className="mr-warnpop-ghost" onClick={() => { setShowGuestPopup(false); doStart(); }}>그냥 시작하기</button>
+          <button className="mr-warnpop-mute" onClick={dontShowGuestWarn}>1일 동안 다시 보지 않기</button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  const myRankBar = canRank && myRank ? (
+    <div className="mr-myrank">
+      <span className="mr-myrank-label">내 순위</span>
+      <span className="mr-myrank-rank">{myRank.my_rank}등</span>
+      <span className="mr-myrank-sep">·</span>
+      <span className="mr-myrank-score">{Number(myRank.best_score).toLocaleString()}점</span>
+      <span className="mr-myrank-total">/ {myRank.total}명</span>
+    </div>
+  ) : null;
+
+  if (phase === "rank")
+    return (
+      <div className="mr-col">
+        <button className="mr-back" onClick={() => setPhase("ready")}>게임으로</button>
+        <RankingCard ranking={ranking} myRankBar={myRankBar} canRank={canRank} nickname={nickname} showGuestNote={!loggedIn} />
+        <button className="mr-btn mr-game-start" onClick={start}>게임 시작</button>
+        {guestPopup}
+      </div>
+    );
+
+  if (phase === "ready")
+    return (
+      <div className="mr-col">
+        <section className="mr-card mr-game-intro">
+          <div className="mr-game-emoji">⚡</div>
+          <h2 className="mr-game-title">스피드 연산</h2>
+          <p className="mr-game-rules">
+            무한 모드예요. 시작 시간은 {START}초.<br />
+            맞히면 <b className="mr-c-good">+{BONUS}초</b>, 틀리면 <b className="mr-c-bad">−{PENALTY}초</b>.<br />
+            연속으로 맞힐수록 콤보 배율이 <b>지수함수처럼</b> 폭발해요 🔥
+          </p>
+          <div className="mr-game-best">최고 점수 {best.toLocaleString()}</div>
+          <button className="mr-btn mr-game-start" onClick={start}>시작하기</button>
+          <button className="mr-game-rankbtn" onClick={openRanking}>🏆 랭킹 보기</button>
+        </section>
+        {guestPopup}
+      </div>
+    );
+
+  if (phase === "over")
+    return (
+      <div className="mr-col">
+        <section className="mr-card mr-game-intro">
+          <div className="mr-game-emoji">🏁</div>
+          <h2 className="mr-game-title">게임 끝!</h2>
+          <div className="mr-game-final">{score.toLocaleString()}<span>점</span></div>
+          <div className="mr-game-stats2">
+            <span>최고 콤보 {comboMax}</span>
+            <span>·</span>
+            <span>최고 점수 {best.toLocaleString()}</span>
+          </div>
+          {score >= best && score > 0 && <div className="mr-game-new">🎉 신기록 달성!</div>}
+          <button className="mr-btn mr-game-start" onClick={start}>다시 도전</button>
+        </section>
+
+        {loggedIn && !nickname && (
+          <section className="mr-card mr-rank-warn">
+            <p className="mr-withdraw-warn" style={{ margin: "0 0 12px" }}>채팅방 닉네임을 저장해야 랭킹에 등록돼요.</p>
+            <button className="mr-btn" onClick={onGoAccount}>닉네임 저장하러 가기</button>
+          </section>
+        )}
+
+        {loggedIn && (
+          <RankingCard ranking={ranking} myRankBar={myRankBar} canRank={canRank} nickname={nickname} showGuestNote={false} />
+        )}
+        {guestPopup}
+      </div>
+    );
+
+  // playing
+  return (
+    <div className={"mr-col mr-game-play" + (flash ? " fl-" + flash : "")}>
+      <div className="mr-game-top">
+        <span className="mr-game-score">{score.toLocaleString()}</span>
+        <span className={"mr-game-combo" + (combo >= 5 ? " hot" : "")}>
+          {combo > 0 ? "x" + combo + " · ×" + mult.toFixed(1) : "콤보 없음"}
+        </span>
+      </div>
+
+      <div className="mr-game-timebar">
+        <div className="mr-game-timefill" style={{ width: timePct + "%" }} />
+        <span className="mr-game-timetext">{timeLeft.toFixed(1)}s</span>
+      </div>
+
+      {flash === "crit" && <div className="mr-game-crit">🔥 크리티컬! ×{mult.toFixed(1)}</div>}
+
+      <section className="mr-card mr-game-qcard">
+        <div className="mr-game-q">{q ? q.text : ""}</div>
+      </section>
+
+      <div className="mr-game-opts">
+        {q && q.options.map((opt) => {
+          let cls = "mr-game-opt";
+          if (picked !== null) {
+            if (opt === q.ans) cls += " correct";
+            else if (opt === picked) cls += " wrong";
+          }
+          return (
+            <button key={opt} className={cls} onClick={() => choose(opt)} disabled={picked !== null}>
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+
+      <button className="mr-btn-text" onClick={() => setTimeLeft(0)}>그만하기</button>
+    </div>
+  );
+}
+
+/* 문항별 정답률 불러오기 (응시 화면·채점 리뷰 공용) */
+function useExamRates(examId) {
+  const [rates, setRates] = useState({});
+  useEffect(() => {
+    let active = true;
+    sb.rpc("exam_question_stats", { p_exam_id: examId })
+      .then(({ data }) => {
+        if (!active || !data) return;
+        const m = {};
+        data.forEach((r) => { m[r.qid] = { total: r.total, correct: r.correct, gtotal: r.gtotal, gcorrect: r.gcorrect }; });
+        setRates(m);
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [examId]);
+  return rates;
+}
+
+/* 해설이 실제로 작성돼 있는지 (빈 조각뿐이면 없음으로 처리) */
+function hasExplain(q) {
+  const ex = q && q.explain;
+  if (!ex || !ex.length) return false;
+  return ex.some((s) => (s.type === "text" ? String(s.v || "").trim() : String(s.latex || "").trim()));
+}
+
+/* 채점 리뷰의 해설 블록: 있으면 버튼으로 펼치고, 없으면 출제자 문의 안내 */
+function ExplainBlock({ q, exam }) {
+  const [open, setOpen] = useState(false);
+  if (!hasExplain(q))
+    return (
+      <div className="mr-explain-none">
+        이 문제는 아직 해설이 없어요. 해설이 필요하면 출제자 <b>{exam.author || "관리자"}</b>님께 문의해 주세요.
+      </div>
+    );
+  if (!open)
+    return (
+      <button type="button" className="mr-explain-btn" onClick={() => setOpen(true)}>
+        💡 해설 보기
+      </button>
+    );
+  return (
+    <div className="mr-explain">
+      <div className="mr-explain-tag">💡 해설</div>
+      <QuestionBody body={q.explain} />
+    </div>
+  );
+}
+
+// 채점 리뷰(문항별 정오·내 답·정답·정답률·해설) — 응시 직후 / 내 시험 기록에서 공용 사용
+function ReviewList({ exam, sub }) {
+  const rates = useExamRates(exam.id);
+  const memRate = (qid) => {
+    const st = rates[qid];
+    return st && st.total ? Math.round((100 * st.correct) / st.total) : null;
+  };
+  const guestRate = (qid) => {
+    const st = rates[qid];
+    return st && st.gtotal ? Math.round((100 * st.gcorrect) / st.gtotal) : null;
+  };
+  return (
+    <>
+      {exam.questions.map((q, qi) => {
+        const correct = isQCorrect(q, sub);
+        const mine = sub.answers[q.id];
+        return (
+          <section className={"mr-card mr-take-q" + (correct ? "" : " wrong")} key={q.id}>
+            <div className="mr-grade-qtext">
+              <span className="mr-qnum">Q{qi + 1}</span>
+              <span className="mr-pts-tag">{q.points}점</span>
+              <span className={"mr-ox " + (correct ? "o" : "x")}>{correct ? "O 정답" : "X 오답"}</span>
+              <span className="mr-rate-tag" style={{ color: rateColor(memRate(q.id)) }}>회원정답률 {memRate(q.id) === null ? "—" : memRate(q.id) + "%"}</span>
+              <span className="mr-rate-tag" style={{ color: rateColor(guestRate(q.id)) }}>비회원정답률 {guestRate(q.id) === null ? "—" : guestRate(q.id) + "%"}</span>
+            </div>
+            {q.image && <img className="mr-q-img" src={q.image} alt={"문제 " + (qi + 1)} />}
+            <QBody q={q} />
+            {q.type === "mc" ? (
+              <div className="mr-take-options">
+                {q.options.map((opt, oi) => {
+                  const isAns = oi === q.answer;
+                  const isMine = mine === oi;
+                  let cls = "mr-take-opt review";
+                  if (isAns) cls += " ans";
+                  if (isMine && !isAns) cls += " mychoice";
+                  return (
+                    <div key={oi} className={cls}>
+                      <span className="mr-opt-label">{String.fromCharCode(9311 + oi + 1)}</span>
+                      {opt}
+                      {isAns && <span className="mr-opt-flag ans">정답</span>}
+                      {isMine && !isAns && <span className="mr-opt-flag mine">내 답</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="mr-short-review">
+                <div className="mr-sr-row">
+                  <span className="mr-sr-k">내 답</span>
+                  <span className={"mr-sr-v " + (correct ? "ok" : "no")}>{(mine && String(mine).trim()) || "(미작성)"}</span>
+                </div>
+                <div className="mr-sr-row">
+                  <span className="mr-sr-k">정답</span>
+                  <span className="mr-sr-v ans">{q.accept || "—"}</span>
+                </div>
+              </div>
+            )}
+            <ExplainBlock q={q} exam={exam} />
+          </section>
+        );
+      })}
+    </>
+  );
+}
+
+function PrivacyBody() {
+  return (
+    <section className="mr-card">
+      <h1 className="mr-pp-title">개인정보 처리방침</h1>
+      <p className="mr-pp-intro">
+        <strong>수학질문방</strong>(이하 '서비스')은(는) 「개인정보 보호법」 제30조에 따라 정보주체의 개인정보를 보호하고 이와 관련한 고충을 신속하고 원활하게 처리할 수 있도록 하기 위하여 다음과 같이 개인정보 처리방침을 수립·공개합니다.
+      </p>
+
+      <h2 className="mr-pp-h2">1. 개인정보의 처리 목적</h2>
+      <p>서비스는 다음의 목적을 위하여 개인정보를 처리하며, 목적 이외의 용도로는 이용하지 않습니다. 이용 목적이 변경되는 경우에는 별도의 동의를 받는 등 필요한 조치를 이행합니다.</p>
+      <ul className="mr-pp-ul">
+        <li><strong>회원 가입 및 관리:</strong> 가입 의사 확인, 로그인 및 본인 식별, 부정이용 방지, 고지사항 전달</li>
+        <li><strong>서비스 제공:</strong> 수학 시험(레벨테스트/오늘의 문제) 응시, 답안 채점 및 점수 기록 관리, 칼럼 게시글 작성·관리, 관리자 기능(감사 로그) 수행</li>
+      </ul>
+
+      <h2 className="mr-pp-h2">2. 처리하는 개인정보의 항목</h2>
+      <table className="mr-pp-table">
+        <thead>
+          <tr><th>구분</th><th>수집 항목</th><th>목적 및 보유 기간</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>회원 필수</strong></td><td>아이디, 비밀번호(암호화하여 저장)</td><td>회원 식별 및 로그인 / 회원 탈퇴 시까지</td></tr>
+          <tr><td><strong>회원 선택</strong></td><td>카카오톡 방 닉네임</td><td>출제자·칼럼 작성자 이름 표시 / 회원 탈퇴 시까지</td></tr>
+          <tr><td><strong>이용 기록</strong></td><td>시험 응시 기록, 제출 답안, 채점 점수, 감사 로그</td><td>시험 결과 제공 및 보안 / 5년 후 파기</td></tr>
+        </tbody>
+      </table>
+      <p>※ 비밀번호는 원문을 보관하지 않으며, 복호화가 불가능한 방식으로 암호화하여 저장합니다.</p>
+
+      <div className="mr-pp-note">
+        <div className="mr-pp-note-tag">비회원 IP 주소 처리 안내</div>
+        <p>비회원의 중복 제출 및 정답률 조작을 방지하기 위해 시스템적으로 방문자의 IP 주소를 참조합니다. 다만 수집 즉시 암호화 해시 함수(MD5)로 변환해 중복 체크 용도로만 사용하며, 원본 IP 주소는 데이터베이스에 저장되지 않아 개인을 식별할 수 없습니다.</p>
+      </div>
+
+      <h2 className="mr-pp-h2">3. 개인정보의 보유 및 이용 기간</h2>
+      <p>회원 정보는 원칙적으로 회원 탈퇴 시 지체 없이 파기합니다. 다만 시험 응시·채점 등 이용 기록은 서비스 운영 및 분쟁 대응을 위해 수집일로부터 5년간 보관 후 파기합니다.</p>
+
+      <h2 className="mr-pp-h2">4. 만 14세 미만 아동의 개인정보</h2>
+      <p>본 서비스는 만 14세 미만 아동을 대상으로 하지 않으며, 만 14세 미만 아동의 가입을 권장하지 않습니다. 만 14세 미만임이 확인되고 법정대리인의 동의가 없는 경우, 해당 아동의 개인정보를 삭제할 수 있습니다.</p>
+
+      <h2 className="mr-pp-h2">5. 개인정보의 처리위탁 및 국외 이전</h2>
+      <p>서비스는 안정적인 데이터 관리를 위해 아래와 같이 개인정보 처리를 위탁하며, 그 과정에서 데이터가 국외 서버에 저장·이전됩니다.</p>
+      <table className="mr-pp-table">
+        <thead>
+          <tr><th>수탁업체</th><th>위탁 업무 / 이전 국가</th><th>이전 일시·방법 / 보유 기간</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>Supabase, Inc.</strong> (미국)</td><td>클라우드 데이터베이스 인프라 제공 및 데이터 보관</td><td>서비스 이용 시 네트워크를 통해 수시 전송 / 회원 탈퇴 또는 위탁 계약 종료 시까지</td></tr>
+        </tbody>
+      </table>
+
+      <h2 className="mr-pp-h2">6. 정보주체의 권리·의무 및 행사 방법</h2>
+      <p>이용자(법정대리인 포함)는 언제든지 본인의 개인정보에 대해 아래 권리를 행사할 수 있습니다.</p>
+      <ul className="mr-pp-ul">
+        <li>개인정보 열람 요구</li>
+        <li>오류 등이 있을 경우 정정 요구</li>
+        <li>삭제 요구</li>
+        <li>처리정지 요구</li>
+      </ul>
+      <p>권리 행사는 아래 개인정보 보호책임자에게 카카오톡으로 요청할 수 있으며, 서비스는 지체 없이 조치합니다.</p>
+
+      <h2 className="mr-pp-h2">7. 개인정보의 안전성 확보 조치</h2>
+      <ul className="mr-pp-ul">
+        <li>비밀번호 암호화 저장 및 전송 구간 암호화(HTTPS)</li>
+        <li>접근 권한 관리: 데이터 조회·수정 권한을 관리자에 한해 부여(행 수준 보안, RLS)</li>
+        <li>비회원 IP는 해시 처리하여 원문 미보관</li>
+      </ul>
+
+      <h2 className="mr-pp-h2">8. 개인정보의 파기 절차 및 방법</h2>
+      <ul className="mr-pp-ul">
+        <li><strong>절차:</strong> 파기 사유가 발생한 개인정보(회원탈퇴 등)를 선정하고, 관리자의 승인을 받아 안전하게 파기합니다.</li>
+        <li><strong>방법:</strong> 데이터베이스에 저장된 레코드는 복구·재생할 수 없는 기술적 방법(DB 삭제 명령)으로 완전히 삭제합니다.</li>
+      </ul>
+
+      <h2 className="mr-pp-h2">9. 개인정보 보호책임자</h2>
+      <ul className="mr-pp-ul">
+        <li><strong>개인정보 보호책임자:</strong> 의비간</li>
+        <li><strong>연락처(카카오톡):</strong> <a href="https://open.kakao.com/o/sOTbsdyi" target="_blank" rel="noopener noreferrer">수학질문방 카카오톡 문의하기</a></li>
+      </ul>
+
+      <h2 className="mr-pp-h2">10. 권익침해 구제 방법</h2>
+      <p>개인정보 침해로 인한 상담·신고가 필요하면 아래 기관에 문의할 수 있습니다.</p>
+      <ul className="mr-pp-ul">
+        <li>개인정보분쟁조정위원회: 1833-6972 (www.kopico.go.kr)</li>
+        <li>개인정보침해신고센터: 118 (privacy.kisa.or.kr)</li>
+        <li>대검찰청 사이버수사과: 1301</li>
+        <li>경찰청 사이버수사국: 182</li>
+      </ul>
+
+      <h2 className="mr-pp-h2">11. 시행일자</h2>
+      <p>본 방침은 시행일로부터 적용되며, 변경 시 시행 7일 전부터 공지사항을 통해 안내합니다.</p>
+      <ul className="mr-pp-ul">
+        <li><strong>공고 및 시행일자:</strong> 2026년 6월 1일</li>
+      </ul>
+    </section>
+  );
+}
+
+function Privacy({ onBack }) {
+  return (
+    <div className="mr-col mr-pp">
+      <button className="mr-back" onClick={onBack}>홈</button>
+      <PrivacyBody />
+    </div>
+  );
+}
+
+function Changelog({ onBack, isAdmin }) {
+  // 관리자 항목: 관리자에겐 내용 그대로, 일반 회원에겐 건수만 한 줄로 요약
+  const blocks = CHANGELOG.map((c) => {
+    const admin = c.adminItems || [];
+    return {
+      ...c,
+      show: c.items || [],
+      showAdmin: isAdmin ? admin : [],
+      adminCount: isAdmin ? 0 : admin.length,
+    };
+  }).filter((c) => c.show.length || c.showAdmin.length || c.adminCount);
+
+  return (
+    <div className="mr-col">
+      <button className="mr-back" onClick={onBack}>홈</button>
+      <div className="mr-list-top">
+        <span className="mr-list-title">업데이트 내역</span>
+      </div>
+      <section className="mr-card">
+        <div className="mr-cl-now">현재 버전 v{APP_VERSION}</div>
+        {blocks.map((c, i) => (
+          <div className="mr-cl-block" key={c.v}>
+            <div className="mr-cl-head">
+              <span className="mr-cl-ver">v{c.v}</span>
+              {i === 0 && <span className="mr-cl-latest">최신</span>}
+              <span className="mr-cl-date">{c.date}</span>
+            </div>
+            <ul className="mr-cl-list">
+              {c.show.map((t, j) => <li key={"u" + j}>{t}</li>)}
+              {c.showAdmin.map((t, j) => (
+                <li key={"a" + j}>
+                  <span className="mr-cl-admin">관리자</span>
+                  {t}
+                </li>
+              ))}
+              {c.adminCount > 0 && (
+                <li className="mr-cl-hidden">관리 기능 업데이트 {c.adminCount}건</li>
+              )}
+            </ul>
+          </div>
+        ))}
+      </section>
+    </div>
+  );
+}
+
+function PolicyModal({ onClose }) {
+  return (
+    <div className="mr-modal-overlay" onClick={onClose} style={{ zIndex: 460 }}>
+      <div className="mr-policy-modal mr-pp" onClick={(e) => e.stopPropagation()}>
+        <div className="mr-policy-head">
+          <span className="mr-modal-title">개인정보 처리방침</span>
+          <button className="mr-modal-x" onClick={onClose}>×</button>
+        </div>
+        <div className="mr-policy-scroll">
+          <PrivacyBody />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MathView({ latex, block }) {
+  if (!latex) return null;
+  let html = "";
+  try {
+    html = window.katex ? window.katex.renderToString(latex, { displayMode: !!block, throwOnError: false }) : latex;
+  } catch (e) {
+    html = "";
+  }
+  return <span className={block ? "mr-math-block" : "mr-math"} dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+/* ===== 수식 입력기: MathLive 기반 =====
+   기존 자체 구현(트리 편집기 + 커스텀 키패드)을 통째로 교체.
+   - 실제 수식 모양 그대로 보면서 편집 (WYSIWYG)
+   - 휴대폰: 입력창을 누르면 수식 전용 키패드가 자동으로 열림
+   - PC: 물리 키보드로 바로 입력 — / 분수, ^ 지수, sqrt 루트, pi π 등 단축 입력 내장
+   - LaTeX 붙여넣기 인식, 값은 input 이벤트의 .value(LaTeX)로 받음 */
+function MathField({ initialLatex, onChange }) {
+  const ref = React.useRef(null);
+  const cbRef = React.useRef(onChange);
+  cbRef.current = onChange;
+  const [latex, setLatex] = useState(initialLatex || "");
+
+  React.useEffect(() => {
+    const mf = ref.current;
+    if (!mf) return;
+    try { mf.setAttribute("placeholder", "\\text{수식을 입력하세요}"); } catch (e) {}
+    mf.value = initialLatex || "";
+    const emit = () => {
+      const v = mf.value || "";
+      setLatex(v);
+      cbRef.current(v, null);
+    };
+    emit(); // 수정 모드: 초기값도 부모에 전달해 바로 '수정 완료' 가능
+    mf.addEventListener("input", emit);
+    const t = setTimeout(() => { try { mf.focus(); } catch (e) {} }, 80);
+    return () => { clearTimeout(t); mf.removeEventListener("input", emit); };
+  }, []);
+
+  return (
+    <div className="mr-mathfield">
+      <math-field ref={ref}></math-field>
+      {latex.trim() ? (
+        <div className="mr-math-preview">
+          <span className="mr-math-preview-tag">문제에 이렇게 보여요</span>
+          <MathView latex={latex} block />
+        </div>
+      ) : null}
+      <p className="mf-hint">키보드로 바로 입력돼요 — <b>/</b> 분수 · <b>^</b> 지수 · <b>sqrt</b> 루트 · <b>pi</b> π. 휴대폰은 입력창을 누르면 수식 키패드가 열리고, LaTeX 붙여넣기도 돼요.</p>
+    </div>
+  );
+}
+
+// 본문 표시: 텍스트+수식 조각을 한 줄로 인라인 렌더
+function QuestionBody({ body }) {
+  if (!body || !body.length) return null;
+  return (
+    <div className="mr-qbody">
+      {body.map((s, i) =>
+        s.type === "text"
+          ? <span key={i} className="mr-qbody-t">{s.v}</span>
+          : <MathView key={i} latex={s.latex} />
+      )}
+    </div>
+  );
+}
+// 본문(신규 body) 우선, 없으면 옛 latex/text 폴백
+function QBody({ q }) {
+  if (q.body && q.body.length) return <QuestionBody body={q.body} />;
+  return (
+    <React.Fragment>
+      {q.latex ? <MathView latex={q.latex} block /> : null}
+      {q.text ? <div className="mr-q-cap">{q.text}</div> : null}
+    </React.Fragment>
+  );
+}
+
+let _segid = 0;
+const segId = () => "s" + ++_segid;
+// 편집기: 텍스트칸/수식칸을 순서대로 만드는 본문 작성기
+function escapeHtml(s) {
+  return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function chipInnerHtml(latex) {
+  try { return window.katex ? window.katex.renderToString(latex || "", { throwOnError: false }) : escapeHtml(latex); }
+  catch (e) { return escapeHtml(latex); }
+}
+function chipHtml(latex, tree) {
+  const t = tree ? encodeURIComponent(JSON.stringify(tree)) : "";
+  return '<span class="mchip" contenteditable="false" data-latex="' + escapeHtml(latex || "") + '" data-tree="' + t + '">' + chipInnerHtml(latex) + "</span>";
+}
+// 조각들 → DOM 프래그먼트 (텍스트 노드 + 수식 칩)
+function buildMixedFragment(parts) {
+  const frag = document.createDocumentFragment();
+  parts.forEach((p) => {
+    if (p.type === "text") {
+      String(p.v).split("\n").forEach((ln, i) => {
+        if (i > 0) frag.appendChild(document.createElement("br"));
+        if (ln) frag.appendChild(document.createTextNode(ln));
+      });
+    } else {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = chipHtml(p.latex, p.tree);
+      if (tmp.firstChild) frag.appendChild(tmp.firstChild);
+    }
+  });
+  return frag;
+}
+function bodyToHtml(body) {
+  if (!body || !body.length) return "";
+  return body.map((s) => (s.type === "text" ? escapeHtml(s.v) : chipHtml(s.latex, s.tree))).join("");
+}
+function htmlToBody(el) {
+  const out = [];
+  const pushText = (v) => {
+    if (!v) return;
+    if (out.length && out[out.length - 1].type === "text") out[out.length - 1].v += v;
+    else out.push({ type: "text", v });
+  };
+  const walk = (node) => {
+    node.childNodes.forEach((n) => {
+      if (n.nodeType === 3) { pushText(n.textContent); return; }
+      if (n.nodeType !== 1) return;
+      if (n.classList && n.classList.contains("mchip")) {
+        let tree = null;
+        try { tree = JSON.parse(decodeURIComponent(n.dataset.tree || "")); } catch (e) {}
+        out.push({ type: "math", latex: n.dataset.latex || "", tree });
+        return;
+      }
+      if (n.tagName === "BR") { pushText("\n"); return; }
+      // div/p 등 줄 단위 래퍼: 줄바꿈 후 내부를 재귀 탐색 (중첩 칩 보존)
+      const block = /^(DIV|P|LI)$/.test(n.tagName);
+      if (block && out.length && !(out[out.length - 1].type === "text" && out[out.length - 1].v.endsWith("\n"))) pushText("\n");
+      walk(n);
+    });
+  };
+  walk(el);
+  return out;
+}
+
+function RichBody({ value, onChange, ph }) {
+  const ref = React.useRef(null);
+  const lastRange = React.useRef(null);
+  const draft = React.useRef({ latex: "", tree: null });
+  const [building, setBuilding] = useState(null); // null | {mode:'new'} | {mode:'edit', chip}
+
+  useEffect(() => {
+    if (ref.current) ref.current.innerHTML = bodyToHtml(value);
+  }, []);
+
+  const saveRange = () => {
+    const sel = document.getSelection();
+    if (sel && sel.rangeCount && ref.current && ref.current.contains(sel.anchorNode)) {
+      lastRange.current = sel.getRangeAt(0).cloneRange();
+    }
+  };
+  const serialize = () => { if (ref.current) onChange(htmlToBody(ref.current)); };
+
+  const openNew = () => { saveRange(); draft.current = { latex: "", tree: null }; setBuilding({ mode: "new" }); };
+  const openEdit = (chip) => {
+    draft.current = { latex: chip.dataset.latex || "", tree: null };
+    setBuilding({ mode: "edit", chip });
+  };
+  const onBoxClick = (e) => {
+    const chip = e.target && e.target.closest ? e.target.closest(".mchip") : null;
+    if (chip) { e.preventDefault(); openEdit(chip); }
+  };
+  const finishMath = () => {
+    if (!building) return;
+    const { latex } = draft.current;
+    if (!String(latex || "").trim()) {
+      // 비워서 완료하면: 수정 중이던 수식 칩은 삭제 (지우기 동작)
+      if (building.mode === "edit" && building.chip && building.chip.parentNode) building.chip.parentNode.removeChild(building.chip);
+      setBuilding(null);
+      serialize();
+      return;
+    }
+    if (building.mode === "edit" && building.chip) {
+      const chip = building.chip;
+      chip.dataset.latex = latex;
+      chip.dataset.tree = "";
+      chip.innerHTML = chipInnerHtml(latex);
+    } else {
+      const el = ref.current;
+      const frag = buildMixedFragment([{ type: "math", latex, tree: null }]);
+      const sp = document.createTextNode("\u00A0");
+      frag.appendChild(sp);
+      const range = lastRange.current && el && el.contains(lastRange.current.commonAncestorContainer) ? lastRange.current : null;
+      if (range) {
+        range.collapse(false);
+        range.insertNode(frag);
+        const r2 = document.createRange();
+        r2.setStartAfter(sp); r2.collapse(true);
+        const sel = document.getSelection(); sel.removeAllRanges(); sel.addRange(r2);
+      } else if (el) {
+        el.appendChild(frag);
+      }
+    }
+    setBuilding(null);
+    serialize();
+    if (ref.current) ref.current.focus();
+  };
+
+  return (
+    <div className="mr-rich">
+      <div
+        ref={ref}
+        className="mr-rich-box"
+        contentEditable
+        suppressContentEditableWarning
+        onInput={serialize}
+        onBlur={() => { saveRange(); serialize(); }}
+        onKeyUp={saveRange}
+        onMouseUp={saveRange}
+        onClick={onBoxClick}
+        data-ph={ph || "문제 본문을 입력하세요. 수식은 아래 ＋수식 버튼으로 넣어요."}
+      />
+      <div className="mr-rich-add">
+        <button type="button" className="mr-btn-soft" onClick={openNew}>＋ 수식 넣기</button>
+        <span className="mr-rich-tip">텍스트는 기본 키보드로, 수식은 ＋수식으로</span>
+      </div>
+      {building && (
+        <div className="mr-rich-mathedit">
+          <MathField initialLatex={draft.current.latex} onChange={(latex) => { draft.current = { latex, tree: null }; }} />
+          <div className="mr-rich-mrow">
+            <button type="button" className="mr-btn" onClick={finishMath}>{building.mode === "edit" ? "수정 완료" : "이 수식 넣기"}</button>
+            <button type="button" className="mr-btn-text" onClick={() => setBuilding(null)}>취소</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QuestionImage({ value, onChange }) {
+  const [busy, setBusy] = useState(false);
+
+  const onFile = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const max = 1600;
+        let { width, height } = img;
+        if (width > max || height > max) {
+          const s = Math.min(max / width, max / height);
+          width = Math.round(width * s);
+          height = Math.round(height * s);
+        }
+        const c = document.createElement("canvas");
+        c.width = width;
+        c.height = height;
+        c.getContext("2d").drawImage(img, 0, 0, width, height);
+        const dataUrl = c.toDataURL("image/jpeg", 0.92);
+        c.toBlob(
+          async (blob) => {
+            if (!blob) {
+              onChange(dataUrl);
+              return;
+            }
+            setBusy(true);
+            try {
+              const path = "q-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + ".jpg";
+              const up = await sb.storage.from("exam-images").upload(path, blob, { contentType: "image/jpeg", upsert: false });
+              if (up.error) throw up.error;
+              const { data: pub } = sb.storage.from("exam-images").getPublicUrl(path);
+              onChange(pub.publicUrl);
+            } catch (err) {
+              console.warn("이미지 업로드 실패, 내장 방식으로 저장:", err);
+              onChange(dataUrl); // 실패 시 base64로 폴백 (기능은 유지)
+            } finally {
+              setBusy(false);
+            }
+          },
+          "image/jpeg",
+          0.92
+        );
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  if (busy)
+    return (
+      <div className="mr-img-drop">
+        <span className="mr-img-main">업로드 중…</span>
+      </div>
+    );
+
+  if (value)
+    return (
+      <div className="mr-img-preview">
+        <img src={value} alt="문제 미리보기" />
+        <label className="mr-img-change">
+          <input type="file" accept="image/*" onChange={onFile} hidden />
+          사진 변경
+        </label>
+        <button className="mr-img-del" onClick={() => onChange("")}>
+          삭제
+        </button>
+      </div>
+    );
+
+  return (
+    <label className="mr-img-drop">
+      <input type="file" accept="image/*" onChange={onFile} hidden />
+      <span className="mr-img-icon">📷</span>
+      <span className="mr-img-main">문제 사진 올리기</span>
+      <span className="mr-img-sub">탭해서 사진 선택 · 손글씨/인쇄 문제 모두 가능</span>
+    </label>
+  );
+}
+
+/* ============================================================
+   스타일 — Toss 스타일
+   ============================================================ */
+const CSS = `
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+
+.mr-root *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+.mr-root{
+  --bg:rgba(255,255,255,0.46); --card:rgba(255,255,255,0.62); --t1:#2c2347; --t2:#6f6391; --t3:#9a8fb8;
+  --blue:#8a5cf0; --blue-d:#7340e0; --blue-bg:rgba(140,92,240,0.14);
+  --line:rgba(255,255,255,0.78); --line-soft:rgba(140,92,180,0.14); --green:#16a394; --green-bg:rgba(22,163,148,0.14);
+  --red:#f0508a; --red-bg:rgba(240,80,138,0.12);
+  --glass-sh:0 14px 34px rgba(91,55,140,0.16), inset 0 1px 1px rgba(255,255,255,0.92);
+  --grad:linear-gradient(140deg,#9b6cff,#ff8fc8);
+  position:relative; min-height:100vh; width:100%; color:var(--t1);
+  font-family:'Pretendard','Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif;
+  -webkit-font-smoothing:antialiased; padding-bottom:64px; letter-spacing:-0.2px;
+}
+.mr-root::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+   radial-gradient(320px 320px at 12% 6%, rgba(216,182,255,0.6), transparent 64%),
+   radial-gradient(320px 320px at 88% 82%, rgba(255,185,224,0.55), transparent 64%),
+   radial-gradient(280px 280px at 62% 42%, rgba(174,195,255,0.5), transparent 66%);}
+
+/* header */
+.mr-header{
+  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;
+  padding:16px 20px; background:var(--card); border-bottom:1px solid var(--line-soft);
+  position:sticky; top:0; z-index:300;
+}
+.mr-brand{display:flex; align-items:center; gap:11px; cursor:pointer}
+.mr-logo{
+  font-size:22px; font-weight:800; color:#fff; width:42px; height:42px;
+  display:grid; place-items:center; background:var(--grad); border-radius:14px;
+  box-shadow:0 8px 20px rgba(124,92,255,0.4), inset 0 1px 1px rgba(255,255,255,0.5);
+}
+.mr-brand-name{font-size:19px; font-weight:800; letter-spacing:-0.4px}
+.mr-rolebox{display:flex; align-items:center; gap:8px}
+
+/* 로그인 / 로그아웃 헤더 */
+.mr-login-btn{
+  border:0; background:var(--grad); color:#fff; font-family:inherit; font-weight:700;
+  font-size:14px; padding:9px 18px; border-radius:12px; cursor:pointer; transition:filter .15s;
+  box-shadow:0 8px 18px rgba(124,92,255,0.32);
+}
+.mr-login-btn:hover{filter:brightness(1.05)}
+.mr-account-btn{
+  width:42px; height:42px; border-radius:50%; border:0; background:var(--bg); color:var(--t2);
+  display:grid; place-items:center; cursor:pointer; transition:background .15s,color .15s,border-color .15s,transform .15s; overflow:hidden; padding:0;
+}
+.mr-account-btn:hover{background:var(--blue-bg); color:var(--blue)}
+.mr-account-btn.active{background:var(--blue); color:#fff}
+.mr-account-btn img{width:100%; height:100%; object-fit:cover}
+
+/* 회원정보 */
+.mr-account-card{display:flex; flex-direction:column; align-items:center; text-align:center; gap:10px; padding:28px 20px}
+.mr-account-avatar{
+  width:72px; height:72px; border-radius:50%; background:var(--blue-bg); color:var(--blue);
+  display:grid; place-items:center; overflow:hidden;
+}
+.mr-account-avatar svg{width:40px; height:40px}
+.mr-account-avatar img{width:100%; height:100%; object-fit:cover}
+.mr-account-name{font-size:20px; font-weight:800; letter-spacing:-0.4px}
+.mr-account-role{font-size:13.5px; color:var(--t2); font-weight:600}
+.mr-ok-msg{font-size:13px; color:var(--green); font-weight:700}
+.mr-logout-full{
+  width:100%; border:0; background:var(--card); color:var(--red); font-family:inherit;
+  font-weight:700; font-size:15px; padding:16px; border-radius:16px; cursor:pointer;
+  box-shadow:0 1px 2px rgba(0,0,0,.03); transition:background .15s;
+}
+.mr-logout-full:hover{background:var(--red-bg)}
+.mr-withdraw-link{display:block; margin:6px auto 0; background:none; border:0; color:var(--t3); font-family:inherit; font-size:13px; font-weight:600; text-decoration:underline; cursor:pointer; padding:8px}
+.mr-withdraw-link:hover{color:var(--red)}
+.mr-withdraw-warn{font-size:13px; color:var(--t2); line-height:1.6; margin:4px 0 12px}
+.mr-btn-danger{background:var(--red)}
+.mr-btn-danger:hover{filter:brightness(.95)}
+
+/* 관리자 페이지 */
+.mr-subtabs{display:flex; gap:6px; background:var(--bg); border-radius:13px; padding:4px}
+.mr-subtabs button{flex:1; border:0; background:transparent; padding:10px; font-family:inherit; font-weight:700; font-size:14px; color:var(--t3); border-radius:10px; cursor:pointer; transition:background .15s,color .15s,border-color .15s,transform .15s}
+.mr-subtabs button.on{background:#fff; color:var(--t1); box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.mr-member-row{
+  display:flex; align-items:center; gap:11px; width:100%; text-align:left; background:transparent;
+  border:0; border-bottom:1px solid var(--line-soft); padding:14px 18px; cursor:pointer;
+  font-family:inherit; transition:background .12s;
+}
+.mr-member-row:last-child{border-bottom:0}
+.mr-member-row:hover{background:var(--bg)}
+.mr-member-row .mr-member-info{display:flex; flex-direction:column; gap:3px; flex:1; min-width:0}
+.mr-detail-actions{display:flex; gap:8px; margin-top:14px}
+.mr-record{display:flex; align-items:center; gap:12px; padding:15px 18px; border-bottom:1px solid var(--line-soft); animation:rise .35s cubic-bezier(.2,.7,.3,1) both}
+.mr-record:last-child{border-bottom:0}
+.mr-record-btn{width:100%; text-align:left; background:none; border:0; border-bottom:1px solid var(--line-soft); font-family:inherit; cursor:pointer; transition:background .12s}
+.mr-record-btn:hover{background:var(--bg)}
+.mr-record-info{flex:1; min-width:0}
+.mr-record-title{font-size:15px; font-weight:700; color:var(--t1); letter-spacing:-0.3px}
+.mr-record-meta{font-size:12.5px; color:var(--t3); font-weight:600; margin-top:3px}
+.mr-record-score{font-size:19px; font-weight:800; letter-spacing:-0.5px; flex:none}
+.mr-record-score.good{color:var(--green)}
+.mr-record-score.mid{color:var(--blue)}
+.mr-record-score.low{color:var(--red)}
+.mr-record-max{font-size:13px; font-weight:700; color:var(--t3)}
+.mr-stat-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:8px}
+.mr-stat{background:var(--bg); border-radius:14px; padding:14px 8px; text-align:center}
+.mr-stat-num{font-size:22px; font-weight:800; color:var(--blue); letter-spacing:-0.5px}
+.mr-stat-label{font-size:12px; font-weight:700; color:var(--t2); margin-top:2px}
+.mr-member-list{display:flex; flex-direction:column}
+.mr-member:last-child{border-bottom:0}
+.mr-member-info{flex:1; min-width:0}
+.mr-member-name{display:flex; align-items:center; gap:6px; font-size:14.5px; font-weight:700; color:var(--t1)}
+.mr-member-meta{font-size:12px; color:var(--t3); font-weight:600; margin-top:2px}
+.mr-member-nick{font-weight:800; color:var(--t1)}
+.mr-user-badge{font-size:10.5px; font-weight:800; color:var(--blue); background:var(--blue-bg); padding:2px 7px; border-radius:6px; margin-left:6px; vertical-align:middle}
+.mr-user-badge.super{color:#fff; background:var(--grad); box-shadow:0 2px 8px rgba(124,92,255,0.35)}
+.mr-super-note{margin-top:14px; font-size:12.5px; color:var(--t3); font-weight:600; line-height:1.6; background:var(--bg); border-radius:11px; padding:11px 13px; text-align:center}
+.mr-mini-btn{border:0; background:var(--bg); color:var(--t2); font-family:inherit; font-weight:700; font-size:12px; padding:7px 10px; border-radius:9px; cursor:pointer; white-space:nowrap}
+.mr-mini-btn:hover{background:var(--blue-bg); color:var(--blue)}
+.mr-mini-btn.danger:hover{background:var(--red-bg); color:var(--red)}
+.mr-exam-summary{display:flex; flex-direction:column}
+.mr-exam-sum-row{padding:12px 0; border-bottom:1px solid var(--line-soft)}
+.mr-exam-sum-row:last-child{border-bottom:0}
+.mr-exam-sum-title{font-size:14.5px; font-weight:700; color:var(--t1)}
+.mr-exam-sum-meta{font-size:12.5px; color:var(--t3); font-weight:600; margin-top:3px}
+.mr-log-list{display:flex; flex-direction:column}
+.mr-log-row{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 0; border-bottom:1px solid var(--line-soft)}
+.mr-log-row:last-child{border-bottom:0}
+.mr-log-main{display:flex; align-items:center; gap:7px; flex-wrap:wrap; min-width:0}
+.mr-log-actor{font-size:13.5px; font-weight:800; color:var(--t1)}
+.mr-log-action{font-size:13px; font-weight:700; color:var(--blue); background:var(--blue-bg); padding:3px 9px; border-radius:20px}
+.mr-log-target{font-size:13px; color:var(--t2); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:160px}
+.mr-log-time{font-size:12px; color:var(--t3); font-weight:600; white-space:nowrap; flex:none}
+
+/* 모달 */
+.mr-modal-overlay{
+  position:fixed; inset:0; z-index:400; background:rgba(180,170,200,.10);
+  -webkit-backdrop-filter:blur(14px) saturate(120%); backdrop-filter:blur(14px) saturate(120%);
+  display:flex; align-items:center; justify-content:center; padding:20px;
+  animation:fade .2s ease both;
+}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.mr-modal{
+  width:100%; max-width:360px; background:var(--card); border-radius:24px; padding:24px;
+  display:flex; flex-direction:column; gap:10px;
+  box-shadow:0 20px 50px rgba(0,0,0,.25); animation:rise .25s cubic-bezier(.2,.7,.3,1) both;
+}
+.mr-modal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:6px}
+.mr-modal-title{font-size:20px; font-weight:800; letter-spacing:-0.5px}
+.mr-modal-x{border:0; background:none; font-size:26px; line-height:1; color:var(--t3); cursor:pointer; padding:0 2px}
+.mr-modal .mr-input{margin-top:0}
+.mr-modal-submit{margin-top:6px; width:100%; padding:14px}
+.mr-modal-switch{text-align:center; font-size:13px; color:var(--t3); margin-top:4px}
+.mr-modal-switch button{border:0; background:none; color:var(--blue); font-weight:700; font-family:inherit; font-size:13px; cursor:pointer; padding:0}
+
+
+/* layout */
+.mr-main{max-width:680px; margin:0 auto; padding:20px 18px}
+.mr-col{display:flex; flex-direction:column; gap:12px}
+
+/* home */
+.mr-hero{padding:14px 4px 6px}
+.mr-hero-greet{font-size:14px; font-weight:700; color:var(--blue); margin-bottom:8px}
+.mr-hero-title{font-size:26px; font-weight:800; line-height:1.35; letter-spacing:-0.6px; color:var(--t1)}
+.mr-sectors{display:flex; flex-direction:column; gap:12px; margin-top:6px}
+.mr-pick2{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:6px}
+.mr-pick-card{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; text-align:center; background:var(--card); border:0; border-radius:20px; padding:30px 16px; box-shadow:0 1px 2px rgba(0,0,0,.03); cursor:pointer; font-family:inherit; transition:transform .1s, box-shadow .15s; animation:rise .4s cubic-bezier(.2,.7,.3,1) both}
+.mr-pick-card:hover{box-shadow:0 6px 18px rgba(0,0,0,.07)}
+.mr-pick-card:active{transform:scale(.98)}
+.mr-pick-icon{width:60px; height:60px; border-radius:18px; display:grid; place-items:center; font-size:30px; position:relative}
+.mr-mathfield{display:flex; flex-direction:column; gap:8px; margin-top:4px}
+.mr-qbody{font-size:13.5px; line-height:1.85; color:var(--t1); white-space:pre-wrap; word-break:break-word; overflow-x:auto}
+.mr-qbody .katex{font-size:1em}
+.mr-qbody-t{white-space:pre-wrap}
+.mr-qbody .mr-math{margin:0 2px; vertical-align:middle}
+.mr-rich{display:flex; flex-direction:column; gap:8px; margin-top:4px}
+.mr-rich-box{min-height:80px; border:1.5px solid var(--line); border-radius:12px; padding:12px 14px; background:var(--card); font-size:15.5px; line-height:2; color:var(--t1); outline:none; white-space:pre-wrap; word-break:break-word}
+.mr-rich-box:focus{border-color:var(--blue)}
+.mr-rich-box:empty:before{content:attr(data-ph); color:var(--t3)}
+.mr-rich-box .mchip{display:inline-block; vertical-align:middle; margin:0 2px; padding:1px 5px; background:var(--blue-bg); border-radius:6px; cursor:pointer; font-size:17px}
+.mr-rich-mathedit{border:1.5px solid var(--blue); border-radius:12px; padding:10px; background:var(--blue-bg)}
+.mr-rich-mrow{display:flex; gap:10px; align-items:center; margin-top:8px}
+.mr-rich-add{display:flex; gap:10px; align-items:center}
+.mr-rich-tip{font-size:12px; color:var(--t3)}
+.mr-btn-soft{border:1px dashed var(--line); background:var(--bg); color:var(--t2); font-family:inherit; font-size:14px; font-weight:700; padding:10px 14px; border-radius:10px; cursor:pointer}
+.mr-btn-soft:active{background:var(--blue-bg); color:var(--blue)}
+.mr-math-preview{background:var(--bg); border-radius:12px; padding:18px 14px 14px; text-align:center; position:relative; overflow-x:auto}
+/* ===== MathLive 수식 입력창 ===== */
+math-field{display:block; width:100%; font-size:19px; min-height:52px; padding:6px 8px;
+  border:1.5px solid var(--line); border-radius:12px; background:rgba(255,255,255,0.92); color:var(--t1);
+  --caret-color:#8a5cf0; --selection-background-color:rgba(140,92,240,0.25)}
+math-field:focus-within{outline:none; box-shadow:inset 0 0 0 2px var(--blue); background:#fff}
+math-field::part(menu-toggle){display:none}
+body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모달(460)보다 위에 뜨도록 */
+.mf-hint{font-size:12px; color:var(--t3); margin:8px 2px 0; line-height:1.5}
+.mr-math-preview-tag{position:absolute; top:6px; left:10px; font-size:10.5px; font-weight:700; color:var(--t3)}
+.mr-math-block{display:block; margin:6px 0; overflow-x:auto}
+.mr-math{display:inline-block}
+.mr-pick-icon.blue{background:var(--blue-bg)}
+.mr-pick-icon.green{background:var(--green-bg)}
+.mr-pick-title{font-size:17px; font-weight:800; color:var(--t1); letter-spacing:-0.4px}
+.mr-pick-desc{font-size:12.5px; color:var(--t3); font-weight:600}
+.mr-sector{
+  display:flex; align-items:center; gap:15px; width:100%; text-align:left;
+  background:var(--card); border:0; border-radius:20px; padding:20px;
+  box-shadow:0 1px 2px rgba(0,0,0,.03); cursor:pointer; font-family:inherit;
+  transition:transform .1s, box-shadow .15s; animation:rise .4s cubic-bezier(.2,.7,.3,1) both;
+}
+.mr-sector:hover{box-shadow:0 6px 18px rgba(0,0,0,.07)}
+.mr-sector:active{transform:scale(.99)}
+.mr-sector.soon{cursor:default; opacity:.7}
+.mr-sector.soon:hover{box-shadow:0 1px 2px rgba(0,0,0,.03)}
+.mr-sector-icon{
+  width:54px; height:54px; border-radius:16px; display:grid; place-items:center;
+  font-size:26px; flex:none; position:relative;
+}
+.mr-sector-dot{position:absolute; top:-2px; right:-2px; width:12px; height:12px; border-radius:50%; background:var(--red); border:2.5px solid var(--card)}
+.mr-sector-icon.blue{background:var(--blue-bg)}
+.mr-sector-icon.green{background:var(--green-bg)}
+.mr-sector-icon.gray{background:var(--bg)}
+.mr-sector-text{display:flex; flex-direction:column; gap:3px; flex:1; min-width:0}
+.mr-sector-title{font-size:18px; font-weight:800; color:var(--t1); letter-spacing:-0.4px}
+.mr-sector-desc{font-size:13.5px; color:var(--t2); line-height:1.4}
+.mr-sector-meta{font-size:12.5px; color:var(--t3); font-weight:600; margin-top:2px}
+.mr-sector-arrow{font-size:20px; color:var(--t3); flex:none; font-weight:700}
+.mr-loading,.mr-empty{text-align:center; color:var(--t3); padding:56px 0; font-size:15px; font-weight:600}
+.mr-empty{background:var(--card); border-radius:20px}
+
+/* cards */
+.mr-card{
+  background:var(--card); border-radius:20px; padding:20px;
+  box-shadow:0 1px 2px rgba(0,0,0,.03);
+  animation:rise .4s cubic-bezier(.2,.7,.3,1) both;
+}
+@keyframes rise{from{opacity:0; transform:translateY(8px)}to{opacity:1; transform:none}}
+.mr-card-tag{display:block; font-size:17px; font-weight:800; color:var(--t1); margin-bottom:14px; letter-spacing:-0.4px}
+.mr-notice-head{display:flex; align-items:baseline; justify-content:space-between; gap:10px}
+.mr-notice-head h3{font-size:17px; font-weight:800; letter-spacing:-0.4px; line-height:1.4}
+.mr-date{font-size:12.5px; color:var(--t3); white-space:nowrap; font-weight:600}
+.mr-notice-body{margin-top:8px; color:var(--t2); line-height:1.65; white-space:pre-wrap; font-size:14.5px}
+.mr-link-del{margin-top:12px; border:0; background:none; color:var(--t3); cursor:pointer; font-size:13px; font-family:inherit; font-weight:700}
+.mr-link-del:hover{color:var(--red)}
+.mr-exam-meta{display:flex; gap:7px; align-items:center; flex-wrap:wrap; margin-top:9px; font-size:13.5px; color:var(--t2); font-weight:600}
+.mr-sched-tag{display:inline-block; margin-top:8px; background:#FFF4E5; color:#C2540A; font-size:12.5px; font-weight:800; padding:5px 11px; border-radius:8px}
+.mr-sched-hint{font-size:12.5px; color:var(--t3); line-height:1.6; margin:8px 2px 0}
+.mr-exam-meta span:nth-child(even){color:var(--line)}
+
+/* inputs */
+.mr-input,.mr-textarea{
+  width:100%; border:none; background:var(--bg); border-radius:12px; padding:13px 14px;
+  font-family:inherit; font-size:15px; color:var(--t1); margin-top:10px; transition:background .15s;
+}
+.mr-input::placeholder,.mr-textarea::placeholder{color:var(--t3)}
+.mr-input:focus,.mr-textarea:focus{outline:none; background:#fff; box-shadow:inset 0 0 0 2px var(--blue)}
+.mr-textarea{resize:vertical; line-height:1.6}
+.mr-writer .mr-input:first-of-type{margin-top:0}
+
+/* 서식 입력기 */
+.mr-rte-wrap{margin-top:10px; border-radius:12px; background:#fff; box-shadow:inset 0 0 0 1px var(--line)}
+.mr-rte-toolbar{position:sticky; top:72px; z-index:9; background:#fff; border-bottom:1px solid var(--line-soft); border-radius:12px 12px 0 0; padding:6px 8px; box-shadow:0 2px 8px rgba(0,0,0,0.04)}
+.mr-rte-toolbar::after{content:""; position:absolute; top:6px; right:0; bottom:6px; width:26px; background:linear-gradient(to left, #fff 25%, rgba(255,255,255,0)); pointer-events:none; border-radius:0 12px 0 0}
+.mr-rte-tools{display:flex; align-items:center; gap:5px; overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; padding-right:18px}
+.mr-rte-tools::-webkit-scrollbar{display:none}
+.mr-rte-tools > *{flex:0 0 auto}
+.mr-rte-btn.mathbtn{background:var(--blue-bg); color:var(--blue); font-weight:800}
+.mr-rte-mathedit{border:1.5px solid var(--blue); margin:8px; border-radius:12px; padding:10px; background:var(--blue-bg)}
+.mr-rte .mchip{display:inline-block; vertical-align:middle; margin:0 2px; padding:1px 5px; background:var(--blue-bg); border-radius:6px; cursor:pointer; font-size:16px}
+.mr-rte-btn{border:0; background:var(--bg); color:var(--t1); min-width:34px; height:34px; padding:0 9px; border-radius:8px; font-family:inherit; font-size:15px; cursor:pointer; transition:background .12s; line-height:1}
+.mr-rte-btn.sm{font-size:13px; font-weight:700}
+.mr-rte-btn:hover{background:var(--blue-bg); color:var(--blue)}
+.mr-rte-div{width:1px; height:20px; background:var(--line); margin:0 3px}
+.mr-rte-color{width:26px; height:26px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px var(--line); cursor:pointer; padding:0; transition:transform .1s}
+.mr-rte-color:hover{transform:scale(1.15)}
+.mr-rte{min-height:240px; padding:14px; font-size:15px; line-height:1.75; color:var(--t1); outline:none; white-space:pre-wrap; word-break:break-word}
+.mr-rte:empty:before{content:attr(data-placeholder); color:var(--t3)}
+
+/* buttons */
+.mr-btn{
+  border:0; background:var(--grad); color:#fff; padding:12px 20px; border-radius:14px;
+  font-family:inherit; font-weight:700; font-size:15px; cursor:pointer; transition:filter .15s,transform .08s;
+  box-shadow:0 8px 20px rgba(124,92,255,0.35), inset 0 1px 1px rgba(255,255,255,0.5);
+}
+.mr-btn:hover{filter:brightness(1.05)}
+.mr-btn:active{transform:scale(.98)}
+.mr-btn-ghost{
+  border:0; background:var(--blue-bg); color:var(--blue); padding:11px 18px; border-radius:13px;
+  font-family:inherit; font-weight:700; font-size:14.5px; cursor:pointer; transition:background .15s;
+}
+.mr-btn-ghost:hover{background:#DBEAFE}
+.mr-btn-ghost.danger{background:var(--red-bg); color:var(--red)}
+.mr-btn-ghost.danger:hover{background:#FBD5DA}
+.mr-btn-text{border:0; background:none; color:var(--t2); cursor:pointer; font-family:inherit; font-size:14.5px; font-weight:700; align-self:flex-start; padding:4px 0}
+.mr-back{display:inline-flex; align-items:center; gap:5px; align-self:flex-start; border:1px solid var(--line); background:rgba(255,255,255,0.6); color:var(--t2); cursor:pointer; font-family:inherit; font-size:13.5px; font-weight:700; padding:8px 14px 8px 11px; border-radius:999px; margin-bottom:4px; transition:background .15s,color .15s}
+.mr-back:hover{background:rgba(255,255,255,0.9); color:var(--t1)}
+.mr-back:active{transform:scale(.97)}
+.mr-back::before{content:"‹"; font-size:17px; line-height:1; margin-top:-1px}
+.mr-row-end{display:flex; justify-content:flex-end; margin-top:14px}
+.mr-row-between{display:flex; justify-content:space-between; align-items:center; gap:10px}
+.mr-gap{display:flex; gap:8px; align-items:center}
+
+/* exam editor */
+.mr-qedit-head{display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin-bottom:4px}
+.mr-qnum{font-weight:800; color:var(--blue); font-size:16px}
+.mr-qnum-sm{font-weight:800; color:var(--blue); margin-right:5px}
+.mr-seg{display:flex; background:var(--bg); border-radius:9px; padding:3px; gap:2px}
+.mr-seg button{border:0; background:transparent; padding:6px 13px; font-size:13px; cursor:pointer; font-family:inherit; color:var(--t3); font-weight:700; border-radius:7px; transition:background .15s,color .15s,border-color .15s,transform .15s}
+.mr-seg button.on{background:#fff; color:var(--t1); box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.mr-points{display:flex; align-items:center; gap:6px; font-size:13px; color:var(--t3); font-weight:600; margin-left:auto}
+.mr-points input{width:60px; border:none; background:var(--bg); border-radius:8px; padding:7px 9px; font-family:inherit; font-weight:700; color:var(--t1)}
+.mr-points input:focus{outline:2px solid var(--blue); outline-offset:-1px}
+.mr-options{margin-top:12px; display:flex; flex-direction:column; gap:8px}
+.mr-opt-row{display:flex; align-items:center; gap:9px}
+.mr-opt-row input[type=radio]{width:18px; height:18px; accent-color:var(--blue); flex:none}
+.mr-opt-label{font-size:15px; color:var(--t3); width:18px; text-align:center; flex:none}
+.mr-opt-input{margin-top:0; flex:1; padding:10px 12px}
+.mr-x{border:0; background:var(--bg); color:var(--t3); width:30px; height:30px; border-radius:9px; cursor:pointer; font-size:17px; flex:none}
+.mr-x:hover{background:var(--red-bg); color:var(--red)}
+.mr-add-opt{align-self:flex-start; border:0; background:var(--bg); color:var(--t2); padding:8px 14px; border-radius:9px; cursor:pointer; font-family:inherit; font-size:13.5px; font-weight:700}
+.mr-add-opt:hover{background:var(--blue-bg); color:var(--blue)}
+.mr-hint{font-size:12.5px; color:var(--t3); margin-top:9px; line-height:1.5}
+
+/* submissions / grading */
+.mr-sub{padding:0; overflow:hidden}
+.mr-sub-head{display:flex; align-items:center; justify-content:space-between; padding:16px 20px; cursor:pointer}
+.mr-sub-name{display:flex; align-items:center; gap:11px}
+.mr-avatar{width:38px; height:38px; border-radius:50%; background:var(--blue-bg); color:var(--blue); display:grid; place-items:center; font-weight:800; flex:none}
+.mr-strong{font-weight:700; font-size:14.5px}
+.mr-sub-score{display:flex; align-items:center; gap:10px}
+.mr-score-done{font-weight:800; color:var(--green); font-size:15px}
+.mr-chevron{font-size:9px; color:var(--t3)}
+.mr-badge-red{background:var(--red-bg); color:var(--red); font-size:12px; font-weight:700; padding:5px 10px; border-radius:20px; white-space:nowrap}
+.mr-sub-body{border-top:1px solid var(--line-soft); padding:6px 20px 18px}
+.mr-grade-q{padding:14px 0; border-bottom:1px solid var(--line-soft)}
+.mr-grade-q:last-of-type{border-bottom:0}
+.mr-grade-qtext{font-size:15px; line-height:1.55; font-weight:600}
+
+/* 칼럼 읽기 */
+.mr-title-input{font-size:18px; font-weight:800}
+
+/* 칼럼 게시판 */
+.mr-list-top{display:flex; align-items:center; justify-content:space-between; padding:6px 2px 4px}
+.mr-list-title{font-size:22px; font-weight:800; letter-spacing:-0.5px; color:var(--t1)}
+.mr-postlist{display:flex; flex-direction:column; gap:10px}
+.mr-post-row{
+  display:flex; flex-direction:column; gap:5px; width:100%; text-align:left; background:transparent;
+  border:0; padding:17px 18px; cursor:pointer;
+  font-family:inherit; transition:background .12s;
+}
+.mr-post-row:last-child{border-bottom:0}
+.mr-post-row:hover{background:var(--bg)}
+.mr-post-row:active{background:var(--bg)}
+.mr-post-row-title{font-size:15.5px; font-weight:700; color:var(--t1); letter-spacing:-0.3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mr-unread-dot{display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--red); margin-right:7px; vertical-align:middle}
+.mr-post-row-meta{font-size:12.5px; color:var(--t3); font-weight:600}
+.mr-draft-head{font-size:13px; font-weight:800; color:var(--t3); padding:2px 2px 0}
+.mr-draft-badge{font-size:11px; font-weight:700; color:#B26A00; background:#FFF4E0; padding:2px 7px; border-radius:6px; margin-left:8px; vertical-align:middle}
+.mr-cat-label{font-size:12.5px; font-weight:700; color:var(--t2); margin-top:14px}
+.mr-cat-seg{display:flex; gap:4px; background:var(--bg); border-radius:11px; padding:4px; margin-top:8px}
+.mr-cat-seg button{flex:1; border:0; background:transparent; padding:9px; font-family:inherit; font-weight:700; font-size:13.5px; color:var(--t3); border-radius:8px; cursor:pointer; transition:background .15s,color .15s,border-color .15s,transform .15s}
+.mr-cat-seg button.on{background:#fff; color:var(--t1); box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.mr-post-item{display:flex; align-items:stretch; background:rgba(255,255,255,0.72); border:1px solid var(--line); border-radius:18px; box-shadow:var(--glass-sh); overflow:hidden; animation:rise .35s cubic-bezier(.2,.7,.3,1) both}
+.mr-post-item:last-child{border-bottom:1px solid var(--line)}
+.mr-post-item .mr-post-row{border-bottom:0; flex:1; min-width:0}
+.mr-reorder{display:flex; flex-direction:column; justify-content:center; gap:3px; padding:0 12px; flex:none}
+.mr-reorder button{border:0; background:var(--bg); color:var(--t2); width:30px; height:22px; border-radius:6px; cursor:pointer; font-size:10px; line-height:1; font-family:inherit}
+.mr-reorder button:disabled{opacity:.3; cursor:default}
+.mr-reorder button:hover:not(:disabled){background:var(--blue-bg); color:var(--blue)}
+.mr-qrate-list{display:flex; flex-direction:column}
+.mr-qrate-row{display:flex; align-items:center; gap:9px; padding:11px 0; border-bottom:1px solid var(--line-soft)}
+.mr-qrate-row:last-child{border-bottom:0}
+.mr-qrate-val{font-size:14px; font-weight:800; color:var(--blue)}
+.mr-qrate-sub{font-size:12.5px; color:var(--t3); font-weight:600; margin-left:auto}
+.mr-qrate-wrong{font-size:13px; font-weight:700; color:var(--red); margin-left:auto}
+
+/* 칼럼 상세 */
+.mr-post-title{font-size:23px; font-weight:800; line-height:1.4; letter-spacing:-0.5px}
+.mr-post-byline{display:flex; align-items:center; gap:8px; margin-top:13px; font-size:13px; color:var(--t2); font-weight:600}
+.mr-avatar.sm{width:26px; height:26px; font-size:12px}
+.mr-post-divider{height:1px; background:var(--line-soft); margin:16px 0}
+.mr-notice .mr-notice-head h3{font-size:20px; line-height:1.4}
+.mr-notice-body{font-size:15.5px; line-height:1.85; color:#333D4B; margin-top:12px}
+
+/* 문제 사진 업로드 */
+.mr-img-drop{
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+  margin-top:12px; padding:26px 16px; background:var(--bg); border:2px dashed #D1D6DB;
+  border-radius:14px; cursor:pointer; text-align:center; transition:background .15s,color .15s,border-color .15s,transform .15s;
+}
+.mr-img-drop:hover{border-color:var(--blue); background:var(--blue-bg)}
+.mr-img-icon{font-size:26px}
+.mr-img-main{font-size:14.5px; font-weight:700; color:var(--t1)}
+.mr-img-sub{font-size:12px; color:var(--t3)}
+.mr-img-preview{margin-top:12px; display:flex; flex-direction:row; flex-wrap:wrap; align-items:center; gap:8px}
+.mr-img-preview > img{width:100%; border-radius:14px; display:block}
+.mr-img-change,.mr-img-del{
+  display:inline-block; font-size:13px; font-weight:700; padding:7px 13px; border-radius:9px;
+  cursor:pointer; border:0; font-family:inherit;
+}
+.mr-img-change{background:var(--blue-bg); color:var(--blue)}
+.mr-img-del{background:var(--bg); color:var(--t3)}
+.mr-img-del:hover{background:var(--red-bg); color:var(--red)}
+
+/* 출제된 문제 사진 표시 */
+.mr-q-img{width:100%; border-radius:13px; margin-top:10px; display:block; background:var(--bg)}
+.mr-q-img.sm{margin-top:8px}
+.mr-q-cap{margin-top:8px; font-size:14px; color:var(--t2); line-height:1.55}
+.mr-short-answer{margin-top:12px}
+.mr-ans-label{display:block; font-size:11.5px; font-weight:700; color:var(--t3); margin-bottom:4px}
+.mr-accept{margin-top:8px; font-size:13.5px; color:var(--t2)}
+.mr-accept strong{color:var(--green); font-weight:700}
+.mr-reset{border:0; background:var(--bg); color:var(--t3); font-size:12px; font-weight:700; padding:5px 10px; border-radius:8px; cursor:pointer; font-family:inherit}
+.mr-reset:hover{background:var(--blue-bg); color:var(--blue)}
+.mr-mc-review{margin-top:10px; display:flex; flex-direction:column; gap:6px}
+.mr-mc-opt{font-size:13.5px; padding:9px 12px; border-radius:10px; background:var(--bg); display:flex; align-items:center; gap:8px; color:var(--t2)}
+.mr-mc-opt.is-answer{background:var(--green-bg); color:var(--green); font-weight:700}
+.mr-mc-opt.is-wrong{background:var(--red-bg); color:var(--red); font-weight:700}
+.mr-tag-correct{font-size:11px; background:var(--green); color:#fff; padding:2px 7px; border-radius:5px; margin-left:auto; font-weight:700}
+.mr-tag-chosen{font-size:11px; border:1px solid currentColor; padding:2px 7px; border-radius:5px; font-weight:700}
+.mr-auto-mark{margin-top:8px; font-size:12.5px; font-weight:700}
+.mr-auto-mark.ok{color:var(--green)} .mr-auto-mark.no{color:var(--red)}
+.mr-answer-box{margin-top:10px; background:var(--bg); border-radius:12px; padding:12px 14px; line-height:1.6; white-space:pre-wrap; font-size:14.5px; color:var(--t1)}
+.mr-manual{display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13.5px; color:var(--t3); font-weight:600}
+.mr-manual input{width:66px; border:none; background:var(--blue-bg); border-radius:9px; padding:8px 10px; font-family:inherit; color:var(--blue); font-weight:800; text-align:center}
+.mr-manual input:focus{outline:2px solid var(--blue); outline-offset:-1px}
+.mr-muted{color:var(--t3)} .mr-ink{color:var(--t1)}
+.mr-grade-foot{margin-top:16px; font-size:13.5px; color:var(--t2); font-weight:600}
+
+/* take exam */
+.mr-pts-tag{font-size:12px; color:var(--t3); margin-left:8px; background:var(--bg); padding:3px 9px; border-radius:20px; font-weight:700}
+.mr-rate-tag{font-size:12px; color:var(--blue); margin-left:6px; background:var(--bg); padding:3px 9px; border-radius:20px; font-weight:700}
+.mr-take-options{margin-top:14px; display:flex; flex-direction:column; gap:9px}
+.mr-take-opt{display:flex; align-items:center; gap:10px; padding:14px; background:var(--bg); border-radius:13px; cursor:pointer; font-size:14.5px; font-weight:600; transition:background .15s,color .15s,border-color .15s,transform .15s; border:2px solid transparent}
+.mr-take-opt.review{cursor:default}
+.mr-take-opt.review.ans{border-color:var(--green); background:var(--green-bg)}
+.mr-take-opt.review.mychoice{border-color:var(--red); background:var(--red-bg)}
+.mr-opt-flag{margin-left:auto; font-size:11px; font-weight:800; padding:2px 9px; border-radius:7px}
+.mr-opt-flag.ans{color:var(--green); background:#fff}
+.mr-opt-flag.mine{color:var(--red); background:#fff}
+.mr-ox{font-size:12px; font-weight:800; padding:3px 11px; border-radius:20px; margin-left:6px}
+.mr-ox.o{color:var(--green); background:var(--green-bg)}
+.mr-ox.x{color:var(--red); background:var(--red-bg)}
+.mr-take-q.wrong{border-left:3px solid var(--red)}
+.mr-short-review{margin-top:12px; display:flex; flex-direction:column; gap:8px}
+.mr-sr-row{display:flex; gap:10px; align-items:center}
+.mr-sr-k{font-size:12px; font-weight:700; color:var(--t3); width:44px; flex:none}
+.mr-sr-v{font-size:14.5px; font-weight:700; color:var(--t1)}
+.mr-sr-v.ok{color:var(--green)}
+.mr-sr-v.no{color:var(--red)}
+.mr-explain-btn{margin-top:14px; width:100%; border:0; background:var(--blue-bg); color:var(--blue); font-family:inherit; font-weight:700; font-size:14px; padding:12px; border-radius:12px; cursor:pointer; transition:background .15s}
+.mr-explain-btn:active{background:rgba(140,92,240,0.26)}
+.mr-explain{margin-top:14px; background:var(--blue-bg); border-radius:12px; padding:12px 14px}
+.mr-explain-tag{font-size:12px; font-weight:800; color:var(--blue); margin-bottom:7px}
+.mr-explain .mr-qbody{font-size:14px; line-height:1.85}
+.mr-explain-none{margin-top:14px; font-size:12.5px; color:var(--t3); font-weight:600; line-height:1.6; background:var(--bg); border-radius:11px; padding:11px 13px}
+.mr-explain-none b{color:var(--t2); font-weight:800}
+.mr-take-opt.sel{background:var(--blue-bg); border-color:var(--blue); color:var(--blue); font-weight:700}
+.mr-take-opt input{width:18px; height:18px; accent-color:var(--blue); flex:none}
+.mr-result-pill{font-weight:800; color:var(--green); background:var(--green-bg); padding:9px 15px; border-radius:11px; font-size:14.5px}
+.mr-guest-note{background:var(--red-bg); color:var(--red); font-size:13.5px; font-weight:700; padding:12px 14px; border-radius:12px; text-align:center; line-height:1.5}
+.mr-resume-note{background:var(--blue-bg); color:var(--blue); font-size:13px; font-weight:700; padding:11px 14px; border-radius:12px; text-align:center; line-height:1.5}
+.mr-c-good{color:var(--green)}
+.mr-c-bad{color:var(--red)}
+.mr-game-intro{text-align:center; padding:32px 22px}
+.mr-game-emoji{font-size:48px; line-height:1}
+.mr-game-title{font-size:22px; font-weight:800; color:var(--t1); margin:12px 0 10px; letter-spacing:-0.5px}
+.mr-game-rules{font-size:14px; color:var(--t2); line-height:1.8; margin:0 0 18px}
+.mr-game-best{font-size:13px; font-weight:700; color:var(--t3); margin-bottom:18px}
+.mr-game-start{width:100%; padding:15px; font-size:16px; margin-top:20px}
+.mr-game-final{font-size:52px; font-weight:800; color:var(--blue); letter-spacing:-1.5px; line-height:1.1; margin:6px 0}
+.mr-game-final span{font-size:20px; color:var(--t3); font-weight:700; margin-left:8px; letter-spacing:0}
+.mr-game-stats2{display:flex; justify-content:center; gap:8px; font-size:13.5px; color:var(--t3); font-weight:600; margin:14px 0 0}
+.mr-game-new{margin-top:16px; font-size:15px; font-weight:800; color:var(--green)}
+.mr-game-play{transition:background .1s}
+.mr-game-play.fl-good{background:rgba(0,178,98,.06)}
+.mr-game-play.fl-bad{background:rgba(240,68,82,.08)}
+.mr-game-play.fl-crit{background:rgba(249,115,22,.10)}
+.mr-game-top{display:flex; align-items:center; justify-content:space-between; padding:2px 4px}
+.mr-game-score{font-size:30px; font-weight:800; color:var(--t1); letter-spacing:-1px}
+.mr-game-combo{font-size:13.5px; font-weight:800; color:var(--t3)}
+.mr-game-combo.hot{color:#F97316}
+.mr-game-timebar{position:relative; height:26px; background:var(--bg); border-radius:13px; overflow:hidden; margin:4px 0 2px}
+.mr-game-timefill{position:absolute; left:0; top:0; bottom:0; background:linear-gradient(90deg,#9b6cff,#ff8fc8); border-radius:13px; transition:width .12s linear}
+.mr-game-timetext{position:absolute; right:12px; top:0; line-height:26px; font-size:12.5px; font-weight:800; color:var(--t1)}
+.mr-game-crit{text-align:center; font-size:16px; font-weight:800; color:#F97316; animation:rise .25s ease both}
+.mr-game-qcard{text-align:center; padding:24px 20px}
+.mr-game-q{font-size:40px; font-weight:800; color:var(--t1); letter-spacing:0.5px}
+.mr-game-opts{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:4px}
+.mr-game-opt{padding:22px; font-size:26px; font-weight:800; color:var(--t1); background:var(--card); border:2px solid transparent; border-radius:16px; cursor:pointer; font-family:inherit; box-shadow:0 1px 2px rgba(0,0,0,.04); transition:transform .08s, background .12s, border-color .12s}
+.mr-game-opt:active{transform:scale(.97)}
+.mr-game-opt.correct{background:var(--green-bg); border-color:var(--green); color:var(--green)}
+.mr-game-opt.wrong{background:var(--red-bg); border-color:var(--red); color:var(--red)}
+.mr-game-opt:disabled{cursor:default}
+.mr-rank-warn{text-align:center}
+.mr-myrank{display:flex; align-items:center; gap:7px; background:var(--blue-bg); border-radius:12px; padding:12px 14px; margin:6px 0 4px; font-size:14px}
+.mr-myrank-label{font-weight:700; color:var(--blue)}
+.mr-myrank-rank{font-weight:800; color:var(--blue); font-size:16px}
+.mr-myrank-sep{color:var(--blue); opacity:.5}
+.mr-myrank-score{font-weight:800; color:var(--t1)}
+.mr-myrank-total{margin-left:auto; font-size:12.5px; color:var(--t3); font-weight:600}
+.mr-game-rankbtn{width:100%; margin-top:10px; background:var(--bg); border:0; color:var(--t2); font-family:inherit; font-weight:700; font-size:15px; padding:13px; border-radius:12px; cursor:pointer}
+.mr-game-rankbtn:hover{background:var(--line-soft)}
+.mr-warnpop{align-items:stretch; text-align:center; padding:28px 24px 22px; gap:0}
+.mr-warnpop-icon{font-size:44px; line-height:1; margin-bottom:14px}
+.mr-warnpop-title{font-size:19px; font-weight:800; color:var(--red); letter-spacing:-0.5px; margin:0 0 8px}
+.mr-warnpop-sub{font-size:14px; color:var(--t2); line-height:1.65; margin:0 0 22px}
+.mr-warnpop-btns{display:flex; flex-direction:column; gap:9px}
+.mr-warnpop-primary{width:100%; padding:15px; font-size:15.5px}
+.mr-warnpop-ghost{width:100%; background:var(--bg); border:0; color:var(--t1); font-family:inherit; font-weight:700; font-size:15px; padding:14px; border-radius:13px; cursor:pointer; transition:background .15s}
+.mr-warnpop-ghost:hover{background:var(--line-soft)}
+.mr-warnpop-mute{background:none; border:0; color:var(--t3); font-family:inherit; font-weight:600; font-size:13px; padding:6px; cursor:pointer; margin-top:2px}
+.mr-warnpop-mute:hover{color:var(--t2)}
+.mr-rank-empty{text-align:center; color:var(--t3); font-size:14px; padding:14px 0}
+.mr-rank-list{list-style:none; margin:6px 0 0; padding:0}
+.mr-rank-row{display:flex; align-items:center; gap:12px; padding:11px 6px; border-bottom:1px solid var(--line-soft); font-size:15px}
+.mr-rank-row:last-child{border-bottom:0}
+.mr-rank-row.me{background:var(--blue-bg); border-radius:10px; border-bottom:0; font-weight:800}
+.mr-rank-no{width:24px; text-align:center; font-weight:800; color:var(--t3)}
+.mr-rank-row.me .mr-rank-no{color:var(--blue)}
+.mr-rank-row:nth-child(1) .mr-rank-no,.mr-rank-row:nth-child(2) .mr-rank-no,.mr-rank-row:nth-child(3) .mr-rank-no{color:#F97316}
+.mr-rank-nick{flex:1; color:var(--t1); font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mr-rank-score{font-weight:800; color:var(--t1); font-variant-numeric:tabular-nums}
+
+.mr-foot{
+  max-width:680px; margin:28px auto 0; padding:0 22px;
+  display:flex; justify-content:center; align-items:center; gap:8px;
+  font-size:12px; color:var(--t3); line-height:1.6; font-weight:500;
+}
+.mr-foot-link{background:none; border:0; color:var(--t2); font-family:inherit; font-size:12px; font-weight:700; cursor:pointer; text-decoration:underline; padding:4px}
+.mr-foot-link:hover{color:var(--blue)}
+.mr-foot-sep{color:var(--t3)}
+.mr-foot-copy{}
+.mr-cl-now{font-size:12.5px; font-weight:800; color:var(--blue); background:var(--blue-bg); padding:8px 12px; border-radius:10px; display:inline-block; margin-bottom:6px}
+.mr-cl-block{padding:16px 0; border-bottom:1px solid var(--line-soft)}
+.mr-cl-block:last-child{border-bottom:0}
+.mr-cl-head{display:flex; align-items:center; gap:8px}
+.mr-cl-ver{font-size:16px; font-weight:800; color:var(--t1); letter-spacing:-0.4px}
+.mr-cl-latest{font-size:10.5px; font-weight:800; color:#fff; background:var(--grad); padding:2px 8px; border-radius:6px}
+.mr-cl-date{margin-left:auto; font-size:12px; color:var(--t3); font-weight:600}
+.mr-cl-list{margin:9px 0 0; padding-left:18px}
+.mr-cl-list li{font-size:13.5px; color:var(--t2); line-height:1.7; margin:5px 0}
+.mr-cl-admin{display:inline-block; font-size:10px; font-weight:800; color:var(--blue); background:var(--blue-bg); padding:2px 6px; border-radius:5px; margin-right:6px; vertical-align:middle}
+.mr-cl-hidden{color:var(--t3); font-style:italic}
+.mr-pp-title{font-size:21px; font-weight:800; color:var(--t1); letter-spacing:-0.5px; padding-bottom:12px; border-bottom:2px solid var(--t1); margin:0 0 14px}
+.mr-pp-intro{font-size:13.5px; color:var(--t2); line-height:1.7; margin:0}
+.mr-pp-h2{font-size:16px; font-weight:800; color:var(--blue); margin:26px 0 9px; letter-spacing:-0.3px}
+.mr-pp p{font-size:13.5px; color:var(--t2); line-height:1.7; margin:0 0 6px}
+.mr-pp-ul{margin:6px 0 4px; padding-left:18px}
+.mr-pp-ul li{font-size:13.5px; color:var(--t2); line-height:1.65; margin:6px 0}
+.mr-pp-table{width:100%; border-collapse:collapse; margin:12px 0; font-size:12.5px}
+.mr-pp-table th,.mr-pp-table td{border:1px solid var(--line); padding:9px 10px; text-align:left; vertical-align:top; color:var(--t2); line-height:1.5}
+.mr-pp-table th{background:var(--bg); color:var(--t1); font-weight:700}
+.mr-pp-note{background:var(--bg); border-radius:14px; padding:16px; margin:16px 0}
+.mr-pp-note-tag{display:inline-block; font-size:11px; font-weight:800; color:var(--blue); background:var(--blue-bg); padding:4px 10px; border-radius:8px; margin-bottom:9px; letter-spacing:-0.2px}
+.mr-pp-note p{font-size:13px; color:var(--t2); line-height:1.7; margin:0}
+.mr-pp a{color:var(--blue); font-weight:700; text-decoration:underline}
+.mr-consent{display:flex; align-items:flex-start; gap:9px; margin:4px 2px 2px; font-size:13px; color:var(--t2); line-height:1.5; cursor:pointer}
+.mr-consent input{margin-top:2px; flex:none; width:16px; height:16px; accent-color:var(--blue)}
+.mr-consent-link{background:none; border:0; padding:0; font:inherit; color:var(--blue); font-weight:700; text-decoration:underline; cursor:pointer}
+.mr-policy-modal{background:var(--card); border-radius:20px; width:100%; max-width:560px; max-height:84vh; display:flex; flex-direction:column; overflow:hidden}
+.mr-policy-head{display:flex; align-items:center; justify-content:space-between; padding:16px 18px; border-bottom:1px solid var(--line-soft); flex:none}
+.mr-policy-scroll{overflow-y:auto; padding:16px}
+.mr-policy-scroll .mr-card{box-shadow:none; padding:0}
+
+/* ===== 글래스모피즘 1단계 (성능 최적화) ===== */
+/* 반복되는 카드엔 실시간 블러 X (렉 방지) — 반투명 흰색으로 유리 느낌만 */
+.mr-card,.mr-sector,.mr-pick-card{
+  background:rgba(255,255,255,0.72); border:1px solid var(--line); box-shadow:var(--glass-sh); border-radius:26px;
+}
+.mr-empty{background:rgba(255,255,255,0.72); border:1px solid var(--line); box-shadow:var(--glass-sh); border-radius:26px}
+.mr-sector:hover,.mr-pick-card:hover{box-shadow:0 18px 40px rgba(91,55,140,0.2), inset 0 1px 1px rgba(255,255,255,0.92)}
+/* 화면에 1~2개뿐인 것만 진짜 블러 */
+.mr-header,.mr-modal,.mr-policy-modal,.mr-rte-toolbar{
+  -webkit-backdrop-filter:blur(16px) saturate(170%); backdrop-filter:blur(16px) saturate(170%);
+}
+.mr-header{border-bottom:1px solid var(--line-soft); background:rgba(255,255,255,0.7)}
+.mr-modal{background:rgba(255,255,255,0.82); border:1px solid var(--line); box-shadow:0 24px 70px rgba(72,40,110,0.3), inset 0 1px 1px rgba(255,255,255,0.92)}
+.mr-input,.mr-textarea{background:rgba(255,255,255,0.6); border:1px solid var(--line)}
+.mr-input:focus,.mr-textarea:focus{background:rgba(255,255,255,0.92); box-shadow:inset 0 0 0 2px var(--blue)}
+.mr-pick-icon.blue,.mr-sector-icon.blue{background:var(--grad); color:#fff}
+.mr-sector-icon.green,.mr-pick-icon.green{background:linear-gradient(140deg,#7c9bff,#aec3ff); color:#fff}
+.mr-btn-ghost{background:rgba(140,92,240,0.16)}
+.mr-account-avatar{background:var(--grad); color:#fff}
+/* 카드 확장 트랜지션: 카드 자리에서 펼쳐지며 그 안에 상세화면 */
+.mr-ov-scrim{position:fixed; top:74px; left:0; right:0; bottom:0; z-index:149; background:linear-gradient(165deg,#efe2ff,#fbe2ef 46%,#e2e9ff); transition:opacity .4s ease}
+.mr-ov{background:linear-gradient(165deg,#f4e9ff 0%,#fde9f4 46%,#e9eeff 100%); border:0; box-shadow:none;
+  transition:top .5s cubic-bezier(.4,0,.2,1), left .5s cubic-bezier(.4,0,.2,1), width .5s cubic-bezier(.4,0,.2,1), height .5s cubic-bezier(.4,0,.2,1), border-radius .5s cubic-bezier(.4,0,.2,1);}
+.mr-ov-inner{position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-top:44px}
+.mr-ov-inner .mr-main{padding-top:8px}
+.mr-ov-back{position:absolute; top:10px; left:12px; z-index:3; width:40px; height:40px; border-radius:50%;
+  border:1px solid var(--line); background:rgba(255,255,255,0.7); color:var(--t1); font-size:20px; cursor:pointer;
+  display:grid; place-items:center; transition:opacity .25s ease; -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px)}
+@keyframes screenIn{from{opacity:0; transform:translateY(20px) scale(.985)}to{opacity:1; transform:none}}
+.mr-screen-in{animation:screenIn .44s cubic-bezier(.22,1,.36,1)}
+`;
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+</script>
+</body>
+</html>
