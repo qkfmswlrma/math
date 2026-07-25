@@ -1345,7 +1345,9 @@ function Admin({
   onDeleteUser,
   onResetPassword
 }) {
-  const [subtab, setSubtab] = useState("dash");
+  const [subtab0, setSubtab] = useState("dash");
+  // 회원 관리는 root 전용 — 일반 관리자에겐 탭도, 상세도 안 보임
+  const subtab = !isSuper && subtab0 === "members" ? "dash" : subtab0;
   const [selUser, setSelUser] = useState(null);
   const [q, setQ] = useState("");
   const stats = [{
@@ -1374,11 +1376,15 @@ function Admin({
     if (!confirm(`'${username}' 회원의 비밀번호를 0000 으로 초기화할까요?`)) return;
     await onResetPassword(username);
   };
+
+  // 회원 관리 관련 기록은 root 에게만 (일반 관리자에겐 칼럼·시험 기록만)
+  const MEMBER_ACTIONS = ["관리자 지정", "관리자 해제", "회원 삭제", "비밀번호 초기화"];
+  const visibleLog = (auditLog || []).filter(g => isSuper || !MEMBER_ACTIONS.includes(g.action));
   const sorted = [...users].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   const kw = q.trim().toLowerCase();
   const filtered = kw ? sorted.filter(u => u.username.toLowerCase().includes(kw) || (u.kakaoId || "").toLowerCase().includes(kw)) : sorted;
   const scoreTone = ratio => ratio >= 0.8 ? "good" : ratio >= 0.5 ? "mid" : "low";
-  if (selUser) {
+  if (selUser && isSuper) {
     const u = users.find(x => x.username === selUser);
     const theirs = subs.filter(s => s.student === selUser).map(s => ({
       sub: s,
@@ -1403,7 +1409,7 @@ function Admin({
       className: "mr-user-badge"
     }, "관리자")), /*#__PURE__*/React.createElement("div", {
       className: "mr-account-role"
-    }, u.kakaoId ? `채팅방 ${u.kakaoId}` : "채팅방 미입력", u.createdAt ? ` · 가입 ${fmtDate(u.createdAt)}` : ""), isSuper && !u.isSuper ? /*#__PURE__*/React.createElement("div", {
+    }, u.kakaoId ? `채팅방 ${u.kakaoId}` : "채팅방 미입력", u.createdAt ? ` · 가입 ${fmtDate(u.createdAt)}` : ""), !u.isSuper ? /*#__PURE__*/React.createElement("div", {
       className: "mr-detail-actions"
     }, /*#__PURE__*/React.createElement("button", {
       className: "mr-mini-btn",
@@ -1416,7 +1422,7 @@ function Admin({
       onClick: () => removeUser(u.username)
     }, "회원 삭제")) : /*#__PURE__*/React.createElement("div", {
       className: "mr-super-note"
-    }, u.isSuper ? "root 계정이라 권한·삭제가 잠겨 있어요." : "회원 권한 관리는 root만 할 수 있어요.")), /*#__PURE__*/React.createElement("section", {
+    }, "이 계정은 권한 변경·삭제가 잠겨 있어요.")), /*#__PURE__*/React.createElement("section", {
       className: "mr-card"
     }, /*#__PURE__*/React.createElement("div", {
       className: "mr-card-tag"
@@ -1461,7 +1467,7 @@ function Admin({
   }, /*#__PURE__*/React.createElement("button", {
     className: subtab === "dash" ? "on" : "",
     onClick: () => setSubtab("dash")
-  }, "대시보드"), /*#__PURE__*/React.createElement("button", {
+  }, "대시보드"), isSuper && /*#__PURE__*/React.createElement("button", {
     className: subtab === "members" ? "on" : "",
     onClick: () => setSubtab("members")
   }, "회원 ", users.length), /*#__PURE__*/React.createElement("button", {
@@ -1536,14 +1542,14 @@ function Admin({
     className: "mr-card"
   }, /*#__PURE__*/React.createElement("div", {
     className: "mr-card-tag"
-  }, "활동 기록"), !auditLog || auditLog.length === 0 ? /*#__PURE__*/React.createElement("p", {
+  }, "활동 기록"), visibleLog.length === 0 ? /*#__PURE__*/React.createElement("p", {
     className: "mr-muted",
     style: {
       fontSize: "14px"
     }
   }, "아직 기록이 없어요.") : /*#__PURE__*/React.createElement("div", {
     className: "mr-log-list"
-  }, auditLog.map(g => /*#__PURE__*/React.createElement("div", {
+  }, visibleLog.map(g => /*#__PURE__*/React.createElement("div", {
     className: "mr-log-row",
     key: g.id
   }, /*#__PURE__*/React.createElement("div", {
