@@ -978,7 +978,9 @@ function MyRecords({ student, exams, subs }) {
 
 /* ===================== 관리자 페이지 ===================== */
 function Admin({ auth, isSuper, users, notices, exams, subs, auditLog, onToggleAdmin, onDeleteUser, onResetPassword }) {
-  const [subtab, setSubtab] = useState("dash");
+  const [subtab0, setSubtab] = useState("dash");
+  // 회원 관리는 root 전용 — 일반 관리자에겐 탭도, 상세도 안 보임
+  const subtab = !isSuper && subtab0 === "members" ? "dash" : subtab0;
   const [selUser, setSelUser] = useState(null);
   const [q, setQ] = useState("");
 
@@ -1003,6 +1005,10 @@ function Admin({ auth, isSuper, users, notices, exams, subs, auditLog, onToggleA
     await onResetPassword(username);
   };
 
+  // 회원 관리 관련 기록은 root 에게만 (일반 관리자에겐 칼럼·시험 기록만)
+  const MEMBER_ACTIONS = ["관리자 지정", "관리자 해제", "회원 삭제", "비밀번호 초기화"];
+  const visibleLog = (auditLog || []).filter((g) => isSuper || !MEMBER_ACTIONS.includes(g.action));
+
   const sorted = [...users].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   const kw = q.trim().toLowerCase();
   const filtered = kw
@@ -1014,7 +1020,7 @@ function Admin({ auth, isSuper, users, notices, exams, subs, auditLog, onToggleA
 
   const scoreTone = (ratio) => (ratio >= 0.8 ? "good" : ratio >= 0.5 ? "mid" : "low");
 
-  if (selUser) {
+  if (selUser && isSuper) {
     const u = users.find((x) => x.username === selUser);
     const theirs = subs
       .filter((s) => s.student === selUser)
@@ -1043,7 +1049,7 @@ function Admin({ auth, isSuper, users, notices, exams, subs, auditLog, onToggleA
                 {u.kakaoId ? `채팅방 ${u.kakaoId}` : "채팅방 미입력"}
                 {u.createdAt ? ` · 가입 ${fmtDate(u.createdAt)}` : ""}
               </div>
-              {isSuper && !u.isSuper ? (
+              {!u.isSuper ? (
                 <div className="mr-detail-actions">
                   <button className="mr-mini-btn" onClick={() => toggleAdmin(u.username)}>
                     {u.isAdmin ? "관리자 해제" : "관리자 지정"}
@@ -1056,9 +1062,7 @@ function Admin({ auth, isSuper, users, notices, exams, subs, auditLog, onToggleA
                   </button>
                 </div>
               ) : (
-                <div className="mr-super-note">
-                  {u.isSuper ? "root 계정이라 권한·삭제가 잠겨 있어요." : "회원 권한 관리는 root만 할 수 있어요."}
-                </div>
+                <div className="mr-super-note">이 계정은 권한 변경·삭제가 잠겨 있어요.</div>
               )}
             </section>
 
@@ -1106,9 +1110,11 @@ function Admin({ auth, isSuper, users, notices, exams, subs, auditLog, onToggleA
         <button className={subtab === "dash" ? "on" : ""} onClick={() => setSubtab("dash")}>
           대시보드
         </button>
-        <button className={subtab === "members" ? "on" : ""} onClick={() => setSubtab("members")}>
-          회원 {users.length}
-        </button>
+        {isSuper && (
+          <button className={subtab === "members" ? "on" : ""} onClick={() => setSubtab("members")}>
+            회원 {users.length}
+          </button>
+        )}
         <button className={subtab === "log" ? "on" : ""} onClick={() => setSubtab("log")}>
           활동 기록
         </button>
@@ -1192,11 +1198,11 @@ function Admin({ auth, isSuper, users, notices, exams, subs, auditLog, onToggleA
       ) : (
         <section className="mr-card">
           <div className="mr-card-tag">활동 기록</div>
-          {(!auditLog || auditLog.length === 0) ? (
+          {visibleLog.length === 0 ? (
             <p className="mr-muted" style={{ fontSize: "14px" }}>아직 기록이 없어요.</p>
           ) : (
             <div className="mr-log-list">
-              {auditLog.map((g) => (
+              {visibleLog.map((g) => (
                 <div className="mr-log-row" key={g.id}>
                   <div className="mr-log-main">
                     <span className="mr-log-actor">{g.actor || "?"}</span>
