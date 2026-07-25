@@ -4,6 +4,10 @@
 # 작업 지침 (root 권한 구조 등 민감 정보 포함 — 사이트 공개 배포 방지)
 CLAUDE.md
 
+# 빌드/검증 도구 (로컬에서만 사용, 사이트에 안 들어감)
+build.js
+verify.js
+
 # node 의존성 (verify.js 실행용)
 node_modules/
 package-lock.json
