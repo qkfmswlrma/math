@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>수학질문방</title>
 <meta name="description" content="수학질문방 - 칼럼과 시험으로 함께 공부하는 수학 커뮤니티" />
-<meta name="theme-color" content="#b388ff" />
+<meta name="theme-color" content="#f2e6fb" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 <meta name="apple-mobile-web-app-title" content="수학질문방" />
@@ -28,27 +28,27 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 <link rel="manifest" href="/manifest.json" />
 <style>
-  html,body,#root{margin:0;padding:0;min-height:100%;background:linear-gradient(165deg,#f4e9ff 0%,#fde9f4 46%,#e9eeff 100%)}
+  html,body,#root{margin:0;padding:0;min-height:100%;background:linear-gradient(165deg,#f4e9ff 0%,#fde9f4 46%,#e9eeff 100%);background-color:#f2e6fb}
   .mr-splash{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:'Pretendard',-apple-system,sans-serif;color:#4E5968}
   .mr-splash .lg{width:52px;height:52px;border-radius:15px;background:linear-gradient(140deg,#9b6cff,#ff8fc8);color:#fff;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800}
   .mr-splash .tx{font-weight:700;font-size:15px;letter-spacing:-0.3px}
   .mr-splash .sp{width:22px;height:22px;border:3px solid #E5E8EB;border-top-color:#9b6cff;border-radius:50%;animation:mrsp .7s linear infinite}
   @keyframes mrsp{to{transform:rotate(360deg)}}
   /* 어두운 화면 모드: 앱이 뜨기 전 스플래시·배경도 어둡게 (깜빡임 방지) */
-  html[data-theme="dark"],html[data-theme="dark"] body,html[data-theme="dark"] #root{background:linear-gradient(165deg,#1a1626 0%,#221a2b 46%,#181a2b 100%)}
+  html[data-theme="dark"],html[data-theme="dark"] body,html[data-theme="dark"] #root{background:linear-gradient(165deg,#1a1626 0%,#221a2b 46%,#181a2b 100%);background-color:#181a2b}
   html[data-theme="dark"] .mr-splash{color:#b3a9cc}
   html[data-theme="dark"] .mr-splash .sp{border-color:rgba(255,255,255,0.14);border-top-color:#b18cff}
 </style>
 <script>
   /* 저장된 화면 모드를 렌더 전에 미리 적용 (없으면 기기 설정을 따름) */
-  try{var mrT=localStorage.getItem('mr-theme');if(mrT!=='dark'&&mrT!=='light')mrT=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=mrT;}catch(e){}
+  try{var mrT=localStorage.getItem('mr-theme');if(mrT!=='dark'&&mrT!=='light')mrT=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=mrT;var mrMc=document.querySelector('meta[name="theme-color"]');if(mrMc)mrMc.setAttribute('content',mrT==='dark'?'#181a2b':'#f2e6fb');}catch(e){}
 </script>
 <script defer crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script defer crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/mathlive@0.110.0"></script>
+<!-- MathLive(수식 입력기)는 필요할 때만 loadMathLive()로 불러온다 (초기 로딩 경량화) -->
 <script defer src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>
 </head>
 <body>
@@ -67,8 +67,31 @@ const SUPABASE_URL = "https://fhdwwqlvosbjonrenpqz.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZoZHd3cWx2b3Niam9ucmVucHF6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMTk4NzYsImV4cCI6MjA5NTg5NTg3Nn0.JgUEKxDRioqKvhSaOPxJMH9tuo0wdFv0-kkc0s5mJ8U";
 const EMAIL_DOMAIN = "mathroom.app";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-/* MathLive(수식 입력기) 전역 설정: 키 입력 효과음 끔 */
-try { if (window.MathfieldElement) window.MathfieldElement.soundsDirectory = null; } catch (e) {}
+/* MathLive(수식 입력기)는 무거워서(약 220KB) 처음부터 안 받고,
+   수식 입력기를 실제로 열 때만 불러온다. 학생은 받을 일이 거의 없다. */
+function mathliveReady() {
+  try { return !!(window.customElements && window.customElements.get("math-field")); } catch (e) { return false; }
+}
+let __mathlivePromise = null;
+function loadMathLive() {
+  if (mathliveReady()) return Promise.resolve();
+  if (__mathlivePromise) return __mathlivePromise;
+  __mathlivePromise = new Promise((resolve) => {
+    try {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/mathlive@0.110.0";
+      s.onload = () => {
+        try { if (window.MathfieldElement) window.MathfieldElement.soundsDirectory = null; } catch (e) {}
+        if (window.customElements && window.customElements.whenDefined)
+          window.customElements.whenDefined("math-field").then(() => resolve(), () => resolve());
+        else resolve();
+      };
+      s.onerror = () => resolve(); // 실패해도 앱은 죽지 않게
+      document.head.appendChild(s);
+    } catch (e) { resolve(); }
+  });
+  return __mathlivePromise;
+}
 const emailOf = (id) => `${String(id).trim().toLowerCase()}@${EMAIL_DOMAIN}`;
 const padPw = (pw) => String(pw) + "__mr__";
 
@@ -453,7 +476,7 @@ function App() {
       document.documentElement.dataset.theme = theme;
       localStorage.setItem("mr-theme", theme);
       const meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.setAttribute("content", theme === "dark" ? "#1a1626" : "#b388ff");
+      if (meta) meta.setAttribute("content", theme === "dark" ? "#181a2b" : "#f2e6fb");
     } catch (e) {}
   }, [theme]);
   const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
@@ -655,7 +678,9 @@ function App() {
       clearTimeout(safety);
       refresh();
     })();
-    const { data: listener } = sb.auth.onAuthStateChange((_evt, session) => {
+    const { data: listener } = sb.auth.onAuthStateChange((evt, session) => {
+      // 첫 구독 시 오는 INITIAL_SESSION 은 아래 초기 로드가 이미 처리하므로 건너뛴다 (중복 요청 방지)
+      if (evt === "INITIAL_SESSION") return;
       setTimeout(async () => {
         if (session && session.user) {
           const p = await loadProfile(session.user.id);
@@ -4136,8 +4161,18 @@ function MathField({ initialLatex, onChange }) {
   const cbRef = React.useRef(onChange);
   cbRef.current = onChange;
   const [latex, setLatex] = useState(initialLatex || "");
+  const [ready, setReady] = useState(mathliveReady);
+
+  // 수식 입력기를 열 때 MathLive를 불러온다 (이미 있으면 즉시 준비 완료)
+  React.useEffect(() => {
+    if (ready) return;
+    let ok = true;
+    loadMathLive().then(() => { if (ok) setReady(true); });
+    return () => { ok = false; };
+  }, [ready]);
 
   React.useEffect(() => {
+    if (!ready) return;
     const mf = ref.current;
     if (!mf) return;
     try { mf.setAttribute("placeholder", "\\text{수식을 입력하세요}"); } catch (e) {}
@@ -4151,11 +4186,13 @@ function MathField({ initialLatex, onChange }) {
     mf.addEventListener("input", emit);
     const t = setTimeout(() => { try { mf.focus(); } catch (e) {} }, 80);
     return () => { clearTimeout(t); mf.removeEventListener("input", emit); };
-  }, []);
+  }, [ready]);
 
   return (
     <div className="mr-mathfield">
-      <math-field ref={ref}></math-field>
+      {ready
+        ? <math-field ref={ref}></math-field>
+        : <div className="mf-loading">수식 입력기 불러오는 중…</div>}
       {latex.trim() ? (
         <div className="mr-math-preview">
           <span className="mr-math-preview-tag">문제에 이렇게 보여요</span>
@@ -4623,6 +4660,7 @@ math-field:focus-within{outline:none; box-shadow:inset 0 0 0 2px var(--blue); ba
 math-field::part(menu-toggle){display:none}
 body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모달(460)보다 위에 뜨도록 */
 .mf-hint{font-size:12px; color:var(--t3); margin:8px 2px 0; line-height:1.5}
+.mf-loading{font-size:13px; color:var(--t3); font-weight:600; padding:18px; text-align:center; background:var(--bg); border-radius:12px}
 .mr-math-preview-tag{position:absolute; top:6px; left:10px; font-size:10.5px; font-weight:700; color:var(--t3)}
 .mr-math-block{display:block; margin:6px 0; overflow-x:auto}
 .mr-math{display:inline-block}
