@@ -68,6 +68,7 @@ const mapColumn = r => ({
   title: r.title,
   body: r.body || "",
   author: r.author || "",
+  authorId: r.author_id || null,
   isDraft: !!r.is_draft,
   category: r.category || "elem",
   sortOrder: r.sort_order || 0,
@@ -106,8 +107,18 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.3.0";
+const APP_VERSION = "2.4.1";
 const CHANGELOG = [{
+  v: "2.4.1",
+  date: "2026.7.25",
+  items: ["내가 쓴 글과 내가 낸 시험에는 안 읽음 표시가 붙지 않아요"],
+  adminItems: []
+}, {
+  v: "2.4.0",
+  date: "2026.7.25",
+  items: ["틀린 문제만 모아보는 오답노트가 생겼어요 (내 시험 기록 → 틀린 문제)", "오답노트에서 내 답·정답·해설을 한 번에 볼 수 있어요", "칼럼과 공지를 검색할 수 있어요 (제목·내용·글쓴이)"],
+  adminItems: ["칼럼 수정·삭제 권한을 시험과 같은 기준으로 맞췄어요"]
+}, {
   v: "2.3.0",
   date: "2026.7.25",
   items: ["모든 화면에 각자 주소가 생겼어요 — 링크를 복사해 카톡에 공유할 수 있어요", "칼럼·공지·시험은 하나하나 주소가 있어요 (예: /column/110001, /exam/320005)", "받은 링크로 들어가면 그 글·그 시험이 바로 열려요", "휴대폰 뒤로가기 버튼이 앱 안에서도 동작해요"],
@@ -219,6 +230,15 @@ function parsePath() {
   }
 }
 // 글번호로 찾기 — 분류가 바뀌기 전의 옛 번호로 들어와도 열리게
+// 검색용: 본문 HTML 에서 글자만 뽑기
+function plainText(html) {
+  return String(html || "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/&[a-z]+;/gi, " ");
+}
+function matchPost(n, kw) {
+  if (!kw) return true;
+  const k = kw.toLowerCase();
+  return String(n.title || "").toLowerCase().indexOf(k) !== -1 || plainText(n.body).toLowerCase().indexOf(k) !== -1 || String(n.author || "").toLowerCase().indexOf(k) !== -1;
+}
 function findByNo(list, no) {
   return (list || []).find(x => x.no === no || (x.prevNos || []).indexOf(no) !== -1);
 }
@@ -422,6 +442,16 @@ function App() {
       if (s.student === auth.username && !readExamIds.has(s.examId)) markExamRead(s.examId);
     });
   }, [subs, auth]);
+  // 내가 쓴 칼럼·공지, 내가 낸 시험은 안 읽음 표시를 붙이지 않음
+  useEffect(() => {
+    if (!auth || !auth.id) return;
+    notices.forEach(n => {
+      if (n.authorId && n.authorId === auth.id && !readColIds.has(n.id)) markColumnRead(n.id);
+    });
+    exams.forEach(e => {
+      if (e.authorId && e.authorId === auth.id && !readExamIds.has(e.id)) markExamRead(e.id);
+    });
+  }, [notices, exams, auth]);
   const [auditLog, setAuditLog] = useState([]);
   const [guestSubs, setGuestSubs] = useState([]);
   const role = auth && auth.isAdmin ? "admin" : "student";
@@ -977,6 +1007,9 @@ function App() {
     switch (key) {
       case "records":
         return loggedIn ? /*#__PURE__*/React.createElement(MyRecords, {
+          key: "r" + nav,
+          initialSub: route && route.tab === "records" ? route.sub : null,
+          pushUrl: pushUrl,
           student: student,
           exams: exams,
           subs: subs
@@ -1349,17 +1382,41 @@ function Account({
   }, "탈퇴하기"))));
 }
 
-/* ===================== 내 시험 기록 ===================== */
+/* ===================== 내 시험 기록 / 오답노트 ===================== */
 function MyRecords({
   student,
   exams,
-  subs
+  subs,
+  initialSub,
+  pushUrl
 }) {
   const [open, setOpen] = useState(null);
+  const [sub0, setSub0] = useState(initialSub === "wrong" ? "wrong" : "exams");
+  const goSub = t => {
+    setSub0(t);
+    setOpen(null);
+    if (pushUrl) pushUrl(t === "wrong" ? "/records/wrong" : "/records");
+  };
   const mine = subs.filter(s => s.student === student).map(s => ({
     sub: s,
     exam: exams.find(e => e.id === s.examId)
   })).filter(r => r.exam).sort((a, b) => (b.sub.submittedAt || 0) - (a.sub.submittedAt || 0));
+
+  // 틀린 문항만 모으기 (최근 응시부터)
+  const wrong = [];
+  mine.forEach(({
+    sub,
+    exam
+  }) => {
+    exam.questions.forEach((q, qi) => {
+      if (!isQCorrect(q, sub)) wrong.push({
+        exam,
+        sub,
+        q,
+        qi
+      });
+    });
+  });
   if (open) {
     const {
       sub,
@@ -1412,7 +1469,76 @@ function MyRecords({
     className: "mr-list-top"
   }, /*#__PURE__*/React.createElement("span", {
     className: "mr-list-title"
-  }, "내 시험 기록")), mine.length === 0 ? /*#__PURE__*/React.createElement(Empty, {
+  }, "내 시험 기록")), /*#__PURE__*/React.createElement("div", {
+    className: "mr-subtabs"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: sub0 === "exams" ? "on" : "",
+    onClick: () => goSub("exams")
+  }, "시험별 ", mine.length), /*#__PURE__*/React.createElement("button", {
+    className: sub0 === "wrong" ? "on" : "",
+    onClick: () => goSub("wrong")
+  }, "틀린 문제 ", wrong.length)), sub0 === "wrong" ? wrong.length === 0 ? /*#__PURE__*/React.createElement(Empty, {
+    text: mine.length === 0 ? "아직 응시한 시험이 없어요." : "틀린 문제가 없어요. 대단해요!"
+  }) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "mr-wrong-hint"
+  }, "틀린 문제만 모았어요. 해설이 있으면 함께 볼 수 있어요."), wrong.map(({
+    exam,
+    sub,
+    q,
+    qi
+  }, i) => {
+    const mine2 = sub.answers[q.id];
+    return /*#__PURE__*/React.createElement("section", {
+      className: "mr-card mr-take-q wrong",
+      key: sub.id + ":" + q.id,
+      style: {
+        animationDelay: `${Math.min(i, 10) * 30}ms`
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "mr-wrong-from"
+    }, exam.title, " · Q", qi + 1, " · ", fmtDate(sub.submittedAt)), q.image && /*#__PURE__*/React.createElement("img", {
+      className: "mr-q-img",
+      src: q.image,
+      alt: "문제 " + (qi + 1)
+    }), /*#__PURE__*/React.createElement(QBody, {
+      q: q
+    }), q.type === "mc" ? /*#__PURE__*/React.createElement("div", {
+      className: "mr-take-options"
+    }, q.options.map((opt, oi) => {
+      const isAns = oi === q.answer;
+      const isMine = mine2 === oi;
+      let cls = "mr-take-opt review";
+      if (isAns) cls += " ans";
+      if (isMine && !isAns) cls += " mychoice";
+      return /*#__PURE__*/React.createElement("div", {
+        key: oi,
+        className: cls
+      }, /*#__PURE__*/React.createElement("span", {
+        className: "mr-opt-label"
+      }, String.fromCharCode(9311 + oi + 1)), opt, isAns && /*#__PURE__*/React.createElement("span", {
+        className: "mr-opt-flag ans"
+      }, "정답"), isMine && !isAns && /*#__PURE__*/React.createElement("span", {
+        className: "mr-opt-flag mine"
+      }, "내 답"));
+    })) : /*#__PURE__*/React.createElement("div", {
+      className: "mr-short-review"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "mr-sr-row"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "mr-sr-k"
+    }, "내 답"), /*#__PURE__*/React.createElement("span", {
+      className: "mr-sr-v no"
+    }, mine2 && String(mine2).trim() || "(미작성)")), /*#__PURE__*/React.createElement("div", {
+      className: "mr-sr-row"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "mr-sr-k"
+    }, "정답"), /*#__PURE__*/React.createElement("span", {
+      className: "mr-sr-v ans"
+    }, q.accept || "—"))), /*#__PURE__*/React.createElement(ExplainBlock, {
+      q: q,
+      exam: exam
+    }));
+  })) : mine.length === 0 ? /*#__PURE__*/React.createElement(Empty, {
     text: "아직 응시한 시험이 없어요."
   }) : /*#__PURE__*/React.createElement("div", {
     className: "mr-postlist"
@@ -1825,8 +1951,8 @@ function Home({
       key: "records",
       icon: "📊",
       title: "내 시험 기록",
-      desc: "내가 응시한 시험과 점수",
-      meta: "내 점수 모아보기",
+      desc: "점수와 틀린 문제 모아보기",
+      meta: "오답노트 보기",
       tone: "blue"
     });
   }
@@ -1913,6 +2039,7 @@ function Notices({
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [savedNote, setSavedNote] = useState("");
+  const [q, setQ] = useState("");
   const authorName = () => (kakaoId || "").trim() || (student || "").trim() || "익명";
   const newWrite = () => {
     setTitle("");
@@ -2134,7 +2261,8 @@ function Notices({
 
   // 목록
   const inCat = n => (n.category || "elem") === cat;
-  const published = notices.filter(n => !n.isDraft && inCat(n)).sort((a, b) => a.sortOrder - b.sortOrder || b.createdAt - a.createdAt);
+  const kw = q.trim();
+  const published = notices.filter(n => !n.isDraft && inCat(n) && matchPost(n, kw)).sort((a, b) => a.sortOrder - b.sortOrder || b.createdAt - a.createdAt);
   const drafts = notices.filter(n => n.isDraft && inCat(n));
   const move = async (idx, dir) => {
     const j = idx + dir;
@@ -2160,7 +2288,12 @@ function Notices({
     key: k,
     className: cat === k ? "on" : "",
     onClick: () => setCat(k)
-  }, CAT[k]))), role === "admin" && drafts.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, CAT[k]))), /*#__PURE__*/React.createElement("input", {
+    className: "mr-input mr-search",
+    placeholder: "제목 · 내용 · 글쓴이 검색",
+    value: q,
+    onChange: e => setQ(e.target.value)
+  }), role === "admin" && drafts.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "mr-draft-head"
   }, "임시저장 ", drafts.length), /*#__PURE__*/React.createElement("div", {
     className: "mr-postlist"
@@ -2175,7 +2308,7 @@ function Notices({
   }, "임시저장")), /*#__PURE__*/React.createElement("span", {
     className: "mr-post-row-meta"
   }, fmtDate(n.createdAt)))))), published.length === 0 ? /*#__PURE__*/React.createElement(Empty, {
-    text: "아직 발행된 칼럼이 없어요."
+    text: kw ? `\u0027${kw}\u0027 검색 결과가 없어요.` : "아직 발행된 칼럼이 없어요."
   }) : /*#__PURE__*/React.createElement("div", {
     className: "mr-postlist"
   }, published.map((n, i) => {
@@ -2233,6 +2366,7 @@ function Announcements({
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [savedNote, setSavedNote] = useState("");
+  const [q, setQ] = useState("");
   const authorName = () => (kakaoId || "").trim() || (student || "").trim() || "익명";
 
   // 주소로 들어온 공지가 있으면 자동으로 열기
@@ -2429,7 +2563,8 @@ function Announcements({
   }
 
   // 목록
-  const published = posts.filter(n => !n.isDraft).sort((a, b) => a.sortOrder - b.sortOrder || b.createdAt - a.createdAt);
+  const kw = q.trim();
+  const published = posts.filter(n => !n.isDraft && matchPost(n, kw)).sort((a, b) => a.sortOrder - b.sortOrder || b.createdAt - a.createdAt);
   const drafts = posts.filter(n => n.isDraft);
   const move = async (idx, dir) => {
     const j = idx + dir;
@@ -2449,7 +2584,12 @@ function Announcements({
   }, "공지사항"), role === "admin" && /*#__PURE__*/React.createElement("button", {
     className: "mr-btn",
     onClick: newWrite
-  }, "공지 쓰기")), role === "admin" && drafts.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }, "공지 쓰기")), /*#__PURE__*/React.createElement("input", {
+    className: "mr-input mr-search",
+    placeholder: "제목 · 내용 검색",
+    value: q,
+    onChange: e => setQ(e.target.value)
+  }), role === "admin" && drafts.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "mr-draft-head"
   }, "임시저장 ", drafts.length), /*#__PURE__*/React.createElement("div", {
     className: "mr-postlist"
@@ -2464,7 +2604,7 @@ function Announcements({
   }, "임시저장")), /*#__PURE__*/React.createElement("span", {
     className: "mr-post-row-meta"
   }, fmtDate(n.createdAt)))))), published.length === 0 ? /*#__PURE__*/React.createElement(Empty, {
-    text: "아직 등록된 공지가 없어요."
+    text: kw ? `\u0027${kw}\u0027 검색 결과가 없어요.` : "아직 등록된 공지가 없어요."
   }) : /*#__PURE__*/React.createElement("div", {
     className: "mr-postlist"
   }, published.map((n, i) => {
@@ -5411,6 +5551,9 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-explain .mr-qbody{font-size:14px; line-height:1.85}
 .mr-explain-none{margin-top:14px; font-size:12.5px; color:var(--t3); font-weight:600; line-height:1.6; background:var(--bg); border-radius:11px; padding:11px 13px}
 .mr-explain-none b{color:var(--t2); font-weight:800}
+.mr-search{margin-top:0}
+.mr-wrong-hint{font-size:12.5px; color:var(--t3); font-weight:600; padding:2px 4px; line-height:1.6}
+.mr-wrong-from{font-size:12px; font-weight:700; color:var(--blue); background:var(--blue-bg); display:inline-block; padding:4px 10px; border-radius:8px; margin-bottom:10px}
 .mr-take-opt.sel{background:var(--blue-bg); border-color:var(--blue); color:var(--blue); font-weight:700}
 .mr-take-opt input{width:18px; height:18px; accent-color:var(--blue); flex:none}
 .mr-result-pill{font-weight:800; color:var(--green); background:var(--green-bg); padding:9px 15px; border-radius:11px; font-size:14.5px}
