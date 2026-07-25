@@ -1,2 +1,9 @@
 # Claude Code local config
 .claude/
+
+# 작업 지침 (root 권한 구조 등 민감 정보 포함 — 사이트 공개 배포 방지)
+CLAUDE.md
+
+# node 의존성 (verify.js 실행용)
+node_modules/
+package-lock.json
