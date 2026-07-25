@@ -1715,7 +1715,7 @@ function Home({ role, student, loggedIn, noticeCount, columnUnread, announceCoun
       key: "game",
       icon: "⚡",
       title: "스피드 연산",
-      desc: "무한 모드 · 콤보로 점수 폭발",
+      desc: "콤보를 이어 점수를 높이는 무한 모드",
       meta: "지금 도전하기",
       tone: "blue",
     },
@@ -3704,7 +3704,7 @@ function SpeedGame({ onBack, auth, onGoAccount, onLogin, initialSub, pushUrl }) 
           <p className="mr-game-rules">
             무한 모드예요. 시작 시간은 {START}초.<br />
             맞히면 <b className="mr-c-good">+{BONUS}초</b>, 틀리면 <b className="mr-c-bad">−{PENALTY}초</b>.<br />
-            연속으로 맞힐수록 콤보 배율이 <b>지수함수처럼</b> 폭발해요 🔥
+            연속으로 맞힐수록 콤보 배율이 <b>눈덩이처럼</b> 불어나요 🔥
           </p>
           <div className="mr-game-best">최고 점수 {best.toLocaleString()}</div>
           <button className="mr-btn mr-game-start" onClick={start}>시작하기</button>
