@@ -72,7 +72,8 @@ const mapSub = (r) => ({
   submittedAt: r.submitted_at ? Date.parse(r.submitted_at) : 0,
 });
 const mapProfile = (r) => ({
-  username: r.username, kakaoId: r.kakao_id || "", isAdmin: !!r.is_admin,
+  username: r.username, kakaoId: r.kakao_id || "", isAdmin: !!r.is_admin || !!r.is_super,
+  isSuper: !!r.is_super,
   createdAt: r.created_at ? Date.parse(r.created_at) : 0,
 });
 
@@ -233,6 +234,7 @@ function App() {
   const [guestSubs, setGuestSubs] = useState([]);
 
   const role = auth && auth.isAdmin ? "admin" : "student";
+  const isSuper = !!(auth && auth.isSuper);
   const student = auth ? auth.username : "";
   const loggedIn = !!auth;
   const requireLogin = () => setAuthOpen(true);
@@ -486,13 +488,23 @@ function App() {
       console.warn("비회원 집계 실패:", e);
     }
   };
+  // root 전용 동작 검사 (일반 관리자는 시도조차 못 하게)
+  const superOnly = () => {
+    if (!auth || !auth.isSuper) { alert("root만 할 수 있는 작업이에요."); return false; }
+    return true;
+  };
+  const isSuperUser = (username) => users.some((u) => u.username === username && u.isSuper);
   const onToggleAdmin = async (username, next) => {
+    if (!superOnly()) return;
+    if (isSuperUser(username)) { alert("root의 권한은 바꿀 수 없어요."); return; }
     const { error } = await sb.from("profiles").update({ is_admin: next }).eq("username", username);
     if (error) { alert("권한 변경에 실패했어요: " + error.message); return; }
     await logAction(next ? "관리자 지정" : "관리자 해제", username);
     await refresh();
   };
   const onDeleteUser = async (username) => {
+    if (!superOnly()) return;
+    if (isSuperUser(username)) { alert("root 계정은 삭제할 수 없어요."); return; }
     const { error } = await sb.rpc("admin_delete_user", { p_username: username });
     if (error) {
       // 함수가 아직 없거나 실패하면, 최소한 프로필이라도 제거
@@ -503,6 +515,8 @@ function App() {
     await refresh();
   };
   const onResetPassword = async (username) => {
+    if (!superOnly()) return;
+    if (isSuperUser(username)) { alert("root의 비밀번호는 여기서 바꿀 수 없어요."); return; }
     const { data, error } = await sb.rpc("admin_reset_password", { p_username: username });
     if (error) { alert("초기화 실패: " + error.message); return; }
     if (data === false) { alert("해당 회원을 찾지 못했어요."); return; }
@@ -517,7 +531,7 @@ function App() {
   const screenFor = (key) => {
     switch (key) {
       case "records": return loggedIn ? <MyRecords student={student} exams={exams} subs={subs} /> : homeView;
-      case "admin": return role === "admin" ? <Admin auth={auth} users={users} notices={notices} exams={exams} subs={subs} auditLog={auditLog} onToggleAdmin={onToggleAdmin} onDeleteUser={onDeleteUser} onResetPassword={onResetPassword} /> : homeView;
+      case "admin": return role === "admin" ? <Admin auth={auth} isSuper={isSuper} users={users} notices={notices} exams={exams} subs={subs} auditLog={auditLog} onToggleAdmin={onToggleAdmin} onDeleteUser={onDeleteUser} onResetPassword={onResetPassword} /> : homeView;
       case "account": return loggedIn ? <Account auth={auth} onChangePassword={onChangePassword} onUpdateKakao={onUpdateKakao} onDeleteMe={onDeleteMe} onLogout={onLogout} /> : homeView;
       case "notices": return <Notices role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} notices={notices} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} readIds={readColIds} onRead={markColumnRead} />;
       case "privacy": return <Privacy onBack={() => setTab("home")} />;
@@ -655,7 +669,7 @@ function Account({ auth, onChangePassword, onUpdateKakao, onDeleteMe, onLogout }
         </div>
         <div className="mr-account-name">{auth.username}</div>
         <div className="mr-account-role">
-          {auth.isAdmin ? "관리자" : "일반 회원"}
+          {auth.isSuper ? "root" : auth.isAdmin ? "관리자" : "일반 회원"}
           {!auth.isAdmin && auth.kakaoId ? ` · 채팅방 ${auth.kakaoId}` : ""}
         </div>
       </section>
@@ -806,7 +820,7 @@ function MyRecords({ student, exams, subs }) {
 }
 
 /* ===================== 관리자 페이지 ===================== */
-function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onDeleteUser, onResetPassword }) {
+function Admin({ auth, isSuper, users, notices, exams, subs, auditLog, onToggleAdmin, onDeleteUser, onResetPassword }) {
   const [subtab, setSubtab] = useState("dash");
   const [selUser, setSelUser] = useState(null);
   const [q, setQ] = useState("");
@@ -866,23 +880,29 @@ function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onD
               </div>
               <div className="mr-account-name">
                 {u.username}
-                {u.isAdmin && <span className="mr-user-badge">관리자</span>}
+                {u.isSuper ? <span className="mr-user-badge super">root</span> : u.isAdmin && <span className="mr-user-badge">관리자</span>}
               </div>
               <div className="mr-account-role">
                 {u.kakaoId ? `채팅방 ${u.kakaoId}` : "채팅방 미입력"}
                 {u.createdAt ? ` · 가입 ${fmtDate(u.createdAt)}` : ""}
               </div>
-              <div className="mr-detail-actions">
-                <button className="mr-mini-btn" onClick={() => toggleAdmin(u.username)}>
-                  {u.isAdmin ? "관리자 해제" : "관리자 지정"}
-                </button>
-                <button className="mr-mini-btn" onClick={() => resetPw(u.username)}>
-                  비밀번호 초기화
-                </button>
-                <button className="mr-mini-btn danger" onClick={() => removeUser(u.username)}>
-                  회원 삭제
-                </button>
-              </div>
+              {isSuper && !u.isSuper ? (
+                <div className="mr-detail-actions">
+                  <button className="mr-mini-btn" onClick={() => toggleAdmin(u.username)}>
+                    {u.isAdmin ? "관리자 해제" : "관리자 지정"}
+                  </button>
+                  <button className="mr-mini-btn" onClick={() => resetPw(u.username)}>
+                    비밀번호 초기화
+                  </button>
+                  <button className="mr-mini-btn danger" onClick={() => removeUser(u.username)}>
+                    회원 삭제
+                  </button>
+                </div>
+              ) : (
+                <div className="mr-super-note">
+                  {u.isSuper ? "root 계정이라 권한·삭제가 잠겨 있어요." : "회원 권한 관리는 root만 할 수 있어요."}
+                </div>
+              )}
             </section>
 
             <section className="mr-card">
@@ -999,7 +1019,7 @@ function Admin({ auth, users, notices, exams, subs, auditLog, onToggleAdmin, onD
                   <span className="mr-member-info">
                     <span className="mr-member-name">
                       {u.username}
-                      {u.isAdmin && <span className="mr-user-badge">관리자</span>}
+                      {u.isSuper ? <span className="mr-user-badge super">root</span> : u.isAdmin && <span className="mr-user-badge">관리자</span>}
                     </span>
                     <span className="mr-member-meta">
                       {u.kakaoId ? <strong className="mr-member-nick">{u.kakaoId}</strong> : "닉네임 미입력"}
@@ -2934,7 +2954,7 @@ function ExplainBlock({ q, exam }) {
   if (!hasExplain(q))
     return (
       <div className="mr-explain-none">
-        이 문제는 아직 해설이 없어요. 해설이 필요하면 출제자 <b>{exam.author || "관리자"}</b>님께 채팅방에서 문의해 주세요.
+        이 문제는 아직 해설이 없어요. 해설이 필요하면 출제자 <b>{exam.author || "관리자"}</b>님께 문의해 주세요.
       </div>
     );
   if (!open)
@@ -3567,6 +3587,8 @@ const CSS = `
 .mr-member-meta{font-size:12px; color:var(--t3); font-weight:600; margin-top:2px}
 .mr-member-nick{font-weight:800; color:var(--t1)}
 .mr-user-badge{font-size:10.5px; font-weight:800; color:var(--blue); background:var(--blue-bg); padding:2px 7px; border-radius:6px; margin-left:6px; vertical-align:middle}
+.mr-user-badge.super{color:#fff; background:var(--grad); box-shadow:0 2px 8px rgba(124,92,255,0.35)}
+.mr-super-note{margin-top:14px; font-size:12.5px; color:var(--t3); font-weight:600; line-height:1.6; background:var(--bg); border-radius:11px; padding:11px 13px; text-align:center}
 .mr-mini-btn{border:0; background:var(--bg); color:var(--t2); font-family:inherit; font-weight:700; font-size:12px; padding:7px 10px; border-radius:9px; cursor:pointer; white-space:nowrap}
 .mr-mini-btn:hover{background:var(--blue-bg); color:var(--blue)}
 .mr-mini-btn.danger:hover{background:var(--red-bg); color:var(--red)}
