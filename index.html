@@ -116,8 +116,18 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.5.0";
+const APP_VERSION = "2.5.2";
 const CHANGELOG = [{
+  v: "2.5.2",
+  date: "2026.7.25",
+  items: ["화면마다 다르게 나오던 정답률을 하나의 기준으로 통일했어요", "시험 목록이 정답률을 한 번에 받아와 더 빨라졌어요"],
+  adminItems: ["채점 화면도 비회원 오답률 대신 정답률로 바뀌었어요"]
+}, {
+  v: "2.5.1",
+  date: "2026.7.25",
+  items: ["시험 목록에서 회원과 비회원을 합친 평균 정답률을 바로 볼 수 있어요"],
+  adminItems: []
+}, {
   v: "2.5.0",
   date: "2026.7.25",
   items: ["카톡에 링크를 붙이면 글 제목과 내용이 미리보기로 떠요", "시험 링크는 시험 제목과 출제자가 보여요"],
@@ -3027,6 +3037,7 @@ function Exams(props) {
     initialNo,
     pushUrl
   } = props;
+  const allRates = useAllExamRates(); // null=로딩중, false=서버에 함수 없음, {}=결과
   // 주소가 /exam/310001 이면 그 시험의 종류로 시작
   const byNo = initialNo ? findByNo(props.exams, initialNo) : null;
   const startType = byNo ? byNo.examType || "level" : initialSub === "level" || initialSub === "today" ? initialSub : null;
@@ -3052,7 +3063,8 @@ function Exams(props) {
     examType,
     onBackToChooser,
     initialNo,
-    goUrl
+    goUrl,
+    allRates
   };
   if (props.role === "admin") return /*#__PURE__*/React.createElement(ExamsAdmin, _extends({}, shared, {
     exams: filtered
@@ -3068,6 +3080,7 @@ function Exams(props) {
 function ExamsAdmin({
   exams,
   isSuper,
+  allRates,
   onAddExam,
   onEditExam,
   onDeleteExam,
@@ -3178,7 +3191,12 @@ function ExamsAdmin({
       className: "mr-sched-tag"
     }, "⏰ 예약됨 · ", new Date(ex.publishAt).getMonth() + 1, "월 ", new Date(ex.publishAt).getDate(), "일 공개"), /*#__PURE__*/React.createElement("div", {
       className: "mr-exam-meta"
-    }, /*#__PURE__*/React.createElement("span", null, "출제자 ", ex.author || "관리자", isMine ? " (나)" : ""), /*#__PURE__*/React.createElement("span", null, "·"), /*#__PURE__*/React.createElement("span", null, "문항 ", ex.questions.length, "개"), /*#__PURE__*/React.createElement("span", null, "·"), /*#__PURE__*/React.createElement("span", null, "만점 ", maxScore(ex), "점"), /*#__PURE__*/React.createElement("span", null, "·"), /*#__PURE__*/React.createElement("span", null, "제출 ", exSubs.length, "건"), pending > 0 && /*#__PURE__*/React.createElement("span", {
+    }, /*#__PURE__*/React.createElement("span", null, "출제자 ", ex.author || "관리자", isMine ? " (나)" : ""), /*#__PURE__*/React.createElement("span", null, "·"), /*#__PURE__*/React.createElement("span", null, "문항 ", ex.questions.length, "개"), /*#__PURE__*/React.createElement("span", null, "·"), /*#__PURE__*/React.createElement("span", null, "만점 ", maxScore(ex), "점"), /*#__PURE__*/React.createElement("span", null, "·"), /*#__PURE__*/React.createElement("span", null, "제출 ", exSubs.length, "건"), /*#__PURE__*/React.createElement("span", null, "·"), allRates && allRates !== true ? /*#__PURE__*/React.createElement(ExamAvgRate, {
+      stat: allRates[ex.id]
+    }) : /*#__PURE__*/React.createElement(ExamAvgRateSolo, {
+      examId: ex.id,
+      questions: ex.questions
+    }), pending > 0 && /*#__PURE__*/React.createElement("span", {
       className: "mr-badge-red"
     }, "채점 대기 ", pending)), /*#__PURE__*/React.createElement("div", {
       className: "mr-row-between",
@@ -3490,6 +3508,7 @@ function GradePanel({
 }) {
   const [openId, setOpenId] = useState(null);
   const guests = guestSubs || [];
+  const rates = useExamRates(exam.id);
   return /*#__PURE__*/React.createElement("div", {
     className: "mr-col"
   }, /*#__PURE__*/React.createElement("button", {
@@ -3513,12 +3532,10 @@ function GradePanel({
   }, "회원 응시 ", subs.length, "명 · 비회원 참여 ", guests.length, "명"), /*#__PURE__*/React.createElement("div", {
     className: "mr-qrate-list"
   }, exam.questions.map((q, qi) => {
-    const mTotal = subs.length;
-    const mCorrect = subs.filter(s => isQCorrect(q, s)).length;
-    const mRate = mTotal ? Math.round(100 * mCorrect / mTotal) : null;
-    const gTotal = guests.length;
-    const gWrong = guests.filter(s => !isQCorrect(q, s)).length;
-    const gWrongRate = gTotal ? Math.round(100 * gWrong / gTotal) : null;
+    // 응시 화면·채점 결과와 같은 서버 집계를 사용해 숫자가 어긋나지 않게 함
+    const st = rates[q.id];
+    const mRate = st && st.total ? Math.round(100 * st.correct / st.total) : null;
+    const gRate = st && st.gtotal ? Math.round(100 * st.gcorrect / st.gtotal) : null;
     return /*#__PURE__*/React.createElement("div", {
       className: "mr-qrate-row",
       key: q.id
@@ -3529,9 +3546,12 @@ function GradePanel({
       style: {
         color: rateColor(mRate)
       }
-    }, "회원정답률 ", mTotal ? mRate + "%" : "—"), /*#__PURE__*/React.createElement("span", {
-      className: "mr-qrate-wrong"
-    }, "비회원 오답률 ", gTotal ? gWrongRate + "%" : "—"));
+    }, "회원정답률 ", mRate === null ? "—" : mRate + "%"), /*#__PURE__*/React.createElement("span", {
+      className: "mr-qrate-wrong",
+      style: {
+        color: rateColor(gRate)
+      }
+    }, "비회원정답률 ", gRate === null ? "—" : gRate + "%"));
   }))), subs.length === 0 ? /*#__PURE__*/React.createElement(Empty, {
     text: "아직 제출된 답안이 없어요."
   }) : subs.map(s => /*#__PURE__*/React.createElement(SubmissionRow, {
@@ -3687,6 +3707,7 @@ function SubmissionRow({
 function ExamsStudent({
   student,
   loggedIn,
+  allRates,
   requireLogin,
   exams,
   subs,
@@ -3748,7 +3769,12 @@ function ExamsStudent({
       className: "mr-date"
     }, fmtDate(ex.createdAt))), /*#__PURE__*/React.createElement("div", {
       className: "mr-exam-meta"
-    }, /*#__PURE__*/React.createElement("span", null, "출제자 ", ex.author || "관리자"), /*#__PURE__*/React.createElement("span", null, "·"), /*#__PURE__*/React.createElement("span", null, "문항 ", ex.questions.length, "개"), /*#__PURE__*/React.createElement("span", null, "·"), /*#__PURE__*/React.createElement("span", null, "만점 ", maxScore(ex), "점")), /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement("span", null, "출제자 ", ex.author || "관리자"), /*#__PURE__*/React.createElement("span", null, "·"), /*#__PURE__*/React.createElement("span", null, "문항 ", ex.questions.length, "개"), /*#__PURE__*/React.createElement("span", null, "·"), /*#__PURE__*/React.createElement("span", null, "만점 ", maxScore(ex), "점"), /*#__PURE__*/React.createElement("span", null, "·"), allRates && allRates !== true ? /*#__PURE__*/React.createElement(ExamAvgRate, {
+      stat: allRates[ex.id]
+    }) : /*#__PURE__*/React.createElement(ExamAvgRateSolo, {
+      examId: ex.id,
+      questions: ex.questions
+    })), /*#__PURE__*/React.createElement("div", {
       className: "mr-row-end"
     }, mine ? mine.graded ? /*#__PURE__*/React.createElement("span", {
       className: "mr-result-pill"
@@ -4466,6 +4492,70 @@ function useExamRates(examId) {
     };
   }, [examId]);
   return rates;
+}
+
+/* 시험 목록의 정답률: 모든 시험 통계를 한 번에 받아온다.
+   서버에 exam_stats_all 이 없으면 null 을 돌려주고, 화면은 예전 방식으로 넘어간다. */
+function useAllExamRates() {
+  const [map, setMap] = useState(null); // null = 아직 모름/사용 불가
+  useEffect(() => {
+    let active = true;
+    sb.rpc("exam_stats_all").then(({
+      data,
+      error
+    }) => {
+      if (!active) return;
+      if (error || !data) {
+        setMap(false);
+        return;
+      }
+      const o = {};
+      data.forEach(r => {
+        o[r.exam_id] = r;
+      });
+      setMap(o);
+    }).catch(() => {
+      if (active) setMap(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+  return map;
+}
+function rateSpan(avg) {
+  return /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: rateColor(avg),
+      fontWeight: 700
+    }
+  }, "평균정답률 ", avg === null ? "—" : avg + "%");
+}
+
+// 한꺼번에 받아온 통계로 표시
+function ExamAvgRate({
+  stat
+}) {
+  const tot = stat ? Number(stat.total || 0) + Number(stat.gtotal || 0) : 0;
+  const cor = stat ? Number(stat.correct || 0) + Number(stat.gcorrect || 0) : 0;
+  return rateSpan(tot ? Math.round(100 * cor / tot) : null);
+}
+
+// 예비용: 시험 하나씩 따로 집계 (exam_stats_all 이 없을 때)
+function ExamAvgRateSolo({
+  examId,
+  questions
+}) {
+  const rates = useExamRates(examId);
+  let tot = 0,
+    cor = 0;
+  (questions || []).forEach(q => {
+    const st = rates[q.id];
+    if (!st) return;
+    tot += (st.total || 0) + (st.gtotal || 0);
+    cor += (st.correct || 0) + (st.gcorrect || 0);
+  });
+  return rateSpan(tot ? Math.round(100 * cor / tot) : null);
 }
 
 /* 해설이 실제로 작성돼 있는지 (빈 조각뿐이면 없음으로 처리) */
