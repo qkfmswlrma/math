@@ -84,15 +84,26 @@ class MetaSetter {
   }
 }
 class TitleSetter {
-  constructor(text) {
-    this.text = text;
+  // 주의: HTMLRewriter 가 handlers.text 를 함수로 기대하므로
+  //       속성 이름에 text 를 쓰면 안 된다.
+  constructor(value) {
+    this.value = value;
   }
   element(el) {
-    el.setInnerContent(this.text);
+    el.setInnerContent(this.value);
   }
 }
 
 export async function onRequest(context) {
+  // 미리보기 처리 중 무슨 문제가 생겨도 사이트는 정상 동작해야 한다
+  try {
+    return await handle(context);
+  } catch (e) {
+    return context.next();
+  }
+}
+
+async function handle(context) {
   const { request, next } = context;
   const url = new URL(request.url);
   const m = url.pathname.match(/^\/(column|notice|exam)\/(\d+)\/?$/);
