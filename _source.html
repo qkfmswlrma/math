@@ -122,8 +122,14 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.7.0";
+const APP_VERSION = "2.8.0";
 const CHANGELOG = [
+  {
+    v: "2.8.0",
+    date: "2026.7.26",
+    items: ["홈 화면에 앱처럼 추가하는 방법을 화면 아래에서 바로 알려줘요"],
+    adminItems: ["칼럼과 공지를 쓸 때 사진을 넣을 수 있어요. 글자 사이에 그대로 들어가요"],
+  },
   {
     v: "2.7.0",
     date: "2026.7.26",
@@ -463,6 +469,23 @@ function difficultyOf(rate) {
   if (rate >= 40) return { label: "보통", cls: "mid" };
   return { label: "어려움", cls: "hard" };
 }
+/* ===== 홈 화면에 추가 안내 ===== */
+// 이미 홈 화면에서 열었는지 (그러면 안내가 필요 없다)
+function isStandalone() {
+  try {
+    return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+  } catch (e) { return false; }
+}
+function isIOS() {
+  try { return /iPad|iPhone|iPod/.test(navigator.userAgent); } catch (e) { return false; }
+}
+function isAndroid() {
+  try { return /Android/.test(navigator.userAgent); } catch (e) { return false; }
+}
+// 카톡 등 앱 안 브라우저에서는 홈 화면에 추가가 안 된다
+function isInAppBrowser() {
+  try { return /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\//i.test(navigator.userAgent); } catch (e) { return false; }
+}
 // 저장된 화면 모드 (없으면 기기 설정을 따름)
 function getTheme() {
   try {
@@ -494,6 +517,43 @@ function App() {
     } catch (e) {}
   }, [theme]);
   const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
+  // 홈 화면에 추가 안내
+  const [installOpen, setInstallOpen] = useState(false);
+  const [bannerOn, setBannerOn] = useState(false);
+  const [canPrompt, setCanPrompt] = useState(false);
+  const promptRef = React.useRef(null);
+  const installed = isStandalone();
+  useEffect(() => {
+    if (installed) return;
+    const onBip = (e) => { e.preventDefault(); promptRef.current = e; setCanPrompt(true); };
+    window.addEventListener("beforeinstallprompt", onBip);
+    let dismissed = false;
+    try { dismissed = localStorage.getItem("mr-a2hs") === "off"; } catch (e) {}
+    // 들어오자마자 띄우면 방해되니 잠깐 뒤에
+    const t = dismissed ? null : setTimeout(() => setBannerOn(true), 2500);
+    return () => { window.removeEventListener("beforeinstallprompt", onBip); if (t) clearTimeout(t); };
+  }, [installed]);
+  const closeBanner = () => {
+    setBannerOn(false);
+    try { localStorage.setItem("mr-a2hs", "off"); } catch (e) {}
+  };
+  // 안드로이드는 브라우저 설치창을 바로 띄우고, 아이폰은 방법을 알려준다
+  const startInstall = async () => {
+    const p = promptRef.current;
+    if (p) {
+      setBannerOn(false);
+      try {
+        p.prompt();
+        await p.userChoice;
+        promptRef.current = null;
+        setCanPrompt(false);
+        try { localStorage.setItem("mr-a2hs", "off"); } catch (e) {}
+        return;
+      } catch (e) {}
+    }
+    setBannerOn(false);
+    setInstallOpen(true);
+  };
   useEffect(() => {
     const onPop = () => {
       const r = parsePath();
@@ -1031,9 +1091,86 @@ function App() {
         <button className="mr-foot-link" onClick={() => go("changelog")}>v{APP_VERSION}</button>
         <span className="mr-foot-sep">·</span>
         <button className="mr-foot-link" onClick={() => go("privacy")}>개인정보 처리방침</button>
+        {!installed && (
+          <>
+            <span className="mr-foot-sep">·</span>
+            <button className="mr-foot-link" onClick={() => setInstallOpen(true)}>홈 화면에 추가</button>
+          </>
+        )}
       </footer>
 
+      {bannerOn && !installed && (isIOS() || isAndroid() || canPrompt) && (
+        <InstallBanner onAdd={startInstall} onClose={closeBanner} />
+      )}
+      {installOpen && <InstallGuide onClose={() => setInstallOpen(false)} />}
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onLogin={onLogin} onSignup={onSignup} />}
+    </div>
+  );
+}
+
+/* 홈 화면에 추가하는 방법 안내 (아이폰은 자동 설치가 안 돼서 단계로 알려준다) */
+function InstallGuide({ onClose }) {
+  const ios = isIOS();
+  const inApp = isInAppBrowser();
+  const steps = ios
+    ? [
+        { t: "화면 아래 점 세 개 누르기", d: "주소창 오른쪽 끝에 있어요" },
+        { t: "\"공유\" 누르기", d: "메뉴 맨 위에 있어요" },
+        { t: "\"홈 화면에 추가\" 누르기", d: "아래로 쓸어내리면 보여요" },
+        { t: "오른쪽 위 \"추가\" 누르면 끝", d: "홈 화면에 아이콘이 생겨요" },
+      ]
+    : [
+        { t: "오른쪽 위 점 세 개 메뉴 열기", d: "주소창 옆에 있어요" },
+        { t: "\"홈 화면에 추가\" 누르기", d: "목록에서 찾아 눌러요" },
+        { t: "\"추가\" 누르면 끝", d: "홈 화면에 아이콘이 생겨요" },
+      ];
+  return (
+    <div className="mr-modal-overlay" onClick={onClose} style={{ zIndex: 470 }}>
+      <div className="mr-a2hs-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="mr-a2hs-head">
+          <span className="mr-modal-title">홈 화면에 추가하기</span>
+          <button className="mr-modal-x" onClick={onClose}>×</button>
+        </div>
+        <div className="mr-a2hs-hero">
+          <span className="mr-a2hs-icon">∫</span>
+          <div className="mr-a2hs-hero-text">
+            <div className="mr-a2hs-hero-title">수학질문방</div>
+            <div className="mr-a2hs-hero-sub">주소를 칠 필요 없이 아이콘만 누르면 바로 열려요</div>
+          </div>
+        </div>
+        {inApp && (
+          <div className="mr-a2hs-warn">
+            지금은 다른 앱 안에서 열려 있어요. 오른쪽 아래 메뉴에서 {ios ? "Safari" : "크롬"}로 먼저 열어주세요
+          </div>
+        )}
+        <ol className="mr-a2hs-steps">
+          {steps.map((s, i) => (
+            <li key={i}>
+              <span className="mr-a2hs-num">{i + 1}</span>
+              <span className="mr-a2hs-step-text">
+                <b>{s.t}</b>
+                <em>{s.d}</em>
+              </span>
+            </li>
+          ))}
+        </ol>
+        <button className="mr-btn mr-a2hs-done" onClick={onClose}>알겠어요</button>
+      </div>
+    </div>
+  );
+}
+
+/* 하단 설치 배너: 아직 홈 화면에 없고, 닫은 적 없을 때만 보인다 */
+function InstallBanner({ onAdd, onClose }) {
+  return (
+    <div className="mr-a2hs-banner">
+      <span className="mr-a2hs-bicon">∫</span>
+      <div className="mr-a2hs-btext">
+        <b>홈 화면에 추가하기</b>
+        <em>앱처럼 바로 열 수 있어요</em>
+      </div>
+      <button className="mr-a2hs-badd" onClick={onAdd}>추가</button>
+      <button className="mr-a2hs-bx" onClick={onClose} aria-label="닫기">×</button>
     </div>
   );
 }
@@ -2367,10 +2504,58 @@ function Announcements({ role, student, kakaoId, posts, onAdd, onDelete, onEdit,
 }
 
 /* ===================== 서식 입력기 (칼럼용) ===================== */
+/* 사진 한 장을 적당한 크기로 줄여 저장소에 올린다.
+   올리기에 실패하면 글 안에 그대로 담아 저장한다 (사진이 사라지지 않게). */
+function uploadPicture(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("사진을 읽지 못했어요."));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("사진을 열지 못했어요."));
+      img.onload = () => {
+        const max = 1600;
+        let { width, height } = img;
+        if (width > max || height > max) {
+          const s = Math.min(max / width, max / height);
+          width = Math.round(width * s);
+          height = Math.round(height * s);
+        }
+        const c = document.createElement("canvas");
+        c.width = width;
+        c.height = height;
+        c.getContext("2d").drawImage(img, 0, 0, width, height);
+        const dataUrl = c.toDataURL("image/jpeg", 0.9);
+        c.toBlob(
+          async (blob) => {
+            if (!blob) { resolve(dataUrl); return; }
+            try {
+              const path = "col-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8) + ".jpg";
+              const up = await sb.storage.from("exam-images").upload(path, blob, { contentType: "image/jpeg", upsert: false });
+              if (up.error) throw up.error;
+              const { data: pub } = sb.storage.from("exam-images").getPublicUrl(path);
+              resolve(pub.publicUrl);
+            } catch (err) {
+              console.warn("사진 업로드 실패, 글에 담아서 저장:", err);
+              resolve(dataUrl);
+            }
+          },
+          "image/jpeg",
+          0.9
+        );
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 function RichEditor({ value, onChange, placeholder }) {
   const ref = React.useRef(null);
   const lastRange = React.useRef(null);
   const draft = React.useRef({ latex: "", tree: null });
+  const fileRef = React.useRef(null);
+  const [picBusy, setPicBusy] = useState(false);
   const [building, setBuilding] = useState(null);
   React.useEffect(() => {
     if (ref.current && (value || "") !== ref.current.innerHTML) {
@@ -2397,6 +2582,46 @@ function RichEditor({ value, onChange, placeholder }) {
     }
   };
   const openNewMath = (e) => { e.preventDefault(); saveRange(); draft.current = { latex: "", tree: null }; setBuilding({ mode: "new" }); };
+  /* 사진 넣기: 커서 자리에 글자처럼 끼워 넣는다 */
+  const pickPicture = (e) => {
+    e.preventDefault();
+    saveRange();
+    if (fileRef.current) fileRef.current.click();
+  };
+  const insertPicture = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    setPicBusy(true);
+    try {
+      const url = await uploadPicture(file);
+      const el = ref.current;
+      const img = document.createElement("img");
+      img.src = url;
+      img.className = "mrpic";
+      const sp = document.createTextNode(" ");
+      const range = lastRange.current && el && el.contains(lastRange.current.commonAncestorContainer) ? lastRange.current : null;
+      if (range) {
+        range.collapse(false);
+        const frag = document.createDocumentFragment();
+        frag.appendChild(img);
+        frag.appendChild(sp);
+        range.insertNode(frag);
+        const r2 = document.createRange();
+        r2.setStartAfter(sp); r2.collapse(true);
+        const sel = document.getSelection(); sel.removeAllRanges(); sel.addRange(r2);
+      } else if (el) {
+        el.appendChild(img);
+        el.appendChild(sp);
+      }
+      sync();
+      if (ref.current) ref.current.focus();
+    } catch (err) {
+      alert("사진을 넣지 못했어요. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setPicBusy(false);
+    }
+  };
   const openEditMath = (chip) => {
     draft.current = { latex: chip.dataset.latex || "", tree: null };
     setBuilding({ mode: "edit", chip });
@@ -2446,6 +2671,10 @@ function RichEditor({ value, onChange, placeholder }) {
       <div className="mr-rte-toolbar">
         <div className="mr-rte-tools">
           <button type="button" className="mr-rte-btn sm mathbtn" title="수식 넣기" onMouseDown={openNewMath}>＋수식</button>
+          <button type="button" className="mr-rte-btn sm picbtn" title="사진 넣기" onMouseDown={pickPicture} disabled={picBusy}>
+            {picBusy ? "올리는 중…" : "＋사진"}
+          </button>
+          <input ref={fileRef} type="file" accept="image/*" hidden onChange={insertPicture} />
           <span className="mr-rte-div" />
           <button type="button" className="mr-rte-btn" style={{ fontWeight: 800 }} title="굵게" onMouseDown={(e) => tool(e, "bold")}>가</button>
           <button type="button" className="mr-rte-btn" style={{ fontStyle: "italic" }} title="기울임" onMouseDown={(e) => tool(e, "italic")}>가</button>
@@ -4992,6 +5221,11 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-rte-tools::-webkit-scrollbar{display:none}
 .mr-rte-tools > *{flex:0 0 auto}
 .mr-rte-btn.mathbtn{background:var(--blue-bg); color:var(--blue); font-weight:800}
+.mr-rte-btn.picbtn{background:var(--green-bg); color:var(--green); font-weight:800}
+.mr-rte-btn.picbtn:hover{background:var(--green-bg); color:var(--green)}
+.mr-rte-btn:disabled{opacity:.6; cursor:default}
+/* 글 안의 사진: 글자처럼 줄 안에 흐르고, 화면보다 커지지 않는다 */
+.mr-rte img,.mr-notice-body img{max-width:100%; height:auto; vertical-align:middle; border-radius:12px; margin:2px 0}
 .mr-rte-mathedit{border:1.5px solid var(--blue); margin:8px; border-radius:12px; padding:10px; background:var(--blue-bg)}
 .mr-rte .mchip{display:inline-block; vertical-align:middle; margin:0 2px; padding:1px 5px; background:var(--blue-bg); border-radius:6px; cursor:pointer; font-size:16px}
 .mr-rte-btn{border:0; background:var(--bg); color:var(--t1); min-width:34px; height:34px; padding:0 9px; border-radius:8px; font-family:inherit; font-size:15px; cursor:pointer; transition:background .12s; line-height:1}
@@ -5328,6 +5562,39 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
   display:grid; place-items:center; transition:opacity .25s ease; -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px)}
 @keyframes screenIn{from{opacity:0; transform:translateY(20px) scale(.985)}to{opacity:1; transform:none}}
 .mr-screen-in{animation:screenIn .44s cubic-bezier(.22,1,.36,1)}
+
+/* ===== 홈 화면에 추가: 하단 배너 + 안내 시트 ===== */
+.mr-a2hs-banner{
+  position:fixed; left:12px; right:12px; bottom:calc(12px + env(safe-area-inset-bottom)); z-index:440;
+  display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:20px;
+  background:var(--card); border:1px solid var(--line); box-shadow:0 16px 40px rgba(72,40,110,0.28);
+  -webkit-backdrop-filter:blur(16px) saturate(170%); backdrop-filter:blur(16px) saturate(170%);
+  max-width:520px; margin:0 auto; animation:a2hsUp .4s cubic-bezier(.22,1,.36,1) both;
+}
+@keyframes a2hsUp{from{opacity:0; transform:translateY(20px)}to{opacity:1; transform:none}}
+.mr-a2hs-bicon{width:42px; height:42px; border-radius:13px; background:var(--grad); color:#fff; display:grid; place-items:center; font-size:22px; font-weight:800; flex:none}
+.mr-a2hs-btext{display:flex; flex-direction:column; gap:2px; flex:1; min-width:0}
+.mr-a2hs-btext b{font-size:14.5px; font-weight:800; color:var(--t1); letter-spacing:-0.3px}
+.mr-a2hs-btext em{font-size:12.5px; font-weight:600; color:var(--t3); font-style:normal}
+.mr-a2hs-badd{border:0; background:var(--grad); color:#fff; font-family:inherit; font-weight:800; font-size:14px; padding:10px 16px; border-radius:12px; cursor:pointer; flex:none; box-shadow:0 6px 16px rgba(124,92,255,0.35)}
+.mr-a2hs-bx{border:0; background:none; color:var(--t3); font-size:22px; line-height:1; cursor:pointer; padding:0 2px; flex:none}
+.mr-a2hs-sheet{
+  width:100%; max-width:420px; background:var(--card); border:1px solid var(--line); border-radius:24px; padding:20px;
+  box-shadow:0 24px 70px rgba(0,0,0,.3); animation:rise .25s cubic-bezier(.2,.7,.3,1) both; max-height:86vh; overflow-y:auto;
+}
+.mr-a2hs-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px}
+.mr-a2hs-hero{display:flex; align-items:center; gap:13px; padding:14px; border-radius:18px; background:var(--bg); margin-bottom:16px}
+.mr-a2hs-icon{width:52px; height:52px; border-radius:16px; background:var(--grad); color:#fff; display:grid; place-items:center; font-size:27px; font-weight:800; flex:none}
+.mr-a2hs-hero-title{font-size:16px; font-weight:800; color:var(--t1)}
+.mr-a2hs-hero-sub{font-size:12.5px; font-weight:600; color:var(--t3); margin-top:3px; line-height:1.5}
+.mr-a2hs-warn{background:var(--red-bg); color:var(--red); font-size:13px; font-weight:700; padding:11px 13px; border-radius:12px; line-height:1.5; margin-bottom:14px}
+.mr-a2hs-steps{list-style:none; display:flex; flex-direction:column; gap:12px; margin:0 0 18px; padding:0}
+.mr-a2hs-steps li{display:flex; align-items:flex-start; gap:11px}
+.mr-a2hs-num{width:26px; height:26px; border-radius:50%; background:var(--grad); color:#fff; font-size:13.5px; font-weight:800; display:grid; place-items:center; flex:none}
+.mr-a2hs-step-text{display:flex; flex-direction:column; gap:2px; min-width:0}
+.mr-a2hs-step-text b{font-size:15px; font-weight:800; color:var(--t1); letter-spacing:-0.3px}
+.mr-a2hs-step-text em{font-size:12.5px; font-weight:600; color:var(--t3); font-style:normal}
+.mr-a2hs-done{width:100%; padding:14px; font-size:15.5px}
 
 /* ===== 화면 설정: 토글 스위치 ===== */
 .mr-setting-row{display:flex; align-items:center; justify-content:space-between; gap:14px}
