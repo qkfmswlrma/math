@@ -152,7 +152,7 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.9.0";
+const APP_VERSION = "2.9.1";
 const CHANGELOG = [{
   v: "2.9.0",
   date: "2026.7.26",
@@ -3161,13 +3161,18 @@ function refreshLinks(root) {
     const s = t.nodeValue || "";
     const frag = document.createDocumentFragment();
     let last = 0,
-      m;
+      m,
+      made = false;
     LINK_FIND.lastIndex = 0;
     while (m = LINK_FIND.exec(s)) {
+      const endIdx = m.index + m[0].length;
+      const after = s.charAt(endIdx); // 주소 바로 뒤 글자 (없으면 빈 문자열)
+      const caretHere = t === caretNode && caretOff === endIdx;
+      // 아직 주소를 치고 있는 중이면 그대로 둔다.
+      // 띄어쓰기로 끝났거나, 커서가 다른 곳으로 옮겨갔을 때만 링크로 만든다.
+      if (!(after && /\s/.test(after)) && caretHere) continue;
       let url = m[0];
-      // 커서가 방금 친 주소 끝에 있으면 문장부호를 떼지 않는다 (계속 쓰는 중)
-      const typingHere = t === caretNode && caretOff === m.index + m[0].length;
-      const tail = typingHere ? "" : (url.match(/[),.!?;:]+$/) || [""])[0];
+      const tail = (url.match(/[),.!?;:]+$/) || [""])[0];
       if (tail) url = url.slice(0, url.length - tail.length);
       if (!url) continue;
       if (m.index > last) frag.appendChild(document.createTextNode(s.slice(last, m.index)));
@@ -3179,8 +3184,10 @@ function refreshLinks(root) {
       a.textContent = url;
       frag.appendChild(a);
       if (tail) frag.appendChild(document.createTextNode(tail));
-      last = m.index + m[0].length;
+      last = endIdx;
+      made = true;
     }
+    if (!made) return; // 이 조각은 손대지 않는다 (커서가 튀지 않게)
     if (last < s.length) frag.appendChild(document.createTextNode(s.slice(last)));
     t.parentNode.replaceChild(frag, t);
     changed = true;
