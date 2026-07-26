@@ -152,11 +152,16 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.8.0";
+const APP_VERSION = "2.9.0";
 const CHANGELOG = [{
+  v: "2.9.0",
+  date: "2026.7.26",
+  items: ["글에 적힌 주소를 눌러서 바로 열 수 있어요", "화면마다 다르게 보이던 뒤로가기를 하나로 정리했어요"],
+  adminItems: []
+}, {
   v: "2.8.0",
   date: "2026.7.26",
-  items: ["홈 화면에 앱처럼 추가하는 방법을 화면 아래에서 바로 알려줘요"],
+  items: [],
   adminItems: ["칼럼과 공지를 쓸 때 사진을 넣을 수 있어요. 글자 사이에 그대로 들어가요"]
 }, {
   v: "2.7.0",
@@ -1373,9 +1378,8 @@ function App() {
     onClick: closeOver,
     style: {
       opacity: over.expanded ? 1 : 0
-    },
-    "aria-label": "뒤로"
-  }, "←"), /*#__PURE__*/React.createElement("div", {
+    }
+  }, "홈"), /*#__PURE__*/React.createElement("div", {
     className: "mr-ov-inner",
     style: {
       opacity: over.expanded ? 1 : 0,
@@ -1418,6 +1422,8 @@ function App() {
     className: "mr-loading"
   }, "불러오는 중…") : tab === "home" ? homeView : screenFor(tab))), /*#__PURE__*/React.createElement("footer", {
     className: "mr-foot"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "mr-foot-row"
   }, /*#__PURE__*/React.createElement("span", {
     className: "mr-foot-copy"
   }, "© suhakjilmoon"), /*#__PURE__*/React.createElement("span", {
@@ -1430,12 +1436,10 @@ function App() {
   }, "·"), /*#__PURE__*/React.createElement("button", {
     className: "mr-foot-link",
     onClick: () => go("privacy")
-  }, "개인정보 처리방침"), !installed && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
-    className: "mr-foot-sep"
-  }, "·"), /*#__PURE__*/React.createElement("button", {
-    className: "mr-foot-link",
+  }, "개인정보 처리방침")), !installed && /*#__PURE__*/React.createElement("button", {
+    className: "mr-foot-install",
     onClick: () => setInstallOpen(true)
-  }, "홈 화면에 추가"))), bannerOn && !installed && (isIOS() || isAndroid() || canPrompt) && /*#__PURE__*/React.createElement(InstallBanner, {
+  }, "홈 화면에 추가")), bannerOn && !installed && (isIOS() || isAndroid() || canPrompt) && /*#__PURE__*/React.createElement(InstallBanner, {
     onAdd: startInstall,
     onClose: closeBanner
   }), installOpen && /*#__PURE__*/React.createElement(InstallGuide, {
@@ -3051,6 +3055,139 @@ function Announcements({
 }
 
 /* ===================== 서식 입력기 (칼럼용) ===================== */
+/* ===== 글 안의 링크: 쓰는 중에 바로 하이퍼링크로 바뀐다 ===== */
+const LINK_FIND = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+\.[^\s<>"']{2,})/g;
+const LINK_WHOLE = /^(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+\.[^\s<>"']{2,})$/i;
+const hrefOf = t => /^https?:\/\//i.test(t) ? t : "https://" + t;
+
+// 커서 위치를 글자 수로 기억해 둔다 (링크로 바꾼 뒤 되돌리기 위해)
+function caretOffsetIn(root) {
+  try {
+    const sel = document.getSelection();
+    if (!sel || !sel.rangeCount) return null;
+    const r = sel.getRangeAt(0);
+    if (!root.contains(r.startContainer)) return null;
+    const pre = r.cloneRange();
+    pre.selectNodeContents(root);
+    pre.setEnd(r.startContainer, r.startOffset);
+    return pre.toString().length;
+  } catch (e) {
+    return null;
+  }
+}
+function setCaretOffset(root, offset) {
+  if (offset === null || offset === undefined) return;
+  try {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+    let acc = 0,
+      node;
+    while (node = walker.nextNode()) {
+      const len = node.nodeValue.length;
+      if (acc + len >= offset) {
+        const r = document.createRange();
+        r.setStart(node, Math.max(0, Math.min(len, offset - acc)));
+        r.collapse(true);
+        const sel = document.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(r);
+        return;
+      }
+      acc += len;
+    }
+    const r = document.createRange();
+    r.selectNodeContents(root);
+    r.collapse(false);
+    const sel = document.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+  } catch (e) {}
+}
+// 링크 상태를 글자에 맞춰 다시 맞춘다. 바뀐 게 있으면 true
+function refreshLinks(root) {
+  let changed = false;
+  // 지금 커서가 어디 있는지 (아직 쓰는 중인 주소에서 문장부호를 떼어내지 않기 위해)
+  let caretNode = null,
+    caretOff = -1,
+    caretLink = null;
+  try {
+    const sel = document.getSelection();
+    if (sel && sel.rangeCount && root.contains(sel.getRangeAt(0).startContainer)) {
+      const r = sel.getRangeAt(0);
+      caretNode = r.startContainer;
+      caretOff = r.startOffset;
+      const el = caretNode.nodeType === 3 ? caretNode.parentElement : caretNode;
+      if (el && el.closest) caretLink = el.closest("a.mrlink");
+    }
+  } catch (e) {}
+  // 1) 이미 링크인 것: 글자가 바뀌었으면 주소를 고치고, 더는 주소가 아니면 링크를 푼다
+  [].slice.call(root.querySelectorAll("a.mrlink")).forEach(a => {
+    const text = a.textContent || "";
+    // 아직 이 링크에 커서가 있으면 쓰는 중이므로 뒤 문장부호를 그대로 둔다
+    const tail = a === caretLink ? "" : (text.match(/[\s),.!?;:]+$/) || [""])[0];
+    const core = tail ? text.slice(0, text.length - tail.length) : text;
+    if (!LINK_WHOLE.test(core)) {
+      a.parentNode.replaceChild(document.createTextNode(text), a);
+      changed = true;
+      return;
+    }
+    if (tail) {
+      a.textContent = core;
+      if (a.nextSibling && a.nextSibling.nodeType === 3) a.nextSibling.nodeValue = tail + a.nextSibling.nodeValue;else a.parentNode.insertBefore(document.createTextNode(tail), a.nextSibling);
+      changed = true;
+    }
+    const href = hrefOf(core);
+    if (a.getAttribute("href") !== href) {
+      a.setAttribute("href", href);
+      changed = true;
+    }
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+  });
+  // 2) 아직 링크가 아닌 글자 중 주소처럼 생긴 것을 링크로 만든다
+  //    (쪼개져 있는 글자 조각을 먼저 합쳐야 주소가 통째로 잡힌다)
+  try {
+    root.normalize();
+  } catch (e) {}
+  const targets = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+  let n;
+  while (n = walker.nextNode()) {
+    const p = n.parentElement;
+    if (p && p.closest && p.closest("a, .mchip")) continue; // 링크 안·수식 칩은 건드리지 않음
+    LINK_FIND.lastIndex = 0;
+    if (LINK_FIND.test(n.nodeValue || "")) targets.push(n);
+  }
+  targets.forEach(t => {
+    const s = t.nodeValue || "";
+    const frag = document.createDocumentFragment();
+    let last = 0,
+      m;
+    LINK_FIND.lastIndex = 0;
+    while (m = LINK_FIND.exec(s)) {
+      let url = m[0];
+      // 커서가 방금 친 주소 끝에 있으면 문장부호를 떼지 않는다 (계속 쓰는 중)
+      const typingHere = t === caretNode && caretOff === m.index + m[0].length;
+      const tail = typingHere ? "" : (url.match(/[),.!?;:]+$/) || [""])[0];
+      if (tail) url = url.slice(0, url.length - tail.length);
+      if (!url) continue;
+      if (m.index > last) frag.appendChild(document.createTextNode(s.slice(last, m.index)));
+      const a = document.createElement("a");
+      a.className = "mrlink";
+      a.href = hrefOf(url);
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = url;
+      frag.appendChild(a);
+      if (tail) frag.appendChild(document.createTextNode(tail));
+      last = m.index + m[0].length;
+    }
+    if (last < s.length) frag.appendChild(document.createTextNode(s.slice(last)));
+    t.parentNode.replaceChild(frag, t);
+    changed = true;
+  });
+  return changed;
+}
+
 /* 사진 한 장을 적당한 크기로 줄여 저장소에 올린다.
    올리기에 실패하면 글 안에 그대로 담아 저장한다 (사진이 사라지지 않게). */
 function uploadPicture(file) {
@@ -3123,8 +3260,19 @@ function RichEditor({
     }
     // 최초 1회만 초기화 (입력 중 커서 유지)
   }, []);
+  // 한글을 조합하는 중에는 글자를 건드리면 입력이 깨지므로 그때는 링크 처리를 미룬다
+  const composing = React.useRef(false);
   const sync = () => {
-    if (ref.current) onChange(ref.current.innerHTML);
+    const el = ref.current;
+    if (!el) return;
+    if (composing.current) {
+      onChange(el.innerHTML);
+      return;
+    }
+    // 쓰는 중에 주소를 바로 링크로 바꾼다 (커서 자리는 그대로 유지)
+    const off = caretOffsetIn(el);
+    if (refreshLinks(el)) setCaretOffset(el, off);
+    onChange(el.innerHTML);
   };
   const exec = (cmd, arg) => {
     document.execCommand(cmd, false, arg);
@@ -3391,6 +3539,13 @@ function RichEditor({
     suppressContentEditableWarning: true,
     "data-placeholder": placeholder || "",
     onInput: sync,
+    onCompositionStart: () => {
+      composing.current = true;
+    },
+    onCompositionEnd: () => {
+      composing.current = false;
+      sync();
+    },
     onBlur: () => {
       saveRange();
       sync();
@@ -6311,7 +6466,8 @@ const CSS = `
 
 
 /* layout */
-.mr-main{max-width:680px; margin:0 auto; padding:20px 18px}
+/* 좌우 여백은 헤더(20px)와 같게 맞춘다. 로고·본문·뒤로가기 왼쪽 끝이 한 줄로 떨어진다 */
+.mr-main{max-width:680px; margin:0 auto; padding:20px}
 .mr-col{display:flex; flex-direction:column; gap:12px}
 
 /* home */
@@ -6425,6 +6581,9 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-rte-btn:disabled{opacity:.6; cursor:default}
 /* 글 안의 사진: 글자처럼 줄 안에 흐르고, 화면보다 커지지 않는다 */
 .mr-rte img,.mr-notice-body img{max-width:100%; height:auto; vertical-align:middle; border-radius:12px; margin:2px 0}
+/* 글 안의 링크 */
+.mr-rte a.mrlink,.mr-notice-body a{color:var(--blue); font-weight:700; text-decoration:underline; text-underline-offset:2px; word-break:break-all}
+.mr-notice-body a:hover{filter:brightness(1.1)}
 .mr-rte-mathedit{border:1.5px solid var(--blue); margin:8px; border-radius:12px; padding:10px; background:var(--blue-bg)}
 .mr-rte .mchip{display:inline-block; vertical-align:middle; margin:0 2px; padding:1px 5px; background:var(--blue-bg); border-radius:6px; cursor:pointer; font-size:16px}
 .mr-rte-btn{border:0; background:var(--bg); color:var(--t1); min-width:34px; height:34px; padding:0 9px; border-radius:8px; font-family:inherit; font-size:15px; cursor:pointer; transition:background .12s; line-height:1}
@@ -6452,10 +6611,9 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-btn-ghost.danger{background:var(--red-bg); color:var(--red)}
 .mr-btn-ghost.danger:hover{background:#FBD5DA}
 .mr-btn-text{border:0; background:none; color:var(--t2); cursor:pointer; font-family:inherit; font-size:14.5px; font-weight:700; align-self:flex-start; padding:4px 0}
-.mr-back{display:inline-flex; align-items:center; gap:5px; align-self:flex-start; border:1px solid var(--line); background:rgba(255,255,255,0.6); color:var(--t2); cursor:pointer; font-family:inherit; font-size:13.5px; font-weight:700; padding:8px 14px 8px 11px; border-radius:999px; margin-bottom:4px; transition:background .15s,color .15s}
-.mr-back:hover{background:rgba(255,255,255,0.9); color:var(--t1)}
+.mr-back{display:inline-flex; align-items:center; gap:7px; align-self:flex-start; border:1px solid var(--line); background:var(--card); color:var(--t2); cursor:pointer; font-family:inherit; font-size:14px; font-weight:700; padding:9px 16px 9px 13px; border-radius:999px; margin-bottom:6px; box-shadow:0 4px 14px rgba(91,55,140,0.10); transition:background .15s,color .15s}
+.mr-back:hover{background:var(--blue-bg); color:var(--blue)}
 .mr-back:active{transform:scale(.97)}
-.mr-back::before{content:"‹"; font-size:17px; line-height:1; margin-top:-1px}
 .mr-row-end{display:flex; justify-content:flex-end; margin-top:14px}
 .mr-row-between{display:flex; justify-content:space-between; align-items:center; gap:10px}
 .mr-gap{display:flex; gap:8px; align-items:center}
@@ -6691,10 +6849,16 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-rank-score{font-weight:800; color:var(--t1); font-variant-numeric:tabular-nums}
 
 .mr-foot{
-  max-width:680px; margin:28px auto 0; padding:0 22px;
-  display:flex; justify-content:center; align-items:center; gap:8px;
+  max-width:680px; margin:28px auto 0; padding:0 20px;
+  display:flex; flex-direction:column; align-items:center; gap:8px;
   font-size:12px; color:var(--t3); line-height:1.6; font-weight:500;
 }
+.mr-foot-row{display:flex; justify-content:center; align-items:center; gap:8px; flex-wrap:wrap}
+.mr-foot-install{
+  border:1px solid var(--line); background:var(--card); color:var(--t2); font-family:inherit;
+  font-size:12px; font-weight:700; padding:7px 14px; border-radius:999px; cursor:pointer; transition:background .15s,color .15s;
+}
+.mr-foot-install:hover{background:var(--blue-bg); color:var(--blue)}
 .mr-foot-link{background:none; border:0; color:var(--t2); font-family:inherit; font-size:12px; font-weight:700; cursor:pointer; text-decoration:underline; padding:4px}
 .mr-foot-link:hover{color:var(--blue)}
 .mr-foot-sep{color:var(--t3)}
@@ -6756,9 +6920,25 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
   transition:top .5s cubic-bezier(.4,0,.2,1), left .5s cubic-bezier(.4,0,.2,1), width .5s cubic-bezier(.4,0,.2,1), height .5s cubic-bezier(.4,0,.2,1), border-radius .5s cubic-bezier(.4,0,.2,1);}
 .mr-ov-inner{position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-top:44px}
 .mr-ov-inner .mr-main{padding-top:8px}
-.mr-ov-back{position:absolute; top:10px; left:12px; z-index:3; width:40px; height:40px; border-radius:50%;
-  border:1px solid var(--line); background:rgba(255,255,255,0.7); color:var(--t1); font-size:20px; cursor:pointer;
-  display:grid; place-items:center; transition:opacity .25s ease; -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px)}
+/* 오버레이 뒤로가기: 화면 안의 뒤로가기와 같은 모양으로 통일 */
+/* 위치는 화면 안 뒤로가기(.mr-back)와 같은 자리에 오도록 맞춘다
+   (.mr-ov-inner 위 여백 10px + .mr-main 위 여백 8px = 18px, 왼쪽은 .mr-main 여백 18px) */
+.mr-ov-back{position:absolute; top:18px; left:20px; z-index:3;
+  display:inline-flex; align-items:center; gap:7px; border:1px solid var(--line); background:var(--card);
+  color:var(--t2); cursor:pointer; font-family:inherit; font-size:14px; font-weight:700;
+  padding:9px 16px 9px 13px; border-radius:999px; box-shadow:0 4px 14px rgba(91,55,140,0.10);
+  transition:opacity .25s ease, background .15s, color .15s;
+  -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px)}
+.mr-ov-back::before,.mr-back::before{
+  content:""; width:8px; height:8px; flex:none;
+  border-left:2.2px solid currentColor; border-bottom:2.2px solid currentColor;
+  transform:rotate(45deg); border-radius:1px;
+}
+.mr-ov-back:hover{background:var(--blue-bg); color:var(--blue)}
+.mr-ov-back:active{transform:scale(.97)}
+/* 화면이 자기 뒤로가기를 가지고 있으면 오버레이 것은 숨긴다 (화살표가 두 개 뜨지 않게) */
+.mr-ov:has(.mr-back) .mr-ov-back{display:none}
+.mr-ov:has(.mr-back) .mr-ov-inner{padding-top:10px}
 @keyframes screenIn{from{opacity:0; transform:translateY(20px) scale(.985)}to{opacity:1; transform:none}}
 .mr-screen-in{animation:screenIn .44s cubic-bezier(.22,1,.36,1)}
 
@@ -6933,11 +7113,12 @@ html[data-theme="dark"] .mr-subtabs button.on,
 html[data-theme="dark"] .mr-seg button.on,
 html[data-theme="dark"] .mr-cat-seg button.on,
 html[data-theme="dark"] .mr-sortseg button.on{background:rgba(255,255,255,0.14); color:var(--t1)}
-html[data-theme="dark"] .mr-back{background:rgba(255,255,255,0.06)}
-html[data-theme="dark"] .mr-back:hover{background:rgba(255,255,255,0.13)}
+html[data-theme="dark"] .mr-back,
+html[data-theme="dark"] .mr-ov-back{background:rgba(255,255,255,0.08); color:var(--t2); box-shadow:none}
+html[data-theme="dark"] .mr-back:hover,
+html[data-theme="dark"] .mr-ov-back:hover{background:rgba(255,255,255,0.15); color:var(--t1)}
 html[data-theme="dark"] .mr-ov-scrim{background:linear-gradient(165deg,#1a1626,#221a2b 46%,#181a2b)}
 html[data-theme="dark"] .mr-ov{background:linear-gradient(165deg,#1a1626 0%,#221a2b 46%,#181a2b 100%)}
-html[data-theme="dark"] .mr-ov-back{background:rgba(255,255,255,0.08); color:var(--t1); border-color:var(--line)}
 html[data-theme="dark"] math-field{background:rgba(255,255,255,0.08); color:var(--t1)}
 html[data-theme="dark"] math-field:focus-within{background:rgba(255,255,255,0.12)}
 html[data-theme="dark"] .mr-rte-wrap,
