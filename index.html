@@ -152,8 +152,13 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.9.1";
+const APP_VERSION = "2.9.2";
 const CHANGELOG = [{
+  v: "2.9.2",
+  date: "2026.7.27",
+  items: ["링크를 눌러 바로 들어온 화면에서도 뒤로가기가 보여요"],
+  adminItems: []
+}, {
   v: "2.9.1",
   date: "2026.7.27",
   items: ["자잘한 부분을 다듬었어요"],
@@ -1420,7 +1425,10 @@ function App() {
     onClick: () => setAuthOpen(true)
   }, "로그인"))), /*#__PURE__*/React.createElement("main", {
     className: "mr-main"
-  }, /*#__PURE__*/React.createElement("div", {
+  }, !loading && tab !== "home" && /*#__PURE__*/React.createElement("button", {
+    className: "mr-page-back",
+    onClick: () => go("home")
+  }, "홈"), /*#__PURE__*/React.createElement("div", {
     className: "mr-screen-in",
     key: tab
   }, loading ? /*#__PURE__*/React.createElement("div", {
@@ -6623,9 +6631,12 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-btn-ghost.danger{background:var(--red-bg); color:var(--red)}
 .mr-btn-ghost.danger:hover{background:#FBD5DA}
 .mr-btn-text{border:0; background:none; color:var(--t2); cursor:pointer; font-family:inherit; font-size:14.5px; font-weight:700; align-self:flex-start; padding:4px 0}
-.mr-back{display:inline-flex; align-items:center; gap:7px; align-self:flex-start; border:1px solid var(--line); background:var(--card); color:var(--t2); cursor:pointer; font-family:inherit; font-size:14px; font-weight:700; padding:9px 16px 9px 13px; border-radius:999px; margin-bottom:6px; box-shadow:0 4px 14px rgba(91,55,140,0.10); transition:background .15s,color .15s}
-.mr-back:hover{background:var(--blue-bg); color:var(--blue)}
-.mr-back:active{transform:scale(.97)}
+.mr-back,.mr-page-back{display:inline-flex; align-items:center; gap:7px; align-self:flex-start; border:1px solid var(--line); background:var(--card); color:var(--t2); cursor:pointer; font-family:inherit; font-size:14px; font-weight:700; padding:9px 16px 9px 13px; border-radius:999px; margin-bottom:6px; box-shadow:0 4px 14px rgba(91,55,140,0.10); transition:background .15s,color .15s}
+.mr-back:hover,.mr-page-back:hover{background:var(--blue-bg); color:var(--blue)}
+.mr-back:active,.mr-page-back:active{transform:scale(.97)}
+/* 주소로 바로 들어온 화면에는 오버레이가 없어서 홈으로 가는 뒤로가기를 따로 둔다.
+   .mr-col 의 gap 12px 만큼을 직접 띄워 화면 안 뒤로가기와 간격을 맞춘다 */
+.mr-page-back{display:flex; width:fit-content; margin-bottom:18px}
 .mr-row-end{display:flex; justify-content:flex-end; margin-top:14px}
 .mr-row-between{display:flex; justify-content:space-between; align-items:center; gap:10px}
 .mr-gap{display:flex; gap:8px; align-items:center}
@@ -6941,16 +6952,17 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
   padding:9px 16px 9px 13px; border-radius:999px; box-shadow:0 4px 14px rgba(91,55,140,0.10);
   transition:opacity .25s ease, background .15s, color .15s;
   -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px)}
-.mr-ov-back::before,.mr-back::before{
+.mr-ov-back::before,.mr-back::before,.mr-page-back::before{
   content:""; width:8px; height:8px; flex:none;
   border-left:2.2px solid currentColor; border-bottom:2.2px solid currentColor;
   transform:rotate(45deg); border-radius:1px;
 }
 .mr-ov-back:hover{background:var(--blue-bg); color:var(--blue)}
 .mr-ov-back:active{transform:scale(.97)}
-/* 화면이 자기 뒤로가기를 가지고 있으면 오버레이 것은 숨긴다 (화살표가 두 개 뜨지 않게) */
+/* 화면이 자기 뒤로가기를 가지고 있으면 홈으로 가는 것은 숨긴다 (화살표가 두 개 뜨지 않게) */
 .mr-ov:has(.mr-back) .mr-ov-back{display:none}
 .mr-ov:has(.mr-back) .mr-ov-inner{padding-top:10px}
+.mr-main:has(.mr-back) .mr-page-back{display:none}
 @keyframes screenIn{from{opacity:0; transform:translateY(20px) scale(.985)}to{opacity:1; transform:none}}
 .mr-screen-in{animation:screenIn .44s cubic-bezier(.22,1,.36,1)}
 
@@ -7126,8 +7138,10 @@ html[data-theme="dark"] .mr-seg button.on,
 html[data-theme="dark"] .mr-cat-seg button.on,
 html[data-theme="dark"] .mr-sortseg button.on{background:rgba(255,255,255,0.14); color:var(--t1)}
 html[data-theme="dark"] .mr-back,
+html[data-theme="dark"] .mr-page-back,
 html[data-theme="dark"] .mr-ov-back{background:rgba(255,255,255,0.08); color:var(--t2); box-shadow:none}
 html[data-theme="dark"] .mr-back:hover,
+html[data-theme="dark"] .mr-page-back:hover,
 html[data-theme="dark"] .mr-ov-back:hover{background:rgba(255,255,255,0.15); color:var(--t1)}
 html[data-theme="dark"] .mr-ov-scrim{background:linear-gradient(165deg,#1a1626,#221a2b 46%,#181a2b)}
 html[data-theme="dark"] .mr-ov{background:linear-gradient(165deg,#1a1626 0%,#221a2b 46%,#181a2b 100%)}
