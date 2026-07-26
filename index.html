@@ -152,8 +152,13 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.6.0";
+const APP_VERSION = "2.7.0";
 const CHANGELOG = [{
+  v: "2.7.0",
+  date: "2026.7.26",
+  items: ["오늘의 문제를 매일 하나씩 크게 보고 그 자리에서 바로 푸는 방식으로 바꿨어요", "며칠 연속으로 풀었는지 세어서 보여줘요", "지난 오늘의 문제도 달력에서 날짜를 눌러 다시 풀 수 있어요", "처음 열 때 더 빠르게 뜨도록 앱을 가볍게 만들었어요", "어두운 화면에서 위아래에 흰 여백이 생기던 걸 고쳤어요"],
+  adminItems: []
+}, {
   v: "2.6.0",
   date: "2026.7.25",
   items: ["어두운 화면 모드가 생겼어요. 회원정보 화면에서 켜고 끌 수 있어요", "시험을 제목이나 출제자로 검색하고 정답률순으로 정렬할 수 있어요", "시험마다 쉬움·보통·어려움 난이도가 정답률에 따라 표시돼요", "내 시험 기록에서 평균 점수와 최근 점수 흐름을 한눈에 볼 수 있어요", "홈 화면에 앱처럼 추가해서 바로 열 수 있어요"],
@@ -363,14 +368,18 @@ function studentName(name, users) {
   if (users && users.some(u => u.username === name)) return name;
   return "탈퇴한 회원 (" + name + ")";
 }
-// 정답률 구간별 색
+// 정답률 구간별 색 (어두운 화면에서는 밝은 쪽 색을 써야 읽힌다)
 function rateColor(rate) {
-  if (rate === null || rate === undefined) return "#8B95A1"; // 데이터 없음(회색)
-  if (rate >= 80) return "#00B262"; // 초록
-  if (rate >= 50) return "#E5A300"; // 노랑
-  if (rate >= 20) return "#F97316"; // 주황
-  if (rate >= 10) return "#F04452"; // 빨강
-  return "#6A0012"; // 10% 미만: 가장 어려운 색(짙은 빨강)
+  let dark = false;
+  try {
+    dark = document.documentElement.dataset.theme === "dark";
+  } catch (e) {}
+  if (rate === null || rate === undefined) return dark ? "#9c93b5" : "#8B95A1"; // 데이터 없음(회색)
+  if (rate >= 80) return dark ? "#3ddb9a" : "#00B262"; // 초록
+  if (rate >= 50) return dark ? "#f0c04e" : "#E5A300"; // 노랑
+  if (rate >= 20) return dark ? "#ff9d5c" : "#F97316"; // 주황
+  if (rate >= 10) return dark ? "#ff7d95" : "#F04452"; // 빨강
+  return dark ? "#ff5c7a" : "#6A0012"; // 10% 미만: 가장 어려운 색
 }
 // 시험 통계(회원+비회원)를 합친 평균 정답률 하나로. 데이터 없으면 null
 function combinedRate(stat) {
@@ -1416,26 +1425,6 @@ function Account({
     className: "mr-card"
   }, /*#__PURE__*/React.createElement("div", {
     className: "mr-card-tag"
-  }, "화면 설정"), /*#__PURE__*/React.createElement("div", {
-    className: "mr-setting-row"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "mr-setting-text"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "mr-setting-name"
-  }, "어두운 화면 모드"), /*#__PURE__*/React.createElement("div", {
-    className: "mr-setting-desc"
-  }, theme === "dark" ? "지금은 어두운 화면이에요" : "지금은 밝은 화면이에요")), /*#__PURE__*/React.createElement("button", {
-    className: "mr-switch" + (theme === "dark" ? " on" : ""),
-    onClick: onToggleTheme,
-    role: "switch",
-    "aria-checked": theme === "dark",
-    "aria-label": "어두운 화면 모드"
-  }, /*#__PURE__*/React.createElement("span", {
-    className: "mr-switch-dot"
-  })))), /*#__PURE__*/React.createElement("section", {
-    className: "mr-card"
-  }, /*#__PURE__*/React.createElement("div", {
-    className: "mr-card-tag"
   }, "내 정보"), /*#__PURE__*/React.createElement("div", {
     className: "mr-cat-label"
   }, "채팅방 닉네임"), /*#__PURE__*/React.createElement("input", {
@@ -1488,7 +1477,27 @@ function Account({
   }, done ? "비밀번호가 변경됐어요" : ""), /*#__PURE__*/React.createElement("button", {
     className: "mr-btn",
     onClick: changePw
-  }, "변경하기"))), /*#__PURE__*/React.createElement("button", {
+  }, "변경하기"))), /*#__PURE__*/React.createElement("section", {
+    className: "mr-card"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "mr-card-tag"
+  }, "화면 설정"), /*#__PURE__*/React.createElement("div", {
+    className: "mr-setting-row"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "mr-setting-text"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "mr-setting-name"
+  }, "어두운 화면 모드"), /*#__PURE__*/React.createElement("div", {
+    className: "mr-setting-desc"
+  }, theme === "dark" ? "지금은 어두운 화면이에요" : "지금은 밝은 화면이에요")), /*#__PURE__*/React.createElement("button", {
+    className: "mr-switch" + (theme === "dark" ? " on" : ""),
+    onClick: onToggleTheme,
+    role: "switch",
+    "aria-checked": theme === "dark",
+    "aria-label": "어두운 화면 모드"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "mr-switch-dot"
+  })))), /*#__PURE__*/React.createElement("button", {
     className: "mr-logout-full",
     onClick: onLogout
   }, "로그아웃"), !withdraw ? /*#__PURE__*/React.createElement("button", {
@@ -3869,6 +3878,388 @@ function SubmissionRow({
   }, "보정 저장"))));
 }
 
+/* ---------- 오늘의 문제: 체스닷컴 일일 퍼즐 스타일 ---------- */
+function dailyDay(ex) {
+  return ex.publishAt || ex.createdAt || 0;
+}
+function fmtDay(ms) {
+  const d = new Date(ms);
+  return d.getMonth() + 1 + "월 " + d.getDate() + "일";
+}
+
+/* 정답을 맞히면 초록, 틀리면 빨강으로 즉시 반응하고 제출을 기록한다 (1문항 전용) */
+function DailySolve({
+  exam,
+  loggedIn,
+  student,
+  onAddSub,
+  onGuestSubmit,
+  onView
+}) {
+  const q = exam.questions[0];
+  const [picked, setPicked] = useState(null);
+  const [typed, setTyped] = useState("");
+  const [done, setDone] = useState(false);
+  const [correct, setCorrect] = useState(false);
+  const lock = React.useRef(false);
+  const record = async answers => {
+    if (onView) onView(exam.id);
+    const clean = (student || "").trim();
+    try {
+      if (loggedIn && clean) await onAddSub({
+        examId: exam.id,
+        student: clean,
+        answers,
+        manualScores: {},
+        graded: true
+      });else await onGuestSubmit(exam.id, answers);
+    } catch (e) {}
+  };
+  const finish = (answers, ok) => {
+    if (lock.current) return;
+    lock.current = true;
+    setCorrect(ok);
+    setDone(true);
+    record(answers);
+  };
+  if (q.type === "mc") return /*#__PURE__*/React.createElement("div", {
+    className: "mr-daily-solve"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "mr-daily-opts"
+  }, q.options.map((opt, oi) => {
+    let cls = "mr-daily-opt";
+    if (done) cls += oi === q.answer ? " right" : oi === picked ? " wrong" : " dim";
+    return /*#__PURE__*/React.createElement("button", {
+      key: oi,
+      className: cls,
+      disabled: done,
+      onClick: () => {
+        setPicked(oi);
+        finish({
+          [q.id]: oi
+        }, oi === q.answer);
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "mr-daily-opt-label"
+    }, String.fromCharCode(9311 + oi + 1)), /*#__PURE__*/React.createElement("span", {
+      className: "mr-daily-opt-txt"
+    }, opt), done && oi === q.answer && /*#__PURE__*/React.createElement("span", {
+      className: "mr-daily-flag"
+    }, "정답"));
+  })), done && /*#__PURE__*/React.createElement(DailyResult, {
+    correct: correct,
+    q: q,
+    exam: exam
+  }));
+  return /*#__PURE__*/React.createElement("div", {
+    className: "mr-daily-solve"
+  }, !done ? /*#__PURE__*/React.createElement("div", {
+    className: "mr-daily-short"
+  }, /*#__PURE__*/React.createElement("input", {
+    className: "mr-input",
+    placeholder: "답을 입력하세요",
+    value: typed,
+    onChange: e => setTyped(e.target.value),
+    onKeyDown: e => {
+      if (e.key === "Enter" && typed.trim()) finish({
+        [q.id]: typed.trim()
+      }, isShortCorrect(q, typed.trim()));
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    className: "mr-btn",
+    disabled: !typed.trim(),
+    onClick: () => finish({
+      [q.id]: typed.trim()
+    }, isShortCorrect(q, typed.trim()))
+  }, "확인")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "mr-daily-your " + (correct ? "ok" : "no")
+  }, "내 답 ", typed), /*#__PURE__*/React.createElement(DailyResult, {
+    correct: correct,
+    q: q,
+    exam: exam
+  })));
+}
+
+/* 이미 푼 1문항 문제의 결과를 다시 보여준다 */
+function DailyReview({
+  exam,
+  sub
+}) {
+  const q = exam.questions[0];
+  const correct = isQCorrect(q, sub);
+  const mine = sub.answers[q.id];
+  return /*#__PURE__*/React.createElement("div", {
+    className: "mr-daily-solve"
+  }, q.type === "mc" ? /*#__PURE__*/React.createElement("div", {
+    className: "mr-daily-opts"
+  }, q.options.map((opt, oi) => {
+    let cls = "mr-daily-opt";
+    cls += oi === q.answer ? " right" : oi === mine ? " wrong" : " dim";
+    return /*#__PURE__*/React.createElement("div", {
+      key: oi,
+      className: cls
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "mr-daily-opt-label"
+    }, String.fromCharCode(9311 + oi + 1)), /*#__PURE__*/React.createElement("span", {
+      className: "mr-daily-opt-txt"
+    }, opt), oi === q.answer && /*#__PURE__*/React.createElement("span", {
+      className: "mr-daily-flag"
+    }, "정답"));
+  })) : /*#__PURE__*/React.createElement("div", {
+    className: "mr-daily-your " + (correct ? "ok" : "no")
+  }, "내 답 ", mine && String(mine).trim() || "(미작성)"), /*#__PURE__*/React.createElement(DailyResult, {
+    correct: correct,
+    q: q,
+    exam: exam
+  }));
+}
+function DailyResult({
+  correct,
+  q,
+  exam
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    className: "mr-daily-result " + (correct ? "ok" : "no")
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "mr-daily-result-big"
+  }, correct ? "정답이에요! 🎉" : "아쉬워요"), !correct && q.type === "short" && q.accept ? /*#__PURE__*/React.createElement("div", {
+    className: "mr-daily-answer"
+  }, "정답 ", /*#__PURE__*/React.createElement("b", null, q.accept)) : null, hasExplain(q) && /*#__PURE__*/React.createElement(ExplainBlock, {
+    q: q,
+    exam: exam
+  }));
+}
+function dayKey(ms) {
+  const d = new Date(ms);
+  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+}
+
+/* 날짜 선택 달력 — 푼 날은 보라 ✓, 선택일은 보라 강조, 문제 없는 날은 흐리게 */
+function DailyCalendar({
+  days,
+  solvedIds,
+  selId,
+  onPick,
+  onClose
+}) {
+  const byDay = {};
+  days.forEach(ex => {
+    const k = dayKey(dailyDay(ex));
+    if (!(k in byDay)) byDay[k] = ex;
+  });
+  const selEx = days.find(d => d.id === selId);
+  const selMs = selEx ? dailyDay(selEx) : Date.now();
+  const [ym, setYm] = useState(() => {
+    const d = new Date(selMs);
+    return {
+      y: d.getFullYear(),
+      m: d.getMonth()
+    };
+  });
+  const startDow = (new Date(ym.y, ym.m, 1).getDay() + 6) % 7; // 월요일=0
+  const daysInMonth = new Date(ym.y, ym.m + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < startDow; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  const shift = n => setYm(p => {
+    let m = p.m + n,
+      y = p.y;
+    if (m < 0) {
+      m = 11;
+      y--;
+    }
+    if (m > 11) {
+      m = 0;
+      y++;
+    }
+    return {
+      y,
+      m
+    };
+  });
+  return /*#__PURE__*/React.createElement("div", {
+    className: "mr-modal-overlay",
+    onClick: onClose,
+    style: {
+      zIndex: 460
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "mr-cal",
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "mr-cal-head"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "mr-modal-title"
+  }, "날짜 선택"), /*#__PURE__*/React.createElement("button", {
+    className: "mr-modal-x",
+    onClick: onClose
+  }, "×")), /*#__PURE__*/React.createElement("div", {
+    className: "mr-cal-nav"
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => shift(-1),
+    "aria-label": "이전 달"
+  }, "‹"), /*#__PURE__*/React.createElement("span", null, ym.y, "년 ", ym.m + 1, "월"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => shift(1),
+    "aria-label": "다음 달"
+  }, "›")), /*#__PURE__*/React.createElement("div", {
+    className: "mr-cal-dow"
+  }, ["월", "화", "수", "목", "금", "토", "일"].map(w => /*#__PURE__*/React.createElement("span", {
+    key: w
+  }, w))), /*#__PURE__*/React.createElement("div", {
+    className: "mr-cal-grid"
+  }, cells.map((d, i) => {
+    if (d === null) return /*#__PURE__*/React.createElement("span", {
+      key: "e" + i,
+      className: "mr-cal-cell empty"
+    });
+    const ex = byDay[ym.y * 10000 + (ym.m + 1) * 100 + d];
+    const solved = ex && solvedIds.has(ex.id);
+    const isSel = ex && ex.id === selId;
+    const cls = "mr-cal-cell" + (ex ? " has" : " none") + (solved ? " solved" : "") + (isSel ? " sel" : "");
+    return /*#__PURE__*/React.createElement("button", {
+      key: d,
+      className: cls,
+      disabled: !ex,
+      onClick: () => {
+        if (ex) {
+          onPick(ex);
+          onClose();
+        }
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "mr-cal-num"
+    }, d), solved && /*#__PURE__*/React.createElement("span", {
+      className: "mr-cal-check"
+    }, "✓"));
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "mr-cal-legend"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "mr-cal-check"
+  }, "✓"), " 푼 문제")));
+}
+function TodayPuzzle({
+  exams,
+  subs,
+  student,
+  loggedIn,
+  allRates,
+  onAddSub,
+  onGuestSubmit,
+  onOpen,
+  onView,
+  onBackToChooser
+}) {
+  const days = (exams || []).slice().sort((a, b) => dailyDay(b) - dailyDay(a));
+  const mine = (subs || []).filter(s => s.student && student && s.student === student);
+  const myOf = id => mine.find(s => s.examId === id) || null;
+  const solvedIds = new Set(mine.map(s => s.examId));
+
+  // 연속 풀이: 최근 문제부터 안 끊기고 푼 개수
+  let streak = 0,
+    started = false;
+  for (const ex of days) {
+    const solved = solvedIds.has(ex.id);
+    if (!started) {
+      if (solved) {
+        started = true;
+        streak = 1;
+      }
+    } else if (solved) streak++;else break;
+  }
+  const [selId, setSelId] = useState(days[0] ? days[0].id : null);
+  const [calOpen, setCalOpen] = useState(false);
+  const sel = days.find(d => d.id === selId) || days[0] || null;
+  const idx = sel ? days.findIndex(d => d.id === sel.id) : -1;
+  const newer = idx > 0 ? days[idx - 1] : null; // 더 최신 문제
+  const older = idx >= 0 && idx < days.length - 1 ? days[idx + 1] : null; // 더 지난 문제
+  const sSub = sel ? myOf(sel.id) : null;
+  const sRate = sel && allRates && typeof allRates === "object" ? combinedRate(allRates[sel.id]) : null;
+  const sDiff = difficultyOf(sRate);
+  return /*#__PURE__*/React.createElement("div", {
+    className: "mr-col"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "mr-back",
+    onClick: onBackToChooser
+  }, "시험 종류"), !sel ? /*#__PURE__*/React.createElement(Empty, {
+    text: "아직 오늘의 문제가 없어요."
+  }) : /*#__PURE__*/React.createElement(React.Fragment, null, loggedIn && streak > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "mr-streak"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "mr-streak-fire"
+  }, "🔥"), " ", /*#__PURE__*/React.createElement("b", null, streak, "일"), " 연속 풀이 중이에요"), /*#__PURE__*/React.createElement("article", {
+    className: "mr-daily-hero"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "mr-daily-badges"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "mr-daily-badge"
+  }, "오늘의 문제"), sDiff && /*#__PURE__*/React.createElement("span", {
+    className: "mr-diff",
+    style: {
+      color: rateColor(sRate),
+      background: rateColor(sRate) + "22"
+    }
+  }, sDiff.label), sRate !== null && /*#__PURE__*/React.createElement("span", {
+    className: "mr-daily-rate",
+    style: {
+      color: rateColor(sRate)
+    }
+  }, "평균정답률 ", sRate, "%")), /*#__PURE__*/React.createElement("h2", {
+    className: "mr-daily-title"
+  }, sel.title), sel.image && /*#__PURE__*/React.createElement("img", {
+    className: "mr-q-img",
+    src: sel.image,
+    alt: "문제"
+  }), sel.questions.length === 1 ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "mr-daily-q"
+  }, /*#__PURE__*/React.createElement(QBody, {
+    q: sel.questions[0]
+  })), sSub ? /*#__PURE__*/React.createElement(DailyReview, {
+    exam: sel,
+    sub: sSub
+  }) : /*#__PURE__*/React.createElement(DailySolve, {
+    exam: sel,
+    loggedIn: loggedIn,
+    student: student,
+    onAddSub: onAddSub,
+    onGuestSubmit: onGuestSubmit,
+    onView: onView
+  })) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "mr-daily-meta"
+  }, "문항 ", sel.questions.length, "개 · 만점 ", maxScore(sel), "점"), sSub ? /*#__PURE__*/React.createElement("div", {
+    className: "mr-daily-donerow"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "mr-result-pill"
+  }, "내 점수 ", totalScore(sel, sSub), " / ", maxScore(sel))) : /*#__PURE__*/React.createElement("button", {
+    className: "mr-btn mr-daily-start",
+    onClick: () => onOpen(sel)
+  }, "풀기"))), /*#__PURE__*/React.createElement("div", {
+    className: "mr-daily-nav"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "mr-daily-arrow",
+    disabled: !older,
+    onClick: () => older && setSelId(older.id),
+    "aria-label": "이전 문제"
+  }, "‹"), /*#__PURE__*/React.createElement("button", {
+    className: "mr-daily-datebtn",
+    onClick: () => setCalOpen(true)
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "mr-daily-datebtn-day"
+  }, fmtDay(dailyDay(sel))), /*#__PURE__*/React.createElement("span", {
+    className: "mr-daily-datebtn-hint"
+  }, "날짜 선택")), /*#__PURE__*/React.createElement("button", {
+    className: "mr-daily-arrow",
+    disabled: !newer,
+    onClick: () => newer && setSelId(newer.id),
+    "aria-label": "다음 문제"
+  }, "›")), calOpen && /*#__PURE__*/React.createElement(DailyCalendar, {
+    days: days,
+    solvedIds: solvedIds,
+    selId: sel.id,
+    onPick: ex => setSelId(ex.id),
+    onClose: () => setCalOpen(false)
+  })));
+}
+
 /* ---------- 참여자: 시험 목록 / 응시 / 결과 ---------- */
 function ExamsStudent({
   student,
@@ -3923,6 +4314,18 @@ function ExamsStudent({
     onAddSub: onAddSub,
     onGuestSubmit: onGuestSubmit
   });
+  if (examType === "today") return /*#__PURE__*/React.createElement(TodayPuzzle, {
+    exams: exams,
+    subs: subs,
+    student: student,
+    loggedIn: loggedIn,
+    allRates: allRates,
+    onAddSub: onAddSub,
+    onGuestSubmit: onGuestSubmit,
+    onOpen: openExam,
+    onView: onView,
+    onBackToChooser: onBackToChooser
+  });
   return /*#__PURE__*/React.createElement("div", {
     className: "mr-col"
   }, /*#__PURE__*/React.createElement("button", {
@@ -3957,7 +4360,8 @@ function ExamsStudent({
   }) : shown.map((ex, i) => {
     const mine = subs.find(s => s.examId === ex.id && s.student === student && student);
     const unread = examType === "today" && !isExamViewed(ex, readIds);
-    const diff = difficultyOf(rateOf(ex));
+    const rate = rateOf(ex);
+    const diff = difficultyOf(rate);
     return /*#__PURE__*/React.createElement("article", {
       className: "mr-card",
       key: ex.id,
@@ -3978,7 +4382,11 @@ function ExamsStudent({
       examId: ex.id,
       questions: ex.questions
     }), diff && /*#__PURE__*/React.createElement("b", {
-      className: "mr-diff " + diff.cls
+      className: "mr-diff",
+      style: {
+        color: rateColor(rate),
+        background: rateColor(rate) + "22"
+      }
     }, diff.label)), /*#__PURE__*/React.createElement("div", {
       className: "mr-row-end"
     }, mine ? mine.graded ? /*#__PURE__*/React.createElement("span", {
@@ -6064,10 +6472,8 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-switch.on .mr-switch-dot{transform:translateX(22px)}
 
 /* ===== 시험 난이도 뱃지 ===== */
+/* 난이도 뱃지: 색은 정답률과 같은 기준(rateColor)으로 화면에서 직접 넣는다 */
 .mr-diff{display:inline-block; font-size:11px; font-weight:800; padding:3px 9px; border-radius:7px; letter-spacing:-0.2px; vertical-align:middle; white-space:nowrap}
-.mr-diff.easy{color:var(--green); background:var(--green-bg)}
-.mr-diff.mid{color:#C2810A; background:rgba(229,163,0,0.14)}
-.mr-diff.hard{color:var(--red); background:var(--red-bg)}
 
 /* ===== 시험 목록 검색·정렬 ===== */
 .mr-listtools{display:flex; flex-direction:column; gap:8px; margin-bottom:2px}
@@ -6082,6 +6488,85 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-spark-col{flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; gap:5px; height:100%; min-width:0}
 .mr-spark-bar{width:100%; max-width:28px; min-height:4px; border-radius:6px 6px 3px 3px; background:var(--grad)}
 .mr-spark-cap{font-size:10px; font-weight:800; color:var(--t3)}
+
+/* ===== 오늘의 문제: 일일 퍼즐 ===== */
+.mr-streak{display:flex; align-items:center; gap:7px; background:var(--card); border:1px solid var(--line); box-shadow:var(--glass-sh); border-radius:16px; padding:12px 16px; font-size:14px; font-weight:700; color:var(--t2)}
+.mr-streak b{color:var(--blue); font-size:15px}
+.mr-streak-fire{font-size:18px}
+.mr-daily-hero{background:var(--card); border:1px solid var(--line); box-shadow:var(--glass-sh); border-radius:26px; padding:22px; animation:rise .4s cubic-bezier(.2,.7,.3,1) both}
+.mr-daily-top{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px}
+.mr-daily-badges{display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap}
+.mr-daily-rate{font-size:13px; font-weight:800; letter-spacing:-0.2px}
+.mr-daily-badge{display:inline-block; font-size:12px; font-weight:800; color:#fff; background:var(--grad); padding:5px 12px; border-radius:20px; letter-spacing:-0.2px}
+.mr-daily-title{font-size:20px; font-weight:800; letter-spacing:-0.5px; line-height:1.4; color:var(--t1); margin:0 0 14px}
+.mr-daily-q{font-size:16px; line-height:1.9; color:var(--t1); margin-bottom:6px}
+.mr-daily-q .mr-qbody{font-size:16px}
+.mr-daily-meta{font-size:13.5px; color:var(--t3); font-weight:600; margin:4px 0 16px}
+.mr-daily-start{width:100%; padding:15px; font-size:16px; margin-top:6px}
+.mr-daily-donerow{margin-top:8px}
+.mr-daily-solve{margin-top:14px}
+.mr-daily-opts{display:flex; flex-direction:column; gap:10px}
+.mr-daily-opt{display:flex; align-items:flex-start; gap:11px; width:100%; text-align:left; padding:14px 16px; border-radius:14px; background:var(--bg); border:2px solid transparent; font-family:inherit; font-size:15px; font-weight:600; line-height:1.6; color:var(--t1); cursor:pointer; transition:transform .08s, background .15s, border-color .15s}
+button.mr-daily-opt:hover{background:var(--blue-bg)}
+button.mr-daily-opt:active{transform:scale(.99)}
+.mr-daily-opt-label{width:22px; flex:none; display:flex; justify-content:center; font-size:15px; color:var(--t3); font-weight:800; line-height:1.6}
+.mr-daily-opt-txt{flex:1; min-width:0; word-break:break-word; overflow-wrap:anywhere}
+.mr-daily-opt.right{background:var(--green-bg); border-color:var(--green); color:var(--green)}
+.mr-daily-opt.wrong{background:var(--red-bg); border-color:var(--red); color:var(--red)}
+.mr-daily-opt.dim{opacity:.5}
+.mr-daily-opt.right .mr-daily-opt-label,.mr-daily-opt.wrong .mr-daily-opt-label{color:inherit}
+.mr-daily-flag{margin-left:auto; font-size:11px; font-weight:800; color:#fff; background:var(--green); padding:3px 9px; border-radius:7px}
+.mr-daily-short{display:flex; gap:8px; align-items:stretch}
+.mr-daily-short .mr-input{margin-top:0; flex:1}
+.mr-daily-your{font-size:14.5px; font-weight:700; padding:12px 14px; border-radius:12px; background:var(--bg)}
+.mr-daily-your.ok{color:var(--green); background:var(--green-bg)}
+.mr-daily-your.no{color:var(--red); background:var(--red-bg)}
+.mr-daily-result{margin-top:14px; text-align:center; padding:16px; border-radius:16px; animation:rise .35s cubic-bezier(.2,.7,.3,1) both}
+.mr-daily-result.ok{background:var(--green-bg)}
+.mr-daily-result.no{background:var(--red-bg)}
+.mr-daily-result-big{font-size:19px; font-weight:800; letter-spacing:-0.4px}
+.mr-daily-result.ok .mr-daily-result-big{color:var(--green)}
+.mr-daily-result.no .mr-daily-result-big{color:var(--red)}
+.mr-daily-answer{margin-top:8px; font-size:14px; color:var(--t2); font-weight:600}
+.mr-daily-answer b{color:var(--t1)}
+.mr-daily-result .mr-explain-btn,.mr-daily-result .mr-explain,.mr-daily-result .mr-explain-none{margin-top:12px; text-align:left}
+.mr-daily-check{color:var(--green); font-weight:900; margin-right:6px}
+.mr-daily-pastcard{margin-top:2px}
+
+/* 하단 날짜 바 (날짜를 누르면 달력) */
+.mr-daily-nav{display:flex; align-items:stretch; gap:10px; margin-top:2px}
+.mr-daily-arrow{width:50px; border:1px solid var(--line); background:var(--card); box-shadow:var(--glass-sh); color:var(--t1); font-size:22px; cursor:pointer; border-radius:16px; flex:none; display:grid; place-items:center; transition:background .15s}
+.mr-daily-arrow:hover:not(:disabled){background:var(--blue-bg); color:var(--blue)}
+.mr-daily-arrow:disabled{opacity:.32; cursor:default}
+.mr-daily-datebtn{flex:1; min-width:0; border:1px solid var(--line); background:var(--card); box-shadow:var(--glass-sh); color:var(--t1); font-family:inherit; cursor:pointer; border-radius:16px; padding:11px; display:flex; flex-direction:column; align-items:center; gap:2px; transition:background .15s}
+.mr-daily-datebtn:hover{background:var(--blue-bg)}
+.mr-daily-datebtn-day{font-size:16px; font-weight:800; color:var(--t1); letter-spacing:-0.3px}
+.mr-daily-datebtn-hint{font-size:11.5px; font-weight:700; color:var(--blue)}
+
+/* 날짜 선택 달력 */
+.mr-cal{width:100%; max-width:400px; background:var(--card); border:1px solid var(--line); border-radius:24px; padding:18px; box-shadow:0 24px 70px rgba(0,0,0,.3); animation:rise .25s cubic-bezier(.2,.7,.3,1) both}
+.mr-cal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:4px}
+.mr-cal-nav{display:flex; align-items:center; justify-content:space-between; margin:6px 2px 14px}
+.mr-cal-nav span{font-size:16px; font-weight:800; color:var(--t1)}
+.mr-cal-nav button{width:34px; height:34px; border:0; background:var(--bg); color:var(--t1); border-radius:10px; font-size:18px; cursor:pointer; transition:background .15s,color .15s}
+.mr-cal-nav button:hover{background:var(--blue-bg); color:var(--blue)}
+.mr-cal-dow{display:grid; grid-template-columns:repeat(7,1fr); gap:5px; margin-bottom:6px}
+.mr-cal-dow span{text-align:center; font-size:12px; font-weight:700; color:var(--t3)}
+.mr-cal-grid{display:grid; grid-template-columns:repeat(7,1fr); gap:5px}
+.mr-cal-cell{position:relative; aspect-ratio:1; border:0; background:transparent; border-radius:11px; font-family:inherit; display:flex; align-items:center; justify-content:center; padding:0}
+.mr-cal-cell.empty{visibility:hidden}
+.mr-cal-num{font-size:14.5px; font-weight:700; color:var(--t1)}
+.mr-cal-cell.none{cursor:default}
+.mr-cal-cell.none .mr-cal-num{color:var(--t3); opacity:.5}
+.mr-cal-cell.has{background:var(--bg); cursor:pointer}
+.mr-cal-cell.has:hover{background:var(--blue-bg)}
+.mr-cal-cell.solved{background:var(--blue-bg)}
+.mr-cal-cell.sel{background:var(--grad); box-shadow:0 6px 16px rgba(124,92,255,0.4)}
+.mr-cal-cell.sel .mr-cal-num{color:#fff}
+.mr-cal-check{position:absolute; top:4px; right:6px; font-size:10px; color:var(--blue); font-weight:900; line-height:1}
+.mr-cal-cell.sel .mr-cal-check{color:#fff}
+.mr-cal-legend{margin-top:14px; font-size:12.5px; color:var(--t3); font-weight:600; text-align:center}
+.mr-cal-legend .mr-cal-check{position:static; color:var(--blue)}
 
 /* ============ 어두운 화면 모드 ============ */
 html[data-theme="dark"] .mr-root{
@@ -6128,7 +6613,6 @@ html[data-theme="dark"] .mr-rte-color{border-color:#241d30}
 html[data-theme="dark"] .mr-notice-body{color:var(--t2)}
 html[data-theme="dark"] .mr-opt-flag.ans,
 html[data-theme="dark"] .mr-opt-flag.mine{background:rgba(255,255,255,0.12)}
-html[data-theme="dark"] .mr-diff.mid{color:#f0b74e; background:rgba(230,165,0,0.18)}
 html[data-theme="dark"] .mr-sched-tag{background:rgba(210,130,30,0.22); color:#ffcf95}
 html[data-theme="dark"] .mr-draft-badge{background:rgba(210,150,20,0.22); color:#ffd98f}
 html[data-theme="dark"] .mr-img-drop{border-color:rgba(255,255,255,0.18)}
