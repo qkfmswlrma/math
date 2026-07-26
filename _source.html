@@ -122,8 +122,14 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.9.2";
+const APP_VERSION = "2.9.3";
 const CHANGELOG = [
+  {
+    v: "2.9.3",
+    date: "2026.7.27",
+    items: ["화면을 넓게 볼 때 뒤로가기가 혼자 왼쪽 끝에 붙던 걸 맞췄어요"],
+    adminItems: [],
+  },
   {
     v: "2.9.2",
     date: "2026.7.27",
@@ -1055,7 +1061,9 @@ function App() {
             ? { position: "fixed", zIndex: 150, overflow: "hidden", top: "74px", left: "0px", width: "100vw", height: "calc(100vh - 74px)", borderRadius: "0px" }
             : { position: "fixed", zIndex: 150, overflow: "hidden", top: over.rect.top + "px", left: over.rect.left + "px", width: over.rect.width + "px", height: over.rect.height + "px", borderRadius: "26px" }}
         >
-          <button className="mr-ov-back" onClick={closeOver} style={{ opacity: over.expanded ? 1 : 0 }}>홈</button>
+          <div className="mr-ov-backwrap" style={{ opacity: over.expanded ? 1 : 0 }}>
+            <button className="mr-ov-back" onClick={closeOver}>홈</button>
+          </div>
           <div
             className="mr-ov-inner"
             style={{
@@ -1095,10 +1103,10 @@ function App() {
       </header>
 
       <main className="mr-main">
+        <div className="mr-screen-in" key={tab}>
         {!loading && tab !== "home" && (
           <button className="mr-page-back" onClick={() => go("home")}>홈</button>
         )}
-        <div className="mr-screen-in" key={tab}>
         {loading ? (
           <div className="mr-loading">불러오는 중…</div>
         ) : tab === "home" ? (
@@ -5728,13 +5736,16 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-ov-inner{position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-top:44px}
 .mr-ov-inner .mr-main{padding-top:8px}
 /* 오버레이 뒤로가기: 화면 안의 뒤로가기와 같은 모양으로 통일 */
-/* 위치는 화면 안 뒤로가기(.mr-back)와 같은 자리에 오도록 맞춘다
-   (.mr-ov-inner 위 여백 10px + .mr-main 위 여백 8px = 18px, 왼쪽은 .mr-main 여백 18px) */
-.mr-ov-back{position:absolute; top:18px; left:20px; z-index:3;
+/* 본문(.mr-main)과 똑같은 폭 안에 넣어야 화면이 넓어져도 왼쪽 끝이 어긋나지 않는다.
+   위 여백은 .mr-ov-inner 10px + .mr-main 8px 과 같은 18px */
+.mr-ov-backwrap{position:absolute; top:18px; left:0; right:0; z-index:3;
+  max-width:680px; margin:0 auto; padding:0 20px; pointer-events:none;
+  transition:opacity .25s ease}
+.mr-ov-back{pointer-events:auto;
   display:inline-flex; align-items:center; gap:7px; border:1px solid var(--line); background:var(--card);
   color:var(--t2); cursor:pointer; font-family:inherit; font-size:14px; font-weight:700;
   padding:9px 16px 9px 13px; border-radius:999px; box-shadow:0 4px 14px rgba(91,55,140,0.10);
-  transition:opacity .25s ease, background .15s, color .15s;
+  transition:background .15s, color .15s;
   -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px)}
 .mr-ov-back::before,.mr-back::before,.mr-page-back::before{
   content:""; width:8px; height:8px; flex:none;
@@ -5744,7 +5755,7 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-ov-back:hover{background:var(--blue-bg); color:var(--blue)}
 .mr-ov-back:active{transform:scale(.97)}
 /* 화면이 자기 뒤로가기를 가지고 있으면 홈으로 가는 것은 숨긴다 (화살표가 두 개 뜨지 않게) */
-.mr-ov:has(.mr-back) .mr-ov-back{display:none}
+.mr-ov:has(.mr-back) .mr-ov-backwrap{display:none}
 .mr-ov:has(.mr-back) .mr-ov-inner{padding-top:10px}
 .mr-main:has(.mr-back) .mr-page-back{display:none}
 @keyframes screenIn{from{opacity:0; transform:translateY(20px) scale(.985)}to{opacity:1; transform:none}}
