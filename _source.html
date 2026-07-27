@@ -122,8 +122,14 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.10.0";
+const APP_VERSION = "2.10.1";
 const CHANGELOG = [
+  {
+    v: "2.10.1",
+    date: "2026.7.27",
+    items: ["목록에서 글로 들어가고 나올 때 화면이 옆으로 넘어가게 바꿨어요"],
+    adminItems: [],
+  },
   {
     v: "2.10.0",
     date: "2026.7.27",
@@ -1373,6 +1379,7 @@ function Account({ auth, theme, onToggleTheme, onChangePassword, onUpdateKakao, 
 /* ===================== 내 시험 기록 / 오답노트 ===================== */
 function MyRecords({ student, exams, subs, initialSub, pushUrl }) {
   const [open, setOpen] = useState(null);
+  const step = useStep(open ? 1 : 0);
   const [sub0, setSub0] = useState(initialSub === "wrong" ? "wrong" : "exams");
   const goSub = (t) => {
     setSub0(t);
@@ -1410,7 +1417,7 @@ function MyRecords({ student, exams, subs, initialSub, pushUrl }) {
     const ratio = max ? score / max : 0;
     const tone = ratio >= 0.8 ? "good" : ratio >= 0.5 ? "mid" : "low";
     return (
-      <div className="mr-col">
+      <div className={"mr-col" + step} key="detail">
         <button className="mr-back" onClick={() => setOpen(null)}>내 시험 기록</button>
         <section className="mr-card" style={{ textAlign: "center", padding: "28px 20px" }}>
           <div className="mr-card-tag" style={{ marginBottom: "10px" }}>{exam.title}</div>
@@ -1429,7 +1436,7 @@ function MyRecords({ student, exams, subs, initialSub, pushUrl }) {
   }
 
   return (
-    <div className="mr-col">
+    <div className={"mr-col" + step} key="list">
       <div className="mr-list-top">
         <span className="mr-list-title">내 시험 기록</span>
       </div>
@@ -1993,12 +2000,26 @@ function Home({ role, student, loggedIn, noticeCount, columnUnread, announceCoun
   );
 }
 
+/* 한 화면 안에서 목록과 글 사이를 오갈 때 들어오는 방향을 정한다.
+   깊이가 커지면 오른쪽에서, 되돌아오면 왼쪽에서 들어온다.
+   처음 들어올 때는 화면 전체 전환이 이미 돌고 있어서 아무것도 하지 않는다 */
+function useStep(depth) {
+  const prev = React.useRef(depth);
+  const dir = React.useRef(null);
+  if (depth !== prev.current) {
+    dir.current = depth > prev.current ? "fwd" : "back";
+    prev.current = depth;
+  }
+  return dir.current ? " mr-step-" + dir.current : "";
+}
+
 /* ===================== 칼럼 ===================== */
 function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onReorder, readIds, onRead, initialNo, initialCat, urlBase, pushUrl, loggedIn, requireLogin }) {
   const goUrl = (path) => { if (pushUrl) pushUrl(path); };
   const CAT = { elem: "초등학교", mid: "중학교", high: "고등학교" };
   const CATS = ["elem", "mid", "high"];
   const [view, setView] = useState("list"); // list | write | read | edit
+  const step = useStep({ list: 0, read: 1, write: 1, edit: 2 }[view] || 0);
   const CAT_KEYS = ["elem", "mid", "high"];
   const [cat, setCat0] = useState(
     CAT_KEYS.indexOf(initialCat) !== -1 ? initialCat : "elem"
@@ -2129,7 +2150,7 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onR
   // 글쓰기 / 임시저장 이어쓰기
   if (view === "write")
     return (
-      <div className="mr-col">
+      <div className={"mr-col" + step} key="write">
         <button className="mr-back" onClick={() => setView("list")}>
           칼럼 목록
         </button>
@@ -2165,7 +2186,7 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onR
   // 글 수정하기 (발행된 글)
   if (view === "edit")
     return (
-      <div className="mr-col">
+      <div className={"mr-col" + step} key="edit">
         <button className="mr-back" onClick={() => setView("read")}>
           칼럼 보기
         </button>
@@ -2196,7 +2217,7 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onR
   if (view === "read") {
     const n = notices.find((x) => x.id === openId);
     return (
-      <div className="mr-col">
+      <div className={"mr-col" + step} key="read">
         <button className="mr-back" onClick={backToList}>
           칼럼 목록
         </button>
@@ -2246,7 +2267,7 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onR
   };
 
   return (
-    <div className="mr-col">
+    <div className={"mr-col" + step} key="list">
       <div className="mr-list-top">
         <span className="mr-list-title">칼럼</span>
         {role === "admin" && (
@@ -2326,6 +2347,7 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onR
 function Announcements({ role, student, kakaoId, posts, onAdd, onDelete, onEdit, onReorder, readIds, onRead, initialNo, urlBase, pushUrl }) {
   const goUrl = (path) => { if (pushUrl) pushUrl(path); };
   const [view, setView] = useState("list"); // list | write | read | edit
+  const step = useStep({ list: 0, read: 1, write: 1, edit: 2 }[view] || 0);
   const [openId, setOpenId] = useState(null);
   const [draftId, setDraftId] = useState(null);
   const [title, setTitle] = useState("");
@@ -2402,7 +2424,7 @@ function Announcements({ role, student, kakaoId, posts, onAdd, onDelete, onEdit,
 
   if (view === "write")
     return (
-      <div className="mr-col">
+      <div className={"mr-col" + step} key="write">
         <button className="mr-back" onClick={() => setView("list")}>공지사항</button>
         <section className="mr-card mr-writer">
           <div className="mr-card-tag">{draftId ? "임시저장 이어쓰기" : "새 공지 쓰기"}</div>
@@ -2423,7 +2445,7 @@ function Announcements({ role, student, kakaoId, posts, onAdd, onDelete, onEdit,
 
   if (view === "edit")
     return (
-      <div className="mr-col">
+      <div className={"mr-col" + step} key="edit">
         <button className="mr-back" onClick={() => setView("read")}>공지 보기</button>
         <section className="mr-card mr-writer">
           <div className="mr-card-tag">공지 수정하기</div>
@@ -2440,7 +2462,7 @@ function Announcements({ role, student, kakaoId, posts, onAdd, onDelete, onEdit,
   if (view === "read") {
     const n = posts.find((x) => x.id === openId);
     return (
-      <div className="mr-col">
+      <div className={"mr-col" + step} key="read">
         <button className="mr-back" onClick={backToList}>공지사항</button>
         {!n ? (
           <Empty text="공지를 찾을 수 없어요." />
@@ -2483,7 +2505,7 @@ function Announcements({ role, student, kakaoId, posts, onAdd, onDelete, onEdit,
   };
 
   return (
-    <div className="mr-col">
+    <div className={"mr-col" + step} key="list">
       <div className="mr-list-top">
         <span className="mr-list-title">공지사항</span>
         {role === "admin" && <button className="mr-btn" onClick={newWrite}>공지 쓰기</button>}
@@ -3823,6 +3845,7 @@ function TodayPuzzle({ exams, subs, student, loggedIn, allRates, onAddSub, onGue
 /* ---------- 참여자: 시험 목록 / 응시 / 결과 ---------- */
 function ExamsStudent({ student, loggedIn, allRates, requireLogin, exams, subs, onAddSub, onGuestSubmit, examType, onBackToChooser, readIds, onView, initialNo, goUrl }) {
   const [taking, setTaking] = useState(() => (initialNo ? findByNo(exams, initialNo) || null : null));
+  const step = useStep(taking ? 1 : 0);
   const url = (p) => { if (goUrl) goUrl(p); };
   const openExam = (ex) => { if (onView) onView(ex.id); setTaking(ex); if (ex.no) url("/exam/" + ex.no); };
   const closeExam = () => { setTaking(null); url("/exam/" + examType); };
@@ -3847,17 +3870,21 @@ function ExamsStudent({ student, loggedIn, allRates, requireLogin, exams, subs, 
 
   if (taking)
     return (
-      <ExamTaker taking={taking} setTaking={closeExam} student={student} loggedIn={loggedIn} onAddSub={onAddSub} onGuestSubmit={onGuestSubmit} />
+      <div className={step.trim()} key="taking">
+        <ExamTaker taking={taking} setTaking={closeExam} student={student} loggedIn={loggedIn} onAddSub={onAddSub} onGuestSubmit={onGuestSubmit} />
+      </div>
     );
 
   if (examType === "today")
     return (
-      <TodayPuzzle exams={exams} subs={subs} student={student} loggedIn={loggedIn} allRates={allRates}
-        onAddSub={onAddSub} onGuestSubmit={onGuestSubmit} onOpen={openExam} onView={onView} onBackToChooser={onBackToChooser} />
+      <div className={step.trim()} key="today">
+        <TodayPuzzle exams={exams} subs={subs} student={student} loggedIn={loggedIn} allRates={allRates}
+          onAddSub={onAddSub} onGuestSubmit={onGuestSubmit} onOpen={openExam} onView={onView} onBackToChooser={onBackToChooser} />
+      </div>
     );
 
   return (
-    <div className="mr-col">
+    <div className={"mr-col" + step} key="list">
       <button className="mr-back" onClick={onBackToChooser}>
         시험 종류
       </button>
@@ -5816,6 +5843,17 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
    여기서 크기까지 바꾸면 안쪽 카드 움직임과 겹쳐 지저분해진다 */
 @keyframes screenIn{from{opacity:0; transform:translateY(10px)}to{opacity:1; transform:none}}
 .mr-screen-in{animation:screenIn .42s var(--ease)}
+/* 목록과 글 사이를 오갈 때는 화면이 통째로 미끄러져 들어온다 */
+@keyframes stepFwd{from{opacity:0; transform:translateX(26px)}to{opacity:1; transform:none}}
+@keyframes stepBack{from{opacity:0; transform:translateX(-26px)}to{opacity:1; transform:none}}
+.mr-step-fwd{animation:stepFwd .34s var(--ease)}
+.mr-step-back{animation:stepBack .34s var(--ease)}
+/* 통째로 움직이는 동안 안쪽 카드가 따로 또 움직이면 지저분해진다 */
+.mr-step-fwd .mr-card,.mr-step-back .mr-card,
+.mr-step-fwd .mr-post-item,.mr-step-back .mr-post-item,
+.mr-step-fwd .mr-record,.mr-step-back .mr-record,
+.mr-step-fwd .mr-pick-card,.mr-step-back .mr-pick-card,
+.mr-step-fwd .mr-daily-hero,.mr-step-back .mr-daily-hero{animation:none}
 
 /* ===== 홈 화면에 추가: 하단 배너 + 안내 시트 ===== */
 .mr-a2hs-banner{

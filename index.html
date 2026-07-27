@@ -152,8 +152,13 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.10.0";
+const APP_VERSION = "2.10.1";
 const CHANGELOG = [{
+  v: "2.10.1",
+  date: "2026.7.27",
+  items: ["목록에서 글로 들어가고 나올 때 화면이 옆으로 넘어가게 바꿨어요"],
+  adminItems: []
+}, {
   v: "2.10.0",
   date: "2026.7.27",
   items: ["화면이 바뀌고 목록이 뜰 때의 움직임을 전체적으로 다듬었어요", "오늘의 문제에서 날짜를 옮기면 앞 문제의 답이 그대로 남아 있던 걸 고쳤어요"],
@@ -1758,6 +1763,7 @@ function MyRecords({
   pushUrl
 }) {
   const [open, setOpen] = useState(null);
+  const step = useStep(open ? 1 : 0);
   const [sub0, setSub0] = useState(initialSub === "wrong" ? "wrong" : "exams");
   const goSub = t => {
     setSub0(t);
@@ -1807,7 +1813,8 @@ function MyRecords({
     const ratio = max ? score / max : 0;
     const tone = ratio >= 0.8 ? "good" : ratio >= 0.5 ? "mid" : "low";
     return /*#__PURE__*/React.createElement("div", {
-      className: "mr-col"
+      className: "mr-col" + step,
+      key: "detail"
     }, /*#__PURE__*/React.createElement("button", {
       className: "mr-back",
       onClick: () => setOpen(null)
@@ -1844,7 +1851,8 @@ function MyRecords({
     }));
   }
   return /*#__PURE__*/React.createElement("div", {
-    className: "mr-col"
+    className: "mr-col" + step,
+    key: "list"
   }, /*#__PURE__*/React.createElement("div", {
     className: "mr-list-top"
   }, /*#__PURE__*/React.createElement("span", {
@@ -2422,6 +2430,19 @@ function Home({
   }, "→")))));
 }
 
+/* 한 화면 안에서 목록과 글 사이를 오갈 때 들어오는 방향을 정한다.
+   깊이가 커지면 오른쪽에서, 되돌아오면 왼쪽에서 들어온다.
+   처음 들어올 때는 화면 전체 전환이 이미 돌고 있어서 아무것도 하지 않는다 */
+function useStep(depth) {
+  const prev = React.useRef(depth);
+  const dir = React.useRef(null);
+  if (depth !== prev.current) {
+    dir.current = depth > prev.current ? "fwd" : "back";
+    prev.current = depth;
+  }
+  return dir.current ? " mr-step-" + dir.current : "";
+}
+
 /* ===================== 칼럼 ===================== */
 function Notices({
   role,
@@ -2451,6 +2472,12 @@ function Notices({
   };
   const CATS = ["elem", "mid", "high"];
   const [view, setView] = useState("list"); // list | write | read | edit
+  const step = useStep({
+    list: 0,
+    read: 1,
+    write: 1,
+    edit: 2
+  }[view] || 0);
   const CAT_KEYS = ["elem", "mid", "high"];
   const [cat, setCat0] = useState(CAT_KEYS.indexOf(initialCat) !== -1 ? initialCat : "elem"); // 목록에서 보고 있는 분류 탭
   const setCat = k => {
@@ -2589,7 +2616,8 @@ function Notices({
 
   // 글쓰기 / 임시저장 이어쓰기
   if (view === "write") return /*#__PURE__*/React.createElement("div", {
-    className: "mr-col"
+    className: "mr-col" + step,
+    key: "write"
   }, /*#__PURE__*/React.createElement("button", {
     className: "mr-back",
     onClick: () => setView("list")
@@ -2631,7 +2659,8 @@ function Notices({
 
   // 글 수정하기 (발행된 글)
   if (view === "edit") return /*#__PURE__*/React.createElement("div", {
-    className: "mr-col"
+    className: "mr-col" + step,
+    key: "edit"
   }, /*#__PURE__*/React.createElement("button", {
     className: "mr-back",
     onClick: () => setView("read")
@@ -2659,7 +2688,8 @@ function Notices({
   if (view === "read") {
     const n = notices.find(x => x.id === openId);
     return /*#__PURE__*/React.createElement("div", {
-      className: "mr-col"
+      className: "mr-col" + step,
+      key: "read"
     }, /*#__PURE__*/React.createElement("button", {
       className: "mr-back",
       onClick: backToList
@@ -2718,7 +2748,8 @@ function Notices({
     await onReorder(ids);
   };
   return /*#__PURE__*/React.createElement("div", {
-    className: "mr-col"
+    className: "mr-col" + step,
+    key: "list"
   }, /*#__PURE__*/React.createElement("div", {
     className: "mr-list-top"
   }, /*#__PURE__*/React.createElement("span", {
@@ -2805,6 +2836,12 @@ function Announcements({
     if (pushUrl) pushUrl(path);
   };
   const [view, setView] = useState("list"); // list | write | read | edit
+  const step = useStep({
+    list: 0,
+    read: 1,
+    write: 1,
+    edit: 2
+  }[view] || 0);
   const [openId, setOpenId] = useState(null);
   const [draftId, setDraftId] = useState(null);
   const [title, setTitle] = useState("");
@@ -2897,7 +2934,8 @@ function Announcements({
     if (ok) setView("read");
   };
   if (view === "write") return /*#__PURE__*/React.createElement("div", {
-    className: "mr-col"
+    className: "mr-col" + step,
+    key: "write"
   }, /*#__PURE__*/React.createElement("button", {
     className: "mr-back",
     onClick: () => setView("list")
@@ -2937,7 +2975,8 @@ function Announcements({
     onClick: post
   }, "발행하기")))));
   if (view === "edit") return /*#__PURE__*/React.createElement("div", {
-    className: "mr-col"
+    className: "mr-col" + step,
+    key: "edit"
   }, /*#__PURE__*/React.createElement("button", {
     className: "mr-back",
     onClick: () => setView("read")
@@ -2963,7 +3002,8 @@ function Announcements({
   if (view === "read") {
     const n = posts.find(x => x.id === openId);
     return /*#__PURE__*/React.createElement("div", {
-      className: "mr-col"
+      className: "mr-col" + step,
+      key: "read"
     }, /*#__PURE__*/React.createElement("button", {
       className: "mr-back",
       onClick: backToList
@@ -3020,7 +3060,8 @@ function Announcements({
     await onReorder(ids);
   };
   return /*#__PURE__*/React.createElement("div", {
-    className: "mr-col"
+    className: "mr-col" + step,
+    key: "list"
   }, /*#__PURE__*/React.createElement("div", {
     className: "mr-list-top"
   }, /*#__PURE__*/React.createElement("span", {
@@ -4785,6 +4826,7 @@ function ExamsStudent({
   goUrl
 }) {
   const [taking, setTaking] = useState(() => initialNo ? findByNo(exams, initialNo) || null : null);
+  const step = useStep(taking ? 1 : 0);
   const url = p => {
     if (goUrl) goUrl(p);
   };
@@ -4813,15 +4855,21 @@ function ExamsStudent({
       return sort === "hard" ? ra - rb : rb - ra;
     });
   }
-  if (taking) return /*#__PURE__*/React.createElement(ExamTaker, {
+  if (taking) return /*#__PURE__*/React.createElement("div", {
+    className: step.trim(),
+    key: "taking"
+  }, /*#__PURE__*/React.createElement(ExamTaker, {
     taking: taking,
     setTaking: closeExam,
     student: student,
     loggedIn: loggedIn,
     onAddSub: onAddSub,
     onGuestSubmit: onGuestSubmit
-  });
-  if (examType === "today") return /*#__PURE__*/React.createElement(TodayPuzzle, {
+  }));
+  if (examType === "today") return /*#__PURE__*/React.createElement("div", {
+    className: step.trim(),
+    key: "today"
+  }, /*#__PURE__*/React.createElement(TodayPuzzle, {
     exams: exams,
     subs: subs,
     student: student,
@@ -4832,9 +4880,10 @@ function ExamsStudent({
     onOpen: openExam,
     onView: onView,
     onBackToChooser: onBackToChooser
-  });
+  }));
   return /*#__PURE__*/React.createElement("div", {
-    className: "mr-col"
+    className: "mr-col" + step,
+    key: "list"
   }, /*#__PURE__*/React.createElement("button", {
     className: "mr-back",
     onClick: onBackToChooser
@@ -7016,6 +7065,17 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
    여기서 크기까지 바꾸면 안쪽 카드 움직임과 겹쳐 지저분해진다 */
 @keyframes screenIn{from{opacity:0; transform:translateY(10px)}to{opacity:1; transform:none}}
 .mr-screen-in{animation:screenIn .42s var(--ease)}
+/* 목록과 글 사이를 오갈 때는 화면이 통째로 미끄러져 들어온다 */
+@keyframes stepFwd{from{opacity:0; transform:translateX(26px)}to{opacity:1; transform:none}}
+@keyframes stepBack{from{opacity:0; transform:translateX(-26px)}to{opacity:1; transform:none}}
+.mr-step-fwd{animation:stepFwd .34s var(--ease)}
+.mr-step-back{animation:stepBack .34s var(--ease)}
+/* 통째로 움직이는 동안 안쪽 카드가 따로 또 움직이면 지저분해진다 */
+.mr-step-fwd .mr-card,.mr-step-back .mr-card,
+.mr-step-fwd .mr-post-item,.mr-step-back .mr-post-item,
+.mr-step-fwd .mr-record,.mr-step-back .mr-record,
+.mr-step-fwd .mr-pick-card,.mr-step-back .mr-pick-card,
+.mr-step-fwd .mr-daily-hero,.mr-step-back .mr-daily-hero{animation:none}
 
 /* ===== 홈 화면에 추가: 하단 배너 + 안내 시트 ===== */
 .mr-a2hs-banner{
