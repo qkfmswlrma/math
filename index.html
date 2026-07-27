@@ -152,21 +152,26 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.11.0";
+const APP_VERSION = "2.11.1";
 const CHANGELOG = [{
+  v: "2.11.1",
+  date: "2026.7.27",
+  items: ["탭을 눌러도 안 바뀌던 걸 고쳤어요"],
+  adminItems: []
+}, {
   v: "2.11.0",
   date: "2026.7.27",
-  items: ["탭을 바꿀 때 표시가 미끄러져 옮겨가고, 손가락으로 끌어서 옮길 수도 있어요", "화면이 넘어갈 때의 움직임을 카드가 펼쳐질 때와 같은 결로 맞췄어요"],
+  items: ["사용감을 여러 군데 다듬었어요"],
   adminItems: []
 }, {
   v: "2.10.1",
   date: "2026.7.27",
-  items: ["목록에서 글로 들어가고 나올 때 화면이 옆으로 넘어가게 바꿨어요"],
+  items: ["사용감을 다듬었어요"],
   adminItems: []
 }, {
   v: "2.10.0",
   date: "2026.7.27",
-  items: ["화면이 바뀌고 목록이 뜰 때의 움직임을 전체적으로 다듬었어요", "오늘의 문제에서 날짜를 옮기면 앞 문제의 답이 그대로 남아 있던 걸 고쳤어요"],
+  items: ["사용감을 다듬었어요", "오늘의 문제에서 날짜를 옮기면 앞 문제의 답이 그대로 남아 있던 걸 고쳤어요"],
   adminItems: ["오늘의 문제를 낼 때 며칠자 문제인지 직접 고를 수 있어요"]
 }, {
   v: "2.9.3",
@@ -2490,16 +2495,20 @@ function SegBar({
     };
     moved.current = false;
     dragEndAt.current = 0; // 새로 누르면 지난번 끌기의 흔적을 지운다
-    try {
-      ref.current.setPointerCapture(e.pointerId);
-    } catch (err) {}
   };
   const move = e => {
     const s = start.current;
     if (!s) return;
     const dx = e.clientX - s.x;
-    if (Math.abs(dx) > 4) moved.current = true;
-    if (!moved.current) return;
+    if (!moved.current) {
+      if (Math.abs(dx) <= 4) return; // 아직 끄는 게 아니라 누르는 중
+      moved.current = true;
+      // 포인터는 진짜로 끌기 시작한 뒤에 붙잡는다. 누르자마자 붙잡으면
+      // 뒤따라오는 click 이 버튼 대신 이 상자로 가서 그냥 누르기가 먹지 않는다
+      try {
+        ref.current.setPointerCapture(e.pointerId);
+      } catch (err) {}
+    }
     setAt(Math.max(0, Math.min(n - 1, s.i + dx / s.step)));
   };
   const up = () => {
