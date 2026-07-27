@@ -152,8 +152,13 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.10.1";
+const APP_VERSION = "2.11.0";
 const CHANGELOG = [{
+  v: "2.11.0",
+  date: "2026.7.27",
+  items: ["탭을 바꿀 때 표시가 미끄러져 옮겨가고, 손가락으로 끌어서 옮길 수도 있어요", "화면이 넘어갈 때의 움직임을 카드가 펼쳐질 때와 같은 결로 맞췄어요"],
+  adminItems: []
+}, {
   v: "2.10.1",
   date: "2026.7.27",
   items: ["목록에서 글로 들어가고 나올 때 화면이 옆으로 넘어가게 바꿨어요"],
@@ -1857,8 +1862,11 @@ function MyRecords({
     className: "mr-list-top"
   }, /*#__PURE__*/React.createElement("span", {
     className: "mr-list-title"
-  }, "내 시험 기록")), /*#__PURE__*/React.createElement("div", {
-    className: "mr-subtabs"
+  }, "내 시험 기록")), /*#__PURE__*/React.createElement(SegBar, {
+    cls: "mr-subtabs",
+    n: 2,
+    i: sub0 === "exams" ? 0 : 1,
+    onPick: k => goSub(k === 0 ? "exams" : "wrong")
   }, /*#__PURE__*/React.createElement("button", {
     className: sub0 === "exams" ? "on" : "",
     onClick: () => goSub("exams")
@@ -2026,6 +2034,7 @@ function Admin({
   };
   // 회원 관리는 root 전용 — 일반 관리자에겐 탭도, 상세도 안 보임
   const subtab = !isSuper && subtab0 === "members" ? "dash" : subtab0;
+  const adminTabs = isSuper ? ["dash", "members", "log"] : ["dash", "log"];
   const [selUser, setSelUser] = useState(null);
   const [q, setQ] = useState("");
   const stats = [{
@@ -2140,8 +2149,11 @@ function Admin({
     className: "mr-list-top"
   }, /*#__PURE__*/React.createElement("span", {
     className: "mr-list-title"
-  }, "관리자 페이지")), /*#__PURE__*/React.createElement("div", {
-    className: "mr-subtabs"
+  }, "관리자 페이지")), /*#__PURE__*/React.createElement(SegBar, {
+    cls: "mr-subtabs",
+    n: adminTabs.length,
+    i: Math.max(0, adminTabs.indexOf(subtab)),
+    onPick: k => setSubtab(adminTabs[k])
   }, /*#__PURE__*/React.createElement("button", {
     className: subtab === "dash" ? "on" : "",
     onClick: () => setSubtab("dash")
@@ -2443,6 +2455,88 @@ function useStep(depth) {
   return dir.current ? " mr-step-" + dir.current : "";
 }
 
+/* 칸을 눌러도 되고 알약을 잡아 끌어도 되는 토글.
+   끄는 동안에는 --i 에 소수를 넣어 손가락을 그대로 따라가고, 손을 떼면 가까운 칸으로 붙는다.
+   끌고 나서 나오는 click 은 막는다. 안 그러면 처음 누른 칸이 다시 선택된다 */
+function SegBar({
+  cls,
+  n,
+  i,
+  onPick,
+  children
+}) {
+  const ref = React.useRef(null);
+  const start = React.useRef(null);
+  const moved = React.useRef(false);
+  const dragEndAt = React.useRef(0);
+  const [at, setAt] = useState(null);
+
+  // 칸 하나가 차지하는 가로 폭. 버튼 자리에서 직접 재야 여백과 간격이 달라도 맞는다
+  const stepOf = () => {
+    const el = ref.current;
+    if (!el) return 0;
+    const b = el.querySelectorAll("button");
+    if (b.length < 2) return 0;
+    return b[1].getBoundingClientRect().left - b[0].getBoundingClientRect().left;
+  };
+  const down = e => {
+    if (n < 2) return;
+    const step = stepOf();
+    if (!step) return;
+    start.current = {
+      x: e.clientX,
+      i,
+      step
+    };
+    moved.current = false;
+    dragEndAt.current = 0; // 새로 누르면 지난번 끌기의 흔적을 지운다
+    try {
+      ref.current.setPointerCapture(e.pointerId);
+    } catch (err) {}
+  };
+  const move = e => {
+    const s = start.current;
+    if (!s) return;
+    const dx = e.clientX - s.x;
+    if (Math.abs(dx) > 4) moved.current = true;
+    if (!moved.current) return;
+    setAt(Math.max(0, Math.min(n - 1, s.i + dx / s.step)));
+  };
+  const up = () => {
+    const s = start.current;
+    start.current = null;
+    if (!s) return;
+    if (moved.current) {
+      dragEndAt.current = Date.now();
+      const target = at === null ? s.i : Math.round(at);
+      setAt(null);
+      if (target !== s.i) onPick(target);
+    }
+    moved.current = false;
+  };
+  // 끌고 난 직후에 딸려오는 click 만 막는다. 시각으로 재야 클릭이 안 오는 경우에도
+  // 표시가 남아 다음 누르기를 잡아먹지 않는다
+  const clickCapture = e => {
+    if (Date.now() - dragEndAt.current > 400) return;
+    dragEndAt.current = 0;
+    e.stopPropagation();
+    e.preventDefault();
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    ref: ref,
+    className: cls + " mr-slide" + (at === null ? "" : " mr-dragging"),
+    style: {
+      "--n": n,
+      "--i": at === null ? i : at
+    },
+    onPointerDown: down,
+    onPointerMove: move,
+    onPointerUp: up,
+    onPointerCancel: up,
+    onClickCapture: clickCapture
+  }, children);
+}
+
 /* ===================== 칼럼 ===================== */
 function Notices({
   role,
@@ -2586,8 +2680,11 @@ function Notices({
   };
   const CatPicker = /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "mr-cat-label"
-  }, "대상"), /*#__PURE__*/React.createElement("div", {
-    className: "mr-cat-seg"
+  }, "대상"), /*#__PURE__*/React.createElement(SegBar, {
+    cls: "mr-cat-seg",
+    n: CATS.length,
+    i: Math.max(0, CATS.indexOf(editCat)),
+    onPick: k => setEditCat(CATS[k])
   }, CATS.map(k => /*#__PURE__*/React.createElement("button", {
     key: k,
     className: editCat === k ? "on" : "",
@@ -2757,8 +2854,11 @@ function Notices({
   }, "칼럼"), role === "admin" && /*#__PURE__*/React.createElement("button", {
     className: "mr-btn",
     onClick: newWrite
-  }, "글쓰기")), /*#__PURE__*/React.createElement("div", {
-    className: "mr-subtabs"
+  }, "글쓰기")), /*#__PURE__*/React.createElement(SegBar, {
+    cls: "mr-subtabs",
+    n: CATS.length,
+    i: Math.max(0, CATS.indexOf(cat)),
+    onPick: k => setCat(CATS[k])
   }, CATS.map(k => /*#__PURE__*/React.createElement("button", {
     key: k,
     className: cat === k ? "on" : "",
@@ -4070,8 +4170,11 @@ function ExamEditor({
     onChange: e => setTitle(e.target.value)
   }), /*#__PURE__*/React.createElement("div", {
     className: "mr-cat-label"
-  }, "종류"), /*#__PURE__*/React.createElement("div", {
-    className: "mr-cat-seg"
+  }, "종류"), /*#__PURE__*/React.createElement(SegBar, {
+    cls: "mr-cat-seg",
+    n: 2,
+    i: examType === "level" ? 0 : 1,
+    onPick: k => setExamType(k === 0 ? "level" : "today")
   }, /*#__PURE__*/React.createElement("button", {
     className: examType === "level" ? "on" : "",
     onClick: () => setExamType("level")
@@ -4089,8 +4192,11 @@ function ExamEditor({
     className: "mr-sched-hint"
   }, "제목과 상관없이 여기서 고른 날짜의 오늘의 문제로 올라가요. 지난 날짜를 고르면 그 자리에 바로 채워지고, 앞으로의 날짜를 고르면 그날 자정부터 보여요.")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "mr-cat-label"
-  }, "공개 시점"), /*#__PURE__*/React.createElement("div", {
-    className: "mr-cat-seg"
+  }, "공개 시점"), /*#__PURE__*/React.createElement(SegBar, {
+    cls: "mr-cat-seg",
+    n: 2,
+    i: scheduled ? 1 : 0,
+    onPick: k => setScheduled(k === 1)
   }, /*#__PURE__*/React.createElement("button", {
     className: !scheduled ? "on" : "",
     onClick: () => setScheduled(false)
@@ -4111,8 +4217,13 @@ function ExamEditor({
     className: "mr-qedit-head"
   }, /*#__PURE__*/React.createElement("span", {
     className: "mr-qnum"
-  }, "Q", qi + 1), /*#__PURE__*/React.createElement("div", {
-    className: "mr-seg"
+  }, "Q", qi + 1), /*#__PURE__*/React.createElement(SegBar, {
+    cls: "mr-seg",
+    n: 2,
+    i: q.type === "mc" ? 0 : 1,
+    onPick: k => update(q.id, {
+      type: k === 0 ? "mc" : "short"
+    })
   }, /*#__PURE__*/React.createElement("button", {
     className: q.type === "mc" ? "on" : "",
     onClick: () => update(q.id, {
@@ -4841,6 +4952,7 @@ function ExamsStudent({
   };
   const [q, setQ] = useState("");
   const [sort, setSort] = useState("recent");
+  const SORTS = ["recent", "easy", "hard"];
   const rateOf = ex => allRates && typeof allRates === "object" ? combinedRate(allRates[ex.id]) : null;
   const kw = q.trim().toLowerCase();
   let shown = exams.filter(ex => !kw || (ex.title || "").toLowerCase().includes(kw) || (ex.author || "").toLowerCase().includes(kw));
@@ -4900,8 +5012,11 @@ function ExamsStudent({
     placeholder: "제목이나 출제자로 검색",
     value: q,
     onChange: e => setQ(e.target.value)
-  }), /*#__PURE__*/React.createElement("div", {
-    className: "mr-sortseg"
+  }), /*#__PURE__*/React.createElement(SegBar, {
+    cls: "mr-sortseg",
+    n: 3,
+    i: Math.max(0, SORTS.indexOf(sort)),
+    onPick: k => setSort(SORTS[k])
   }, /*#__PURE__*/React.createElement("button", {
     className: sort === "recent" ? "on" : "",
     onClick: () => setSort("recent")
@@ -6430,8 +6545,11 @@ const CSS = `
   --red:#f0508a; --red-bg:rgba(240,80,138,0.12);
   --glass-sh:0 14px 34px rgba(91,55,140,0.16), inset 0 1px 1px rgba(255,255,255,0.92);
   --grad:linear-gradient(140deg,#9b6cff,#ff8fc8);
-  /* 카드가 펼쳐지는 전환과 같은 곡선을 화면 전체가 함께 쓴다 */
+  /* 작은 요소가 나타날 때: 빠르게 붙었다가 부드럽게 멎는다 */
   --ease:cubic-bezier(.22,1,.36,1);
+  /* 화면이 통째로 움직일 때: 카드가 펼쳐지는 전환과 똑같은 곡선.
+     천천히 출발해 천천히 멎어서 움직이는 내내 눈에 보인다 */
+  --ease-screen:cubic-bezier(.4,0,.2,1);
   position:relative; min-height:100vh; width:100%; color:var(--t1);
   font-family:'Pretendard','Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif;
   -webkit-font-smoothing:antialiased; padding-bottom:64px; letter-spacing:-0.2px;
@@ -6499,6 +6617,29 @@ const CSS = `
 .mr-subtabs{display:flex; gap:6px; background:var(--bg); border-radius:13px; padding:4px}
 .mr-subtabs button{flex:1; border:0; background:transparent; padding:10px; font-family:inherit; font-weight:700; font-size:14px; color:var(--t3); border-radius:10px; cursor:pointer; transition:background .15s,color .15s,border-color .15s,transform .15s}
 .mr-subtabs button.on{background:#fff; color:var(--t1); box-shadow:0 1px 3px rgba(0,0,0,.08)}
+
+/* ===== 토글: 켜진 칸으로 흰 알약이 미끄러져 간다 =====
+   .mr-slide 를 붙이고 칸 개수(--n)와 켜진 칸 번호(--i)를 넘기면 알약이 움직인다.
+   버튼이 flex:1 이라 칸 너비가 모두 같으므로 번호만으로 자리를 구할 수 있다 */
+/* 세로 스크롤은 그대로 두고 가로로 끄는 것만 우리가 처리한다 */
+.mr-slide{position:relative; isolation:isolate; touch-action:pan-y; -webkit-user-select:none; user-select:none}
+.mr-slide::before{
+  content:""; position:absolute; z-index:-1; top:var(--sp); bottom:var(--sp); left:var(--sp);
+  width:calc((100% - 2 * var(--sp) - (var(--n) - 1) * var(--sg)) / var(--n));
+  transform:translateX(calc(var(--i) * (100% + var(--sg))));
+  background:#fff; border-radius:var(--sr); box-shadow:0 1px 3px rgba(0,0,0,.08);
+  transition:transform .34s var(--ease-screen);
+}
+/* 끄는 동안에는 손가락을 그대로 따라와야 하므로 부드럽게 따라가는 설정을 끈다.
+   위 규칙과 우선순위가 같으므로 반드시 뒤에 와야 이긴다 */
+.mr-dragging::before{transition:none}
+/* 알약이 대신 그려주므로 버튼 자신은 배경을 그리지 않는다 (어두운 모드 몫은 맨 아래에) */
+.mr-slide button.on{background:transparent; box-shadow:none}
+.mr-subtabs.mr-slide{--sp:4px; --sg:6px; --sr:10px}
+.mr-cat-seg.mr-slide{--sp:4px; --sg:4px; --sr:8px}
+.mr-sortseg.mr-slide{--sp:3px; --sg:2px; --sr:8px}
+.mr-seg.mr-slide{--sp:3px; --sg:2px; --sr:7px}
+.mr-seg.mr-slide button{flex:1}
 .mr-member-row{
   display:flex; align-items:center; gap:11px; width:100%; text-align:left; background:transparent;
   border:0; border-bottom:1px solid var(--line-soft); padding:14px 18px; cursor:pointer;
@@ -7063,19 +7204,21 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-main:has(.mr-back) .mr-page-back{display:none}
 /* 화면 전체는 가볍게 떠오르기만 하고, 실제 움직임은 안쪽 카드들이 차례로 만든다.
    여기서 크기까지 바꾸면 안쪽 카드 움직임과 겹쳐 지저분해진다 */
-@keyframes screenIn{from{opacity:0; transform:translateY(10px)}to{opacity:1; transform:none}}
-.mr-screen-in{animation:screenIn .42s var(--ease)}
+@keyframes screenIn{from{opacity:0; transform:translateY(16px)}to{opacity:1; transform:none}}
+.mr-screen-in{animation:screenIn .5s var(--ease-screen)}
 /* 목록과 글 사이를 오갈 때는 화면이 통째로 미끄러져 들어온다 */
-@keyframes stepFwd{from{opacity:0; transform:translateX(26px)}to{opacity:1; transform:none}}
-@keyframes stepBack{from{opacity:0; transform:translateX(-26px)}to{opacity:1; transform:none}}
-.mr-step-fwd{animation:stepFwd .34s var(--ease)}
-.mr-step-back{animation:stepBack .34s var(--ease)}
-/* 통째로 움직이는 동안 안쪽 카드가 따로 또 움직이면 지저분해진다 */
-.mr-step-fwd .mr-card,.mr-step-back .mr-card,
-.mr-step-fwd .mr-post-item,.mr-step-back .mr-post-item,
-.mr-step-fwd .mr-record,.mr-step-back .mr-record,
-.mr-step-fwd .mr-pick-card,.mr-step-back .mr-pick-card,
-.mr-step-fwd .mr-daily-hero,.mr-step-back .mr-daily-hero{animation:none}
+@keyframes stepFwd{from{opacity:0; transform:translateX(34px)}to{opacity:1; transform:none}}
+@keyframes stepBack{from{opacity:0; transform:translateX(-34px)}to{opacity:1; transform:none}}
+.mr-step-fwd{animation:stepFwd .5s var(--ease-screen)}
+.mr-step-back{animation:stepBack .5s var(--ease-screen)}
+/* 통째로 움직이는 동안 안쪽 카드가 따로 또 움직이면 지저분해진다.
+   카드가 펼쳐지는 전환 안에서도 마찬가지다. 상자가 커지는 사이 안쪽 여백이
+   줄면서 글자가 옆으로 밀리는데, 거기에 카드까지 각자 뜨면 흔들려 보인다 */
+.mr-step-fwd .mr-card,.mr-step-back .mr-card,.mr-ov .mr-card,
+.mr-step-fwd .mr-post-item,.mr-step-back .mr-post-item,.mr-ov .mr-post-item,
+.mr-step-fwd .mr-record,.mr-step-back .mr-record,.mr-ov .mr-record,
+.mr-step-fwd .mr-pick-card,.mr-step-back .mr-pick-card,.mr-ov .mr-pick-card,
+.mr-step-fwd .mr-daily-hero,.mr-step-back .mr-daily-hero,.mr-ov .mr-daily-hero{animation:none}
 
 /* ===== 홈 화면에 추가: 하단 배너 + 안내 시트 ===== */
 .mr-a2hs-banner{
@@ -7248,6 +7391,9 @@ html[data-theme="dark"] .mr-subtabs button.on,
 html[data-theme="dark"] .mr-seg button.on,
 html[data-theme="dark"] .mr-cat-seg button.on,
 html[data-theme="dark"] .mr-sortseg button.on{background:rgba(255,255,255,0.14); color:var(--t1)}
+/* 미끄러지는 알약을 쓰는 토글은 버튼이 배경을 그리지 않는다 (위 규칙보다 뒤에 와야 이긴다) */
+html[data-theme="dark"] .mr-slide button.on{background:transparent}
+html[data-theme="dark"] .mr-slide::before{background:rgba(255,255,255,0.14); box-shadow:none}
 html[data-theme="dark"] .mr-back,
 html[data-theme="dark"] .mr-page-back,
 html[data-theme="dark"] .mr-ov-back{background:rgba(255,255,255,0.08); color:var(--t2); box-shadow:none}
