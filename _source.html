@@ -122,8 +122,17 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.9.3";
+const APP_VERSION = "2.10.0";
 const CHANGELOG = [
+  {
+    v: "2.10.0",
+    date: "2026.7.27",
+    items: [
+      "화면이 바뀌고 목록이 뜰 때의 움직임을 전체적으로 다듬었어요",
+      "오늘의 문제에서 날짜를 옮기면 앞 문제의 답이 그대로 남아 있던 걸 고쳤어요",
+    ],
+    adminItems: ["오늘의 문제를 낼 때 며칠자 문제인지 직접 고를 수 있어요"],
+  },
   {
     v: "2.9.3",
     date: "2026.7.27",
@@ -1443,7 +1452,7 @@ function MyRecords({ student, exams, subs, initialSub, pushUrl }) {
             {wrong.map(({ exam, sub, q, qi }, i) => {
               const mine2 = sub.answers[q.id];
               return (
-                <section className="mr-card mr-take-q wrong" key={sub.id + ":" + q.id} style={{ animationDelay: `${Math.min(i, 10) * 30}ms` }}>
+                <section className="mr-card mr-take-q wrong" key={sub.id + ":" + q.id} style={{ animationDelay: `${Math.min(i, 5) * 45}ms` }}>
                   <div className="mr-wrong-from">{exam.title} · Q{qi + 1} · {fmtDate(sub.submittedAt)}</div>
                   {q.image && <img className="mr-q-img" src={q.image} alt={"문제 " + (qi + 1)} />}
                   <QBody q={q} />
@@ -1514,7 +1523,7 @@ function MyRecords({ student, exams, subs, initialSub, pushUrl }) {
               const ratio = max ? score / max : 0;
               const tone = ratio >= 0.8 ? "good" : ratio >= 0.5 ? "mid" : "low";
               return (
-                <button className="mr-record mr-record-btn" key={sub.id} style={{ animationDelay: `${i * 30}ms` }} onClick={() => setOpen({ sub, exam })}>
+                <button className="mr-record mr-record-btn" key={sub.id} style={{ animationDelay: `${Math.min(i, 5) * 45}ms` }} onClick={() => setOpen({ sub, exam })}>
                   <div className="mr-record-info">
                     <div className="mr-record-title">{exam.title}</div>
                     <div className="mr-record-meta">{fmtDate(sub.submittedAt)} · 채점 결과 보기</div>
@@ -1964,7 +1973,7 @@ function Home({ role, student, loggedIn, noticeCount, columnUnread, announceCoun
           <button
             key={s.key}
             className="mr-sector"
-            style={{ animationDelay: `${i * 60}ms` }}
+            style={{ animationDelay: `${Math.min(i, 5) * 45}ms` }}
             onClick={(e) => onGo(s.key, e.currentTarget.getBoundingClientRect())}
           >
             <span className={"mr-sector-icon " + s.tone}>
@@ -3075,7 +3084,7 @@ function ExamsAdmin({ exams, isSuper, allRates, onAddExam, onEditExam, onDeleteE
           const myTake = subs.find((s) => s.examId === ex.id && s.student === student && student);
           const unread = examType === "today" && !isExamViewed(ex, readIds);
           return (
-            <article className="mr-card" key={ex.id} style={{ animationDelay: `${i * 40}ms` }}>
+            <article className="mr-card" key={ex.id} style={{ animationDelay: `${Math.min(i, 5) * 45}ms` }}>
               <div className="mr-notice-head">
                 <h3>{unread && <span className="mr-unread-dot" />}{ex.title}</h3>
                 <span className="mr-date">{fmtDate(ex.createdAt)}</span>
@@ -3146,7 +3155,18 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
   };
   const [scheduled, setScheduled] = useState(initial ? !!initial.publishAt : false);
-  const [publishStr, setPublishStr] = useState(initial && initial.publishAt ? toLocalInput(initial.publishAt) : "");
+  // 오늘의 문제는 공개 날짜가 곧 며칠자 문제인지를 뜻한다.
+  // 예전에 즉시 공개로 올린 글은 만든 날짜를 채워 넣어야 수정만 해도 날짜가 옮겨가지 않는다
+  const [publishStr, setPublishStr] = useState(
+    initial && initial.publishAt
+      ? toLocalInput(initial.publishAt)
+      : initial && initial.examType === "today" && initial.createdAt
+        ? toLocalInput(initial.createdAt)
+        : ""
+  );
+  React.useEffect(() => {
+    if (examType === "today" && !publishStr) setPublishStr(toLocalInput(Date.now()));
+  }, [examType]);
   const [questions, setQuestions] = useState(
     initial && initial.questions && initial.questions.length
       ? initial.questions.map((q) => {
@@ -3197,11 +3217,19 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
       if (q.type === "short" && !String(q.accept || "").trim())
         return alert("주관식 문항의 정답을 입력하세요. (자동 채점에 사용됩니다)");
     }
+    const midnightOf = (s) => {
+      const [y, m, d] = s.split("-").map(Number);
+      return new Date(y, m - 1, d, 0, 0, 0, 0).getTime(); // 그 날 자정에 공개
+    };
     let publishAt = null;
-    if (scheduled) {
+    if (examType === "today") {
+      // 오늘의 문제는 제목과 무관하게 이 날짜로 달력에 꽂힌다
+      if (!publishStr) return alert("문제 날짜를 선택하세요.");
+      publishAt = midnightOf(publishStr);
+      if (isNaN(publishAt)) return alert("문제 날짜가 올바르지 않아요.");
+    } else if (scheduled) {
       if (!publishStr) return alert("공개 날짜를 선택하세요.");
-      const [y, m, d] = publishStr.split("-").map(Number);
-      publishAt = new Date(y, m - 1, d, 0, 0, 0, 0).getTime(); // 그 날 자정(00:00)에 공개
+      publishAt = midnightOf(publishStr);
       if (isNaN(publishAt)) return alert("공개 날짜가 올바르지 않아요.");
     }
     onSave({ title: title.trim(), examType, publishAt, questions: final });
@@ -3222,20 +3250,35 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
           <button className={examType === "level" ? "on" : ""} onClick={() => setExamType("level")}>레벨테스트</button>
           <button className={examType === "today" ? "on" : ""} onClick={() => setExamType("today")}>오늘의 문제</button>
         </div>
-        <div className="mr-cat-label">공개 시점</div>
-        <div className="mr-cat-seg">
-          <button className={!scheduled ? "on" : ""} onClick={() => setScheduled(false)}>즉시 공개</button>
-          <button className={scheduled ? "on" : ""} onClick={() => setScheduled(true)}>예약 공개</button>
-        </div>
-        {scheduled && (
+        {examType === "today" ? (
           <>
+            <div className="mr-cat-label">문제 날짜</div>
             <input
               className="mr-input"
               type="date"
               value={publishStr}
               onChange={(e) => setPublishStr(e.target.value)}
             />
-            <p className="mr-sched-hint">선택한 날짜의 자정(00:00)부터 학생·비회원에게 공개돼요. 그 전까지는 관리자에게만 보여요.</p>
+            <p className="mr-sched-hint">제목과 상관없이 여기서 고른 날짜의 오늘의 문제로 올라가요. 지난 날짜를 고르면 그 자리에 바로 채워지고, 앞으로의 날짜를 고르면 그날 자정부터 보여요.</p>
+          </>
+        ) : (
+          <>
+            <div className="mr-cat-label">공개 시점</div>
+            <div className="mr-cat-seg">
+              <button className={!scheduled ? "on" : ""} onClick={() => setScheduled(false)}>즉시 공개</button>
+              <button className={scheduled ? "on" : ""} onClick={() => setScheduled(true)}>예약 공개</button>
+            </div>
+            {scheduled && (
+              <>
+                <input
+                  className="mr-input"
+                  type="date"
+                  value={publishStr}
+                  onChange={(e) => setPublishStr(e.target.value)}
+                />
+                <p className="mr-sched-hint">선택한 날짜 자정부터 학생과 비회원에게 공개돼요. 그 전까지는 관리자에게만 보여요.</p>
+              </>
+            )}
           </>
         )}
       </section>
@@ -3738,9 +3781,10 @@ function TodayPuzzle({ exams, subs, student, loggedIn, allRates, onAddSub, onGue
             {sel.questions.length === 1 ? (
               <>
                 <div className="mr-daily-q"><QBody q={sel.questions[0]} /></div>
+                {/* key resets the solve state when the day changes */}
                 {sSub
-                  ? <DailyReview exam={sel} sub={sSub} />
-                  : <DailySolve exam={sel} loggedIn={loggedIn} student={student} onAddSub={onAddSub} onGuestSubmit={onGuestSubmit} onView={onView} />}
+                  ? <DailyReview key={sel.id} exam={sel} sub={sSub} />
+                  : <DailySolve key={sel.id} exam={sel} loggedIn={loggedIn} student={student} onAddSub={onAddSub} onGuestSubmit={onGuestSubmit} onView={onView} />}
               </>
             ) : (
               <>
@@ -3848,7 +3892,7 @@ function ExamsStudent({ student, loggedIn, allRates, requireLogin, exams, subs, 
               const rate = rateOf(ex);
               const diff = difficultyOf(rate);
               return (
-                <article className="mr-card" key={ex.id} style={{ animationDelay: `${Math.min(i, 12) * 40}ms` }}>
+                <article className="mr-card" key={ex.id} style={{ animationDelay: `${Math.min(i, 5) * 45}ms` }}>
                   <div className="mr-notice-head">
                     <h3>{unread && <span className="mr-unread-dot" />}{ex.title}</h3>
                     <span className="mr-date">{fmtDate(ex.createdAt)}</span>
@@ -5137,6 +5181,8 @@ const CSS = `
   --red:#f0508a; --red-bg:rgba(240,80,138,0.12);
   --glass-sh:0 14px 34px rgba(91,55,140,0.16), inset 0 1px 1px rgba(255,255,255,0.92);
   --grad:linear-gradient(140deg,#9b6cff,#ff8fc8);
+  /* 카드가 펼쳐지는 전환과 같은 곡선을 화면 전체가 함께 쓴다 */
+  --ease:cubic-bezier(.22,1,.36,1);
   position:relative; min-height:100vh; width:100%; color:var(--t1);
   font-family:'Pretendard','Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif;
   -webkit-font-smoothing:antialiased; padding-bottom:64px; letter-spacing:-0.2px;
@@ -5213,7 +5259,7 @@ const CSS = `
 .mr-member-row:hover{background:var(--bg)}
 .mr-member-row .mr-member-info{display:flex; flex-direction:column; gap:3px; flex:1; min-width:0}
 .mr-detail-actions{display:flex; gap:8px; margin-top:14px}
-.mr-record{display:flex; align-items:center; gap:12px; padding:15px 18px; border-bottom:1px solid var(--line-soft); animation:rise .35s cubic-bezier(.2,.7,.3,1) both}
+.mr-record{display:flex; align-items:center; gap:12px; padding:15px 18px; border-bottom:1px solid var(--line-soft); animation:rise .5s var(--ease) both}
 .mr-record:last-child{border-bottom:0}
 .mr-record-btn{width:100%; text-align:left; background:none; border:0; border-bottom:1px solid var(--line-soft); font-family:inherit; cursor:pointer; transition:background .12s}
 .mr-record-btn:hover{background:var(--bg)}
@@ -5260,13 +5306,13 @@ const CSS = `
   position:fixed; inset:0; z-index:400; background:rgba(180,170,200,.10);
   -webkit-backdrop-filter:blur(14px) saturate(120%); backdrop-filter:blur(14px) saturate(120%);
   display:flex; align-items:center; justify-content:center; padding:20px;
-  animation:fade .2s ease both;
+  animation:fade .28s var(--ease) both;
 }
 @keyframes fade{from{opacity:0}to{opacity:1}}
 .mr-modal{
   width:100%; max-width:360px; background:var(--card); border-radius:24px; padding:24px;
   display:flex; flex-direction:column; gap:10px;
-  box-shadow:0 20px 50px rgba(0,0,0,.25); animation:rise .25s cubic-bezier(.2,.7,.3,1) both;
+  box-shadow:0 20px 50px rgba(0,0,0,.25); animation:popIn .34s var(--ease) both;
 }
 .mr-modal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:6px}
 .mr-modal-title{font-size:20px; font-weight:800; letter-spacing:-0.5px}
@@ -5288,7 +5334,7 @@ const CSS = `
 .mr-hero-title{font-size:26px; font-weight:800; line-height:1.35; letter-spacing:-0.6px; color:var(--t1)}
 .mr-sectors{display:flex; flex-direction:column; gap:12px; margin-top:6px}
 .mr-pick2{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:6px}
-.mr-pick-card{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; text-align:center; background:var(--card); border:0; border-radius:20px; padding:30px 16px; box-shadow:0 1px 2px rgba(0,0,0,.03); cursor:pointer; font-family:inherit; transition:transform .1s, box-shadow .15s; animation:rise .4s cubic-bezier(.2,.7,.3,1) both}
+.mr-pick-card{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; text-align:center; background:var(--card); border:0; border-radius:20px; padding:30px 16px; box-shadow:0 1px 2px rgba(0,0,0,.03); cursor:pointer; font-family:inherit; transition:transform .1s, box-shadow .15s; animation:rise .5s var(--ease) both}
 .mr-pick-card:hover{box-shadow:0 6px 18px rgba(0,0,0,.07)}
 .mr-pick-card:active{transform:scale(.98)}
 .mr-pick-icon{width:60px; height:60px; border-radius:18px; display:grid; place-items:center; font-size:30px; position:relative}
@@ -5329,7 +5375,7 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
   display:flex; align-items:center; gap:15px; width:100%; text-align:left;
   background:var(--card); border:0; border-radius:20px; padding:20px;
   box-shadow:0 1px 2px rgba(0,0,0,.03); cursor:pointer; font-family:inherit;
-  transition:transform .1s, box-shadow .15s; animation:rise .4s cubic-bezier(.2,.7,.3,1) both;
+  transition:transform .1s, box-shadow .15s; animation:rise .5s var(--ease) both;
 }
 .mr-sector:hover{box-shadow:0 6px 18px rgba(0,0,0,.07)}
 .mr-sector:active{transform:scale(.99)}
@@ -5355,9 +5401,17 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-card{
   background:var(--card); border-radius:20px; padding:20px;
   box-shadow:0 1px 2px rgba(0,0,0,.03);
-  animation:rise .4s cubic-bezier(.2,.7,.3,1) both;
+  animation:rise .5s var(--ease) both;
 }
-@keyframes rise{from{opacity:0; transform:translateY(8px)}to{opacity:1; transform:none}}
+@keyframes rise{from{opacity:0; transform:translateY(14px)}to{opacity:1; transform:none}}
+/* 모달, 시트, 달력처럼 떠오르는 것은 살짝 커지면서 나타난다 */
+@keyframes popIn{from{opacity:0; transform:translateY(16px) scale(.96)}to{opacity:1; transform:none}}
+/* 목록은 한꺼번에 튀어나오지 않고 위에서부터 차례로 올라온다 */
+.mr-sector:nth-child(2),.mr-post-item:nth-child(2),.mr-pick-card:nth-child(2),.mr-record:nth-child(2){animation-delay:.045s}
+.mr-sector:nth-child(3),.mr-post-item:nth-child(3),.mr-pick-card:nth-child(3),.mr-record:nth-child(3){animation-delay:.09s}
+.mr-sector:nth-child(4),.mr-post-item:nth-child(4),.mr-pick-card:nth-child(4),.mr-record:nth-child(4){animation-delay:.135s}
+.mr-sector:nth-child(5),.mr-post-item:nth-child(5),.mr-pick-card:nth-child(5),.mr-record:nth-child(5){animation-delay:.18s}
+.mr-sector:nth-child(n+6),.mr-post-item:nth-child(n+6),.mr-pick-card:nth-child(n+6),.mr-record:nth-child(n+6){animation-delay:.225s}
 .mr-card-tag{display:block; font-size:17px; font-weight:800; color:var(--t1); margin-bottom:14px; letter-spacing:-0.4px}
 .mr-notice-head{display:flex; align-items:baseline; justify-content:space-between; gap:10px}
 .mr-notice-head h3{font-size:17px; font-weight:800; letter-spacing:-0.4px; line-height:1.4}
@@ -5493,7 +5547,7 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-cat-seg{display:flex; gap:4px; background:var(--bg); border-radius:11px; padding:4px; margin-top:8px}
 .mr-cat-seg button{flex:1; border:0; background:transparent; padding:9px; font-family:inherit; font-weight:700; font-size:13.5px; color:var(--t3); border-radius:8px; cursor:pointer; transition:background .15s,color .15s,border-color .15s,transform .15s}
 .mr-cat-seg button.on{background:#fff; color:var(--t1); box-shadow:0 1px 3px rgba(0,0,0,.08)}
-.mr-post-item{display:flex; align-items:stretch; background:rgba(255,255,255,0.72); border:1px solid var(--line); border-radius:18px; box-shadow:var(--glass-sh); overflow:hidden; animation:rise .35s cubic-bezier(.2,.7,.3,1) both}
+.mr-post-item{display:flex; align-items:stretch; background:rgba(255,255,255,0.72); border:1px solid var(--line); border-radius:18px; box-shadow:var(--glass-sh); overflow:hidden; animation:rise .5s var(--ease) both}
 .mr-post-item:last-child{border-bottom:1px solid var(--line)}
 .mr-post-item .mr-post-row{border-bottom:0; flex:1; min-width:0}
 .mr-reorder{display:flex; flex-direction:column; justify-content:center; gap:3px; padding:0 12px; flex:none}
@@ -5624,7 +5678,7 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-game-timebar{position:relative; height:26px; background:var(--bg); border-radius:13px; overflow:hidden; margin:4px 0 2px}
 .mr-game-timefill{position:absolute; left:0; top:0; bottom:0; background:linear-gradient(90deg,#9b6cff,#ff8fc8); border-radius:13px; transition:width .12s linear}
 .mr-game-timetext{position:absolute; right:12px; top:0; line-height:26px; font-size:12.5px; font-weight:800; color:var(--t1)}
-.mr-game-crit{text-align:center; font-size:16px; font-weight:800; color:#F97316; animation:rise .25s ease both}
+.mr-game-crit{text-align:center; font-size:16px; font-weight:800; color:#F97316; animation:rise .3s var(--ease) both}
 .mr-game-qcard{text-align:center; padding:24px 20px}
 .mr-game-q{font-size:40px; font-weight:800; color:var(--t1); letter-spacing:0.5px}
 .mr-game-opts{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:4px}
@@ -5758,8 +5812,10 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-ov:has(.mr-back) .mr-ov-backwrap{display:none}
 .mr-ov:has(.mr-back) .mr-ov-inner{padding-top:10px}
 .mr-main:has(.mr-back) .mr-page-back{display:none}
-@keyframes screenIn{from{opacity:0; transform:translateY(20px) scale(.985)}to{opacity:1; transform:none}}
-.mr-screen-in{animation:screenIn .44s cubic-bezier(.22,1,.36,1)}
+/* 화면 전체는 가볍게 떠오르기만 하고, 실제 움직임은 안쪽 카드들이 차례로 만든다.
+   여기서 크기까지 바꾸면 안쪽 카드 움직임과 겹쳐 지저분해진다 */
+@keyframes screenIn{from{opacity:0; transform:translateY(10px)}to{opacity:1; transform:none}}
+.mr-screen-in{animation:screenIn .42s var(--ease)}
 
 /* ===== 홈 화면에 추가: 하단 배너 + 안내 시트 ===== */
 .mr-a2hs-banner{
@@ -5767,7 +5823,7 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
   display:flex; align-items:center; gap:12px; padding:12px 14px; border-radius:20px;
   background:var(--card); border:1px solid var(--line); box-shadow:0 16px 40px rgba(72,40,110,0.28);
   -webkit-backdrop-filter:blur(16px) saturate(170%); backdrop-filter:blur(16px) saturate(170%);
-  max-width:520px; margin:0 auto; animation:a2hsUp .4s cubic-bezier(.22,1,.36,1) both;
+  max-width:520px; margin:0 auto; animation:a2hsUp .45s var(--ease) both;
 }
 @keyframes a2hsUp{from{opacity:0; transform:translateY(20px)}to{opacity:1; transform:none}}
 .mr-a2hs-bicon{width:42px; height:42px; border-radius:13px; background:var(--grad); color:#fff; display:grid; place-items:center; font-size:22px; font-weight:800; flex:none}
@@ -5778,7 +5834,7 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-a2hs-bx{border:0; background:none; color:var(--t3); font-size:22px; line-height:1; cursor:pointer; padding:0 2px; flex:none}
 .mr-a2hs-sheet{
   width:100%; max-width:420px; background:var(--card); border:1px solid var(--line); border-radius:24px; padding:20px;
-  box-shadow:0 24px 70px rgba(0,0,0,.3); animation:rise .25s cubic-bezier(.2,.7,.3,1) both; max-height:86vh; overflow-y:auto;
+  box-shadow:0 24px 70px rgba(0,0,0,.3); animation:popIn .34s var(--ease) both; max-height:86vh; overflow-y:auto;
 }
 .mr-a2hs-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:14px}
 .mr-a2hs-hero{display:flex; align-items:center; gap:13px; padding:14px; border-radius:18px; background:var(--bg); margin-bottom:16px}
@@ -5826,7 +5882,7 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-streak{display:flex; align-items:center; gap:7px; background:var(--card); border:1px solid var(--line); box-shadow:var(--glass-sh); border-radius:16px; padding:12px 16px; font-size:14px; font-weight:700; color:var(--t2)}
 .mr-streak b{color:var(--blue); font-size:15px}
 .mr-streak-fire{font-size:18px}
-.mr-daily-hero{background:var(--card); border:1px solid var(--line); box-shadow:var(--glass-sh); border-radius:26px; padding:22px; animation:rise .4s cubic-bezier(.2,.7,.3,1) both}
+.mr-daily-hero{background:var(--card); border:1px solid var(--line); box-shadow:var(--glass-sh); border-radius:26px; padding:22px; animation:rise .5s var(--ease) both}
 .mr-daily-top{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px}
 .mr-daily-badges{display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap}
 .mr-daily-rate{font-size:13px; font-weight:800; letter-spacing:-0.2px}
@@ -5854,7 +5910,7 @@ button.mr-daily-opt:active{transform:scale(.99)}
 .mr-daily-your{font-size:14.5px; font-weight:700; padding:12px 14px; border-radius:12px; background:var(--bg)}
 .mr-daily-your.ok{color:var(--green); background:var(--green-bg)}
 .mr-daily-your.no{color:var(--red); background:var(--red-bg)}
-.mr-daily-result{margin-top:14px; text-align:center; padding:16px; border-radius:16px; animation:rise .35s cubic-bezier(.2,.7,.3,1) both}
+.mr-daily-result{margin-top:14px; text-align:center; padding:16px; border-radius:16px; animation:rise .5s var(--ease) both}
 .mr-daily-result.ok{background:var(--green-bg)}
 .mr-daily-result.no{background:var(--red-bg)}
 .mr-daily-result-big{font-size:19px; font-weight:800; letter-spacing:-0.4px}
@@ -5877,7 +5933,7 @@ button.mr-daily-opt:active{transform:scale(.99)}
 .mr-daily-datebtn-hint{font-size:11.5px; font-weight:700; color:var(--blue)}
 
 /* 날짜 선택 달력 */
-.mr-cal{width:100%; max-width:400px; background:var(--card); border:1px solid var(--line); border-radius:24px; padding:18px; box-shadow:0 24px 70px rgba(0,0,0,.3); animation:rise .25s cubic-bezier(.2,.7,.3,1) both}
+.mr-cal{width:100%; max-width:400px; background:var(--card); border:1px solid var(--line); border-radius:24px; padding:18px; box-shadow:0 24px 70px rgba(0,0,0,.3); animation:popIn .34s var(--ease) both}
 .mr-cal-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:4px}
 .mr-cal-nav{display:flex; align-items:center; justify-content:space-between; margin:6px 2px 14px}
 .mr-cal-nav span{font-size:16px; font-weight:800; color:var(--t1)}
