@@ -122,8 +122,14 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.11.4";
+const APP_VERSION = "2.12.0";
 const CHANGELOG = [
+  {
+    v: "2.12.0",
+    date: "2026.7.28",
+    items: [],
+    adminItems: ["문제를 풀기 전에는 정답이 내려가지 않도록 채점을 서버로 옮겼어요"],
+  },
   {
     v: "2.11.4",
     date: "2026.7.28",
@@ -502,6 +508,19 @@ function autoScore(exam, answers) {
 function totalScore(exam, sub) {
   return exam.questions.reduce((s, q) => s + questionScore(q, sub), 0);
 }
+/* 정답을 빼고 내려온 시험인지. 서버는 아직 안 푼 사람에게 정답을 지우고 준다 */
+function answersHidden(exam) {
+  const qs = (exam && exam.questions) || [];
+  if (!qs.length) return false;
+  return qs.every((q) => q.answer === undefined && (q.accept === undefined || q.accept === null));
+}
+/* 제출한 뒤 서버가 내준 정답을 문제에 합친다. 채점 화면은 이걸 쓴다 */
+function withAnswers(exam, qs) {
+  if (!exam || !Array.isArray(qs) || !qs.length) return exam;
+  const by = {};
+  qs.forEach((q) => { if (q && q.id) by[q.id] = q; });
+  return { ...exam, questions: exam.questions.map((q) => (by[q.id] ? { ...q, ...by[q.id] } : q)) };
+}
 // 한 문항을 '맞춤'으로 볼지 (회원정답률 계산용) — 자동 정답 또는 보정으로 만점인 경우
 function isQCorrect(q, sub) {
   const answers = (sub && sub.answers) || {}; // 비회원 집계 행은 answers가 null일 수 있음 → 크래시 방지
@@ -780,7 +799,9 @@ function App() {
     try {
       const [c, e, s, p] = await Promise.all([
         sb.from("columns").select("*").order("created_at", { ascending: false }),
-        sb.from("exams").select("*").order("created_at", { ascending: false }),
+        // exams_view 는 안 푼 사람에게 정답을 지우고 준다. 아직 없으면 예전처럼 표를 읽는다
+        sb.from("exams_view").select("*").order("created_at", { ascending: false })
+          .then((r) => (r.error ? sb.from("exams").select("*").order("created_at", { ascending: false }) : r)),
         sb.from("submissions").select("*").order("submitted_at", { ascending: false }),
         sb.from("profiles").select("*").order("created_at", { ascending: false }),
       ]);
@@ -1027,12 +1048,26 @@ function App() {
     return {};
   };
   // 비회원: IP 기준 24시간 중복 방지 함수로 보냄 (개인정보 없이 익명 집계)
+  // 비회원은 사람을 알아볼 수 없어서 서버가 제출 응답에 정답을 실어 보낸다.
+  // 예전 함수는 true/false 만 주므로 그때는 null 을 돌려 원래 방식대로 채점한다
   const onGuestSubmit = async (examId, answers) => {
     try {
-      await sb.rpc("submit_guest_attempt", { p_exam_id: examId, p_answers: answers });
+      const { data } = await sb.rpc("submit_guest_attempt", { p_exam_id: examId, p_answers: answers });
+      if (data && typeof data === "object" && Array.isArray(data.questions)) return data.questions;
     } catch (e) {
       console.warn("비회원 집계 실패:", e);
     }
+    return null;
+  };
+  // 회원은 제출하고 나면 서버가 그 시험의 정답을 내준다
+  const getAnswers = async (examId) => {
+    for (const t of ["exams_view", "exams"]) {
+      try {
+        const { data, error } = await sb.from(t).select("questions").eq("id", examId).maybeSingle();
+        if (!error && data && Array.isArray(data.questions)) return data.questions;
+      } catch (e) {}
+    }
+    return null;
   };
   // root 전용 동작 검사 (일반 관리자는 시도조차 못 하게)
   const superOnly = () => {
@@ -1088,7 +1123,7 @@ function App() {
       case "privacy": return <Privacy onBack={() => go("home")} />;
       case "changelog": return <Changelog onBack={() => go("home")} isAdmin={role === "admin"} />;
       case "game": return <SpeedGame key={"g" + nav} initialSub={route && route.tab === "game" ? route.sub : null} pushUrl={pushUrl} onBack={closeOver} auth={auth} onGoAccount={() => { setOver(null); go("account"); }} onLogin={() => setAuthOpen(true)} />;
-      case "exams": return <Exams key={"e" + nav} initialSub={route && route.tab === "exams" ? route.sub : null} initialNo={route && route.tab === "exams" ? route.no : null} pushUrl={pushUrl} role={role} isSuper={isSuper} student={student} myId={auth ? auth.id : null} users={users} loggedIn={loggedIn} requireLogin={requireLogin} exams={exams} subs={subs} onAddExam={onAddExam} onEditExam={onEditExam} onDeleteExam={onDeleteExam} onGradeSub={onGradeSub} onAddSub={onAddSub} onGuestSubmit={onGuestSubmit} guestSubs={guestSubs} readIds={readExamIds} onView={markExamRead} />;
+      case "exams": return <Exams key={"e" + nav} initialSub={route && route.tab === "exams" ? route.sub : null} initialNo={route && route.tab === "exams" ? route.no : null} pushUrl={pushUrl} role={role} isSuper={isSuper} student={student} myId={auth ? auth.id : null} users={users} loggedIn={loggedIn} requireLogin={requireLogin} exams={exams} subs={subs} onAddExam={onAddExam} onEditExam={onEditExam} onDeleteExam={onDeleteExam} onGradeSub={onGradeSub} onAddSub={onAddSub} onGuestSubmit={onGuestSubmit} getAnswers={getAnswers} guestSubs={guestSubs} readIds={readExamIds} onView={markExamRead} />;
       default: return homeView;
     }
   };
@@ -3135,7 +3170,7 @@ function Exams(props) {
 }
 
 /* ---------- 관리자: 시험 목록 / 출제 / 채점 / (남의 시험) 응시 ---------- */
-function ExamsAdmin({ exams, isSuper, allRates, onAddExam, onEditExam, onDeleteExam, subs, onGradeSub, onAddSub, myId, student, loggedIn, guestSubs, examType, onBackToChooser, users, readIds, onView, initialNo, goUrl }) {
+function ExamsAdmin({ exams, isSuper, allRates, onAddExam, onEditExam, onDeleteExam, subs, onGradeSub, onAddSub, getAnswers, myId, student, loggedIn, guestSubs, examType, onBackToChooser, users, readIds, onView, initialNo, goUrl }) {
   const [mode, setMode] = useState("list");
   const [activeExam, setActiveExam] = useState(null);
   const [taking, setTaking] = useState(() => (initialNo ? findByNo(exams, initialNo) || null : null));
@@ -3157,7 +3192,7 @@ function ExamsAdmin({ exams, isSuper, allRates, onAddExam, onEditExam, onDeleteE
 
   if (taking)
     return (
-      <ExamTaker taking={taking} setTaking={closeExam} student={student} loggedIn={loggedIn} onAddSub={onAddSub} />
+      <ExamTaker taking={taking} setTaking={closeExam} student={student} loggedIn={loggedIn} onAddSub={onAddSub} getAnswers={getAnswers} />
     );
 
   if (mode === "create")
@@ -3720,26 +3755,45 @@ function dailyDay(ex) { return ex.publishAt || ex.createdAt || 0; }
 function fmtDay(ms) { const d = new Date(ms); return (d.getMonth() + 1) + "월 " + d.getDate() + "일"; }
 
 /* 정답을 맞히면 초록, 틀리면 빨강으로 즉시 반응하고 제출을 기록한다 (1문항 전용) */
-function DailySolve({ exam, loggedIn, student, onAddSub, onGuestSubmit, onView }) {
-  const q = exam.questions[0];
+function DailySolve({ exam, loggedIn, student, onAddSub, onGuestSubmit, getAnswers, onView }) {
+  // graded: 제출 뒤 정답까지 채워진 시험. 정답이 딸려온 상태면 처음부터 이게 곧 exam 이다
+  const [graded, setGraded] = useState(exam);
+  const q = graded.questions[0];
   const [picked, setPicked] = useState(null);
   const [typed, setTyped] = useState("");
   const [done, setDone] = useState(false);
   const [correct, setCorrect] = useState(false);
   const lock = React.useRef(false);
 
+  // 기록하고, 정답이 빠져 있었으면 서버에서 받아온다
   const record = async (answers) => {
     if (onView) onView(exam.id);
     const clean = (student || "").trim();
     try {
-      if (loggedIn && clean) await onAddSub({ examId: exam.id, student: clean, answers, manualScores: {}, graded: true });
-      else await onGuestSubmit(exam.id, answers);
+      if (loggedIn && clean) {
+        await onAddSub({ examId: exam.id, student: clean, answers, manualScores: {}, graded: true });
+        if (answersHidden(exam) && getAnswers) return await getAnswers(exam.id);
+      } else {
+        return await onGuestSubmit(exam.id, answers);
+      }
     } catch (e) {}
+    return null;
   };
-  const finish = (answers, ok) => {
+  const finish = async (answers) => {
     if (lock.current) return;
     lock.current = true;
-    setCorrect(ok); setDone(true); record(answers);
+    // 정답을 이미 갖고 있으면 기다릴 것 없이 바로 알려준다
+    if (!answersHidden(exam)) {
+      setCorrect(isQCorrect(q, { answers, manualScores: {} }));
+      setDone(true);
+      record(answers);
+      return;
+    }
+    setDone(true); // 먼저 잠그고 결과는 서버 답을 받은 뒤에
+    const qs = await record(answers);
+    const g = qs ? withAnswers(exam, qs) : exam;
+    setGraded(g);
+    setCorrect(isQCorrect(g.questions[0], { answers, manualScores: {} }));
   };
 
   if (q.type === "mc")
@@ -3751,7 +3805,7 @@ function DailySolve({ exam, loggedIn, student, onAddSub, onGuestSubmit, onView }
             if (done) cls += oi === q.answer ? " right" : oi === picked ? " wrong" : " dim";
             return (
               <button key={oi} className={cls} disabled={done}
-                onClick={() => { setPicked(oi); finish({ [q.id]: oi }, oi === q.answer); }}>
+                onClick={() => { setPicked(oi); finish({ [q.id]: oi }); }}>
                 <span className="mr-daily-opt-label">{String.fromCharCode(9311 + oi + 1)}</span>
                 <span className="mr-daily-opt-txt">{opt}</span>
                 {done && oi === q.answer && <span className="mr-daily-flag">정답</span>}
@@ -3759,7 +3813,7 @@ function DailySolve({ exam, loggedIn, student, onAddSub, onGuestSubmit, onView }
             );
           })}
         </div>
-        {done && <DailyResult correct={correct} q={q} exam={exam} />}
+        {done && <DailyResult correct={correct} q={q} exam={graded} />}
       </div>
     );
 
@@ -3769,14 +3823,14 @@ function DailySolve({ exam, loggedIn, student, onAddSub, onGuestSubmit, onView }
         <div className="mr-daily-short">
           <input className="mr-input" placeholder="답을 입력하세요" value={typed}
             onChange={(e) => setTyped(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && typed.trim()) finish({ [q.id]: typed.trim() }, isShortCorrect(q, typed.trim())); }} />
+            onKeyDown={(e) => { if (e.key === "Enter" && typed.trim()) finish({ [q.id]: typed.trim() }); }} />
           <button className="mr-btn" disabled={!typed.trim()}
-            onClick={() => finish({ [q.id]: typed.trim() }, isShortCorrect(q, typed.trim()))}>확인</button>
+            onClick={() => finish({ [q.id]: typed.trim() })}>확인</button>
         </div>
       ) : (
         <>
           <div className={"mr-daily-your " + (correct ? "ok" : "no")}>내 답 {typed}</div>
-          <DailyResult correct={correct} q={q} exam={exam} />
+          <DailyResult correct={correct} q={q} exam={graded} />
         </>
       )}
     </div>
@@ -3871,7 +3925,7 @@ function DailyCalendar({ days, solvedIds, selId, onPick, onClose }) {
   );
 }
 
-function TodayPuzzle({ exams, subs, student, loggedIn, allRates, onAddSub, onGuestSubmit, onOpen, onView, onBackToChooser }) {
+function TodayPuzzle({ exams, subs, student, loggedIn, allRates, onAddSub, onGuestSubmit, getAnswers, onOpen, onView, onBackToChooser }) {
   const days = (exams || []).slice().sort((a, b) => dailyDay(b) - dailyDay(a));
   const mine = (subs || []).filter((s) => s.student && student && s.student === student);
   const myOf = (id) => mine.find((s) => s.examId === id) || null;
@@ -3920,7 +3974,7 @@ function TodayPuzzle({ exams, subs, student, loggedIn, allRates, onAddSub, onGue
                 {/* key resets the solve state when the day changes */}
                 {sSub
                   ? <DailyReview key={sel.id} exam={sel} sub={sSub} />
-                  : <DailySolve key={sel.id} exam={sel} loggedIn={loggedIn} student={student} onAddSub={onAddSub} onGuestSubmit={onGuestSubmit} onView={onView} />}
+                  : <DailySolve key={sel.id} exam={sel} loggedIn={loggedIn} student={student} onAddSub={onAddSub} onGuestSubmit={onGuestSubmit} getAnswers={getAnswers} onView={onView} />}
               </>
             ) : (
               <>
@@ -3957,7 +4011,7 @@ function TodayPuzzle({ exams, subs, student, loggedIn, allRates, onAddSub, onGue
 }
 
 /* ---------- 참여자: 시험 목록 / 응시 / 결과 ---------- */
-function ExamsStudent({ student, loggedIn, allRates, requireLogin, exams, subs, onAddSub, onGuestSubmit, examType, onBackToChooser, readIds, onView, initialNo, goUrl }) {
+function ExamsStudent({ student, loggedIn, allRates, requireLogin, exams, subs, onAddSub, onGuestSubmit, getAnswers, examType, onBackToChooser, readIds, onView, initialNo, goUrl }) {
   const [taking, setTaking] = useState(() => (initialNo ? findByNo(exams, initialNo) || null : null));
   const step = useStep(taking ? 1 : 0);
   const url = (p) => { if (goUrl) goUrl(p); };
@@ -3986,7 +4040,7 @@ function ExamsStudent({ student, loggedIn, allRates, requireLogin, exams, subs, 
   if (taking)
     return (
       <div className={step.trim()} key="taking">
-        <ExamTaker taking={taking} setTaking={closeExam} student={student} loggedIn={loggedIn} onAddSub={onAddSub} onGuestSubmit={onGuestSubmit} />
+        <ExamTaker taking={taking} setTaking={closeExam} student={student} loggedIn={loggedIn} onAddSub={onAddSub} onGuestSubmit={onGuestSubmit} getAnswers={getAnswers} />
       </div>
     );
 
@@ -3994,7 +4048,7 @@ function ExamsStudent({ student, loggedIn, allRates, requireLogin, exams, subs, 
     return (
       <div className={step.trim()} key="today">
         <TodayPuzzle exams={exams} subs={subs} student={student} loggedIn={loggedIn} allRates={allRates}
-          onAddSub={onAddSub} onGuestSubmit={onGuestSubmit} onOpen={openExam} onView={onView} onBackToChooser={onBackToChooser} />
+          onAddSub={onAddSub} onGuestSubmit={onGuestSubmit} getAnswers={getAnswers} onOpen={openExam} onView={onView} onBackToChooser={onBackToChooser} />
       </div>
     );
 
@@ -4079,7 +4133,10 @@ function ExamsStudent({ student, loggedIn, allRates, requireLogin, exams, subs, 
   );
 }
 
-function TakeExam({ exam, student, loggedIn, onGuestSubmit, onCancel, onSubmit }) {
+function TakeExam({ exam: rawExam, student, loggedIn, onGuestSubmit, getAnswers, onCancel, onSubmit }) {
+  // 제출 전에는 정답이 빠진 채로 온다. 제출하면 서버가 정답을 주고 그때부터 이걸 쓴다
+  const [graded, setGraded] = useState(null);
+  const exam = graded || rawExam;
   const draftKey = "mrdraft:" + exam.id + ":" + ((student || "").trim() || "guest");
   const [answers, setAnswers] = useState(() => {
     try {
@@ -4148,6 +4205,7 @@ function TakeExam({ exam, student, loggedIn, onGuestSubmit, onCancel, onSubmit }
       graded: true,
       submittedAt: Date.now(),
     };
+    const hidden = answersHidden(rawExam);
     if (loggedIn && student.trim()) {
       const res = await onSubmit(sub); // 회원: 기록 저장 (목록 이동은 리뷰 화면에서)
       if (res && res.error) {
@@ -4156,8 +4214,14 @@ function TakeExam({ exam, student, loggedIn, onGuestSubmit, onCancel, onSubmit }
         setSubmitting(false);
         return;
       }
-    } else {
-      if (onGuestSubmit) onGuestSubmit(exam.id, answers); // 비회원: 익명 집계만
+      // 정답이 빠져 있었으면 채점 화면을 그리기 전에 받아온다
+      if (hidden && getAnswers) {
+        const qs = await getAnswers(rawExam.id);
+        if (qs) setGraded(withAnswers(rawExam, qs));
+      }
+    } else if (onGuestSubmit) {
+      const qs = await onGuestSubmit(exam.id, answers); // 비회원: 익명 집계 + 정답
+      if (hidden && qs) setGraded(withAnswers(rawExam, qs));
     }
     clearDraft(); // 제출 완료 → 임시저장 삭제
     setResult(sub); // 회원·비회원 모두 채점 리뷰 화면 표시

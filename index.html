@@ -152,8 +152,13 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.11.4";
+const APP_VERSION = "2.12.0";
 const CHANGELOG = [{
+  v: "2.12.0",
+  date: "2026.7.28",
+  items: [],
+  adminItems: ["문제를 풀기 전에는 정답이 내려가지 않도록 채점을 서버로 옮겼어요"]
+}, {
   v: "2.11.4",
   date: "2026.7.28",
   items: ["넓은 화면에서 카드를 열 때 내용이 옆으로 밀리던 걸 고쳤어요"],
@@ -413,6 +418,27 @@ function autoScore(exam, answers) {
 }
 function totalScore(exam, sub) {
   return exam.questions.reduce((s, q) => s + questionScore(q, sub), 0);
+}
+/* 정답을 빼고 내려온 시험인지. 서버는 아직 안 푼 사람에게 정답을 지우고 준다 */
+function answersHidden(exam) {
+  const qs = exam && exam.questions || [];
+  if (!qs.length) return false;
+  return qs.every(q => q.answer === undefined && (q.accept === undefined || q.accept === null));
+}
+/* 제출한 뒤 서버가 내준 정답을 문제에 합친다. 채점 화면은 이걸 쓴다 */
+function withAnswers(exam, qs) {
+  if (!exam || !Array.isArray(qs) || !qs.length) return exam;
+  const by = {};
+  qs.forEach(q => {
+    if (q && q.id) by[q.id] = q;
+  });
+  return {
+    ...exam,
+    questions: exam.questions.map(q => by[q.id] ? {
+      ...q,
+      ...by[q.id]
+    } : q)
+  };
 }
 // 한 문항을 '맞춤'으로 볼지 (회원정답률 계산용) — 자동 정답 또는 보정으로 만점인 경우
 function isQCorrect(q, sub) {
@@ -761,9 +787,13 @@ function App() {
     try {
       const [c, e, s, p] = await Promise.all([sb.from("columns").select("*").order("created_at", {
         ascending: false
-      }), sb.from("exams").select("*").order("created_at", {
+      }),
+      // exams_view 는 안 푼 사람에게 정답을 지우고 준다. 아직 없으면 예전처럼 표를 읽는다
+      sb.from("exams_view").select("*").order("created_at", {
         ascending: false
-      }), sb.from("submissions").select("*").order("submitted_at", {
+      }).then(r => r.error ? sb.from("exams").select("*").order("created_at", {
+        ascending: false
+      }) : r), sb.from("submissions").select("*").order("submitted_at", {
         ascending: false
       }), sb.from("profiles").select("*").order("created_at", {
         ascending: false
@@ -1174,15 +1204,34 @@ function App() {
     return {};
   };
   // 비회원: IP 기준 24시간 중복 방지 함수로 보냄 (개인정보 없이 익명 집계)
+  // 비회원은 사람을 알아볼 수 없어서 서버가 제출 응답에 정답을 실어 보낸다.
+  // 예전 함수는 true/false 만 주므로 그때는 null 을 돌려 원래 방식대로 채점한다
   const onGuestSubmit = async (examId, answers) => {
     try {
-      await sb.rpc("submit_guest_attempt", {
+      const {
+        data
+      } = await sb.rpc("submit_guest_attempt", {
         p_exam_id: examId,
         p_answers: answers
       });
+      if (data && typeof data === "object" && Array.isArray(data.questions)) return data.questions;
     } catch (e) {
       console.warn("비회원 집계 실패:", e);
     }
+    return null;
+  };
+  // 회원은 제출하고 나면 서버가 그 시험의 정답을 내준다
+  const getAnswers = async examId => {
+    for (const t of ["exams_view", "exams"]) {
+      try {
+        const {
+          data,
+          error
+        } = await sb.from(t).select("questions").eq("id", examId).maybeSingle();
+        if (!error && data && Array.isArray(data.questions)) return data.questions;
+      } catch (e) {}
+    }
+    return null;
   };
   // root 전용 동작 검사 (일반 관리자는 시도조차 못 하게)
   const superOnly = () => {
@@ -1386,6 +1435,7 @@ function App() {
           onGradeSub: onGradeSub,
           onAddSub: onAddSub,
           onGuestSubmit: onGuestSubmit,
+          getAnswers: getAnswers,
           guestSubs: guestSubs,
           readIds: readExamIds,
           onView: markExamRead
@@ -3905,6 +3955,7 @@ function ExamsAdmin({
   subs,
   onGradeSub,
   onAddSub,
+  getAnswers,
   myId,
   student,
   loggedIn,
@@ -3944,7 +3995,8 @@ function ExamsAdmin({
     setTaking: closeExam,
     student: student,
     loggedIn: loggedIn,
-    onAddSub: onAddSub
+    onAddSub: onAddSub,
+    getAnswers: getAnswers
   });
   if (mode === "create") return /*#__PURE__*/React.createElement(ExamEditor, {
     defaultType: examType,
@@ -4570,33 +4622,59 @@ function DailySolve({
   student,
   onAddSub,
   onGuestSubmit,
+  getAnswers,
   onView
 }) {
-  const q = exam.questions[0];
+  // graded: 제출 뒤 정답까지 채워진 시험. 정답이 딸려온 상태면 처음부터 이게 곧 exam 이다
+  const [graded, setGraded] = useState(exam);
+  const q = graded.questions[0];
   const [picked, setPicked] = useState(null);
   const [typed, setTyped] = useState("");
   const [done, setDone] = useState(false);
   const [correct, setCorrect] = useState(false);
   const lock = React.useRef(false);
+
+  // 기록하고, 정답이 빠져 있었으면 서버에서 받아온다
   const record = async answers => {
     if (onView) onView(exam.id);
     const clean = (student || "").trim();
     try {
-      if (loggedIn && clean) await onAddSub({
-        examId: exam.id,
-        student: clean,
-        answers,
-        manualScores: {},
-        graded: true
-      });else await onGuestSubmit(exam.id, answers);
+      if (loggedIn && clean) {
+        await onAddSub({
+          examId: exam.id,
+          student: clean,
+          answers,
+          manualScores: {},
+          graded: true
+        });
+        if (answersHidden(exam) && getAnswers) return await getAnswers(exam.id);
+      } else {
+        return await onGuestSubmit(exam.id, answers);
+      }
     } catch (e) {}
+    return null;
   };
-  const finish = (answers, ok) => {
+  const finish = async answers => {
     if (lock.current) return;
     lock.current = true;
-    setCorrect(ok);
-    setDone(true);
-    record(answers);
+    // 정답을 이미 갖고 있으면 기다릴 것 없이 바로 알려준다
+    if (!answersHidden(exam)) {
+      setCorrect(isQCorrect(q, {
+        answers,
+        manualScores: {}
+      }));
+      setDone(true);
+      record(answers);
+      return;
+    }
+    setDone(true); // 먼저 잠그고 결과는 서버 답을 받은 뒤에
+    const qs = await record(answers);
+    const g = qs ? withAnswers(exam, qs) : exam;
+    setGraded(g);
+    setCorrect(isQCorrect(g.questions[0], {
+      answers,
+      manualScores: {}
+    }));
   };
   if (q.type === "mc") return /*#__PURE__*/React.createElement("div", {
     className: "mr-daily-solve"
@@ -4613,7 +4691,7 @@ function DailySolve({
         setPicked(oi);
         finish({
           [q.id]: oi
-        }, oi === q.answer);
+        });
       }
     }, /*#__PURE__*/React.createElement("span", {
       className: "mr-daily-opt-label"
@@ -4625,7 +4703,7 @@ function DailySolve({
   })), done && /*#__PURE__*/React.createElement(DailyResult, {
     correct: correct,
     q: q,
-    exam: exam
+    exam: graded
   }));
   return /*#__PURE__*/React.createElement("div", {
     className: "mr-daily-solve"
@@ -4639,20 +4717,20 @@ function DailySolve({
     onKeyDown: e => {
       if (e.key === "Enter" && typed.trim()) finish({
         [q.id]: typed.trim()
-      }, isShortCorrect(q, typed.trim()));
+      });
     }
   }), /*#__PURE__*/React.createElement("button", {
     className: "mr-btn",
     disabled: !typed.trim(),
     onClick: () => finish({
       [q.id]: typed.trim()
-    }, isShortCorrect(q, typed.trim()))
+    })
   }, "확인")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "mr-daily-your " + (correct ? "ok" : "no")
   }, "내 답 ", typed), /*#__PURE__*/React.createElement(DailyResult, {
     correct: correct,
     q: q,
-    exam: exam
+    exam: graded
   })));
 }
 
@@ -4821,6 +4899,7 @@ function TodayPuzzle({
   allRates,
   onAddSub,
   onGuestSubmit,
+  getAnswers,
   onOpen,
   onView,
   onBackToChooser
@@ -4900,6 +4979,7 @@ function TodayPuzzle({
     student: student,
     onAddSub: onAddSub,
     onGuestSubmit: onGuestSubmit,
+    getAnswers: getAnswers,
     onView: onView
   })) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     className: "mr-daily-meta"
@@ -4948,6 +5028,7 @@ function ExamsStudent({
   subs,
   onAddSub,
   onGuestSubmit,
+  getAnswers,
   examType,
   onBackToChooser,
   readIds,
@@ -4995,7 +5076,8 @@ function ExamsStudent({
     student: student,
     loggedIn: loggedIn,
     onAddSub: onAddSub,
-    onGuestSubmit: onGuestSubmit
+    onGuestSubmit: onGuestSubmit,
+    getAnswers: getAnswers
   }));
   if (examType === "today") return /*#__PURE__*/React.createElement("div", {
     className: step.trim(),
@@ -5008,6 +5090,7 @@ function ExamsStudent({
     allRates: allRates,
     onAddSub: onAddSub,
     onGuestSubmit: onGuestSubmit,
+    getAnswers: getAnswers,
     onOpen: openExam,
     onView: onView,
     onBackToChooser: onBackToChooser
@@ -5090,13 +5173,17 @@ function ExamsStudent({
   })));
 }
 function TakeExam({
-  exam,
+  exam: rawExam,
   student,
   loggedIn,
   onGuestSubmit,
+  getAnswers,
   onCancel,
   onSubmit
 }) {
+  // 제출 전에는 정답이 빠진 채로 온다. 제출하면 서버가 정답을 주고 그때부터 이걸 쓴다
+  const [graded, setGraded] = useState(null);
+  const exam = graded || rawExam;
   const draftKey = "mrdraft:" + exam.id + ":" + ((student || "").trim() || "guest");
   const [answers, setAnswers] = useState(() => {
     try {
@@ -5163,6 +5250,7 @@ function TakeExam({
       graded: true,
       submittedAt: Date.now()
     };
+    const hidden = answersHidden(rawExam);
     if (loggedIn && student.trim()) {
       const res = await onSubmit(sub); // 회원: 기록 저장 (목록 이동은 리뷰 화면에서)
       if (res && res.error) {
@@ -5171,8 +5259,14 @@ function TakeExam({
         setSubmitting(false);
         return;
       }
-    } else {
-      if (onGuestSubmit) onGuestSubmit(exam.id, answers); // 비회원: 익명 집계만
+      // 정답이 빠져 있었으면 채점 화면을 그리기 전에 받아온다
+      if (hidden && getAnswers) {
+        const qs = await getAnswers(rawExam.id);
+        if (qs) setGraded(withAnswers(rawExam, qs));
+      }
+    } else if (onGuestSubmit) {
+      const qs = await onGuestSubmit(exam.id, answers); // 비회원: 익명 집계 + 정답
+      if (hidden && qs) setGraded(withAnswers(rawExam, qs));
     }
     clearDraft(); // 제출 완료 → 임시저장 삭제
     setResult(sub); // 회원·비회원 모두 채점 리뷰 화면 표시
