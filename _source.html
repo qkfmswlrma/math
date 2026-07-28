@@ -122,8 +122,14 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.11.3";
+const APP_VERSION = "2.11.4";
 const CHANGELOG = [
+  {
+    v: "2.11.4",
+    date: "2026.7.28",
+    items: ["넓은 화면에서 카드를 열 때 내용이 옆으로 밀리던 걸 고쳤어요"],
+    adminItems: [],
+  },
   {
     v: "2.11.3",
     date: "2026.7.28",
@@ -5958,7 +5964,9 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-ov{background:linear-gradient(165deg,#f4e9ff 0%,#fde9f4 46%,#e9eeff 100%); border:0; box-shadow:none;
   transition:top .5s cubic-bezier(.4,0,.2,1), left .5s cubic-bezier(.4,0,.2,1), width .5s cubic-bezier(.4,0,.2,1), height .5s cubic-bezier(.4,0,.2,1), border-radius .5s cubic-bezier(.4,0,.2,1);}
 /* 뒤로가기가 내용과 같은 흐름에 있으므로 위 여백은 10px + .mr-main 8px = 18px */
-.mr-ov-inner{position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-top:10px}
+/* scrollbar-gutter: 스크롤이 생기든 말든 스크롤바 자리를 늘 비워둔다.
+   안 그러면 내용이 짧은 화면을 열 때만 기둥이 스크롤바 폭만큼 옆으로 밀린다 */
+.mr-ov-inner{position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-top:10px; scrollbar-gutter:stable}
 .mr-ov-inner .mr-main{padding-top:8px}
 .mr-back::before,.mr-page-back::before{
   content:""; width:8px; height:8px; flex:none;
