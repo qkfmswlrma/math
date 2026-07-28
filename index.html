@@ -152,8 +152,13 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.11.2";
+const APP_VERSION = "2.11.3";
 const CHANGELOG = [{
+  v: "2.11.3",
+  date: "2026.7.28",
+  items: ["넓은 화면에서 뒤로가기가 아래 내용과 어긋나 있던 걸 맞췄어요"],
+  adminItems: []
+}, {
   v: "2.11.2",
   date: "2026.7.28",
   items: ["넓은 화면에서 본문을 더 넓게 쓰고, 위아래 줄과 자리를 맞췄어요"],
@@ -1414,14 +1419,6 @@ function App() {
       borderRadius: "26px"
     }
   }, /*#__PURE__*/React.createElement("div", {
-    className: "mr-ov-backwrap",
-    style: {
-      opacity: over.expanded ? 1 : 0
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    className: "mr-ov-back",
-    onClick: closeOver
-  }, "홈")), /*#__PURE__*/React.createElement("div", {
     className: "mr-ov-inner",
     style: {
       opacity: over.expanded ? 1 : 0,
@@ -1430,7 +1427,10 @@ function App() {
     }
   }, /*#__PURE__*/React.createElement("main", {
     className: "mr-main"
-  }, screenFor(over.key)))), /*#__PURE__*/React.createElement("header", {
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "mr-page-back",
+    onClick: closeOver
+  }, "홈"), screenFor(over.key)))), /*#__PURE__*/React.createElement("header", {
     className: "mr-header"
   }, /*#__PURE__*/React.createElement("div", {
     className: "mr-brand",
@@ -7199,30 +7199,15 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-ov-scrim{position:fixed; top:74px; left:0; right:0; bottom:0; z-index:149; background:linear-gradient(165deg,#efe2ff,#fbe2ef 46%,#e2e9ff); transition:opacity .4s ease}
 .mr-ov{background:linear-gradient(165deg,#f4e9ff 0%,#fde9f4 46%,#e9eeff 100%); border:0; box-shadow:none;
   transition:top .5s cubic-bezier(.4,0,.2,1), left .5s cubic-bezier(.4,0,.2,1), width .5s cubic-bezier(.4,0,.2,1), height .5s cubic-bezier(.4,0,.2,1), border-radius .5s cubic-bezier(.4,0,.2,1);}
-.mr-ov-inner{position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-top:44px}
+/* 뒤로가기가 내용과 같은 흐름에 있으므로 위 여백은 10px + .mr-main 8px = 18px */
+.mr-ov-inner{position:absolute; inset:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-top:10px}
 .mr-ov-inner .mr-main{padding-top:8px}
-/* 오버레이 뒤로가기: 화면 안의 뒤로가기와 같은 모양으로 통일 */
-/* 본문(.mr-main)과 똑같은 폭 안에 넣어야 화면이 넓어져도 왼쪽 끝이 어긋나지 않는다.
-   위 여백은 .mr-ov-inner 10px + .mr-main 8px 과 같은 18px */
-.mr-ov-backwrap{position:absolute; top:18px; left:0; right:0; z-index:3;
-  max-width:var(--col); margin:0 auto; padding:0 20px; pointer-events:none;
-  transition:opacity .25s ease}
-.mr-ov-back{pointer-events:auto;
-  display:inline-flex; align-items:center; gap:7px; border:1px solid var(--line); background:var(--card);
-  color:var(--t2); cursor:pointer; font-family:inherit; font-size:14px; font-weight:700;
-  padding:9px 16px 9px 13px; border-radius:999px; box-shadow:0 4px 14px rgba(91,55,140,0.10);
-  transition:background .15s, color .15s;
-  -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px)}
-.mr-ov-back::before,.mr-back::before,.mr-page-back::before{
+.mr-back::before,.mr-page-back::before{
   content:""; width:8px; height:8px; flex:none;
   border-left:2.2px solid currentColor; border-bottom:2.2px solid currentColor;
   transform:rotate(45deg); border-radius:1px;
 }
-.mr-ov-back:hover{background:var(--blue-bg); color:var(--blue)}
-.mr-ov-back:active{transform:scale(.97)}
 /* 화면이 자기 뒤로가기를 가지고 있으면 홈으로 가는 것은 숨긴다 (화살표가 두 개 뜨지 않게) */
-.mr-ov:has(.mr-back) .mr-ov-backwrap{display:none}
-.mr-ov:has(.mr-back) .mr-ov-inner{padding-top:10px}
 .mr-main:has(.mr-back) .mr-page-back{display:none}
 /* 화면 전체는 가볍게 떠오르기만 하고, 실제 움직임은 안쪽 카드들이 차례로 만든다.
    여기서 크기까지 바꾸면 안쪽 카드 움직임과 겹쳐 지저분해진다 */
@@ -7417,11 +7402,9 @@ html[data-theme="dark"] .mr-sortseg button.on{background:rgba(255,255,255,0.14);
 html[data-theme="dark"] .mr-slide button.on{background:transparent}
 html[data-theme="dark"] .mr-slide::before{background:rgba(255,255,255,0.14); box-shadow:none}
 html[data-theme="dark"] .mr-back,
-html[data-theme="dark"] .mr-page-back,
-html[data-theme="dark"] .mr-ov-back{background:rgba(255,255,255,0.08); color:var(--t2); box-shadow:none}
+html[data-theme="dark"] .mr-page-back{background:rgba(255,255,255,0.08); color:var(--t2); box-shadow:none}
 html[data-theme="dark"] .mr-back:hover,
-html[data-theme="dark"] .mr-page-back:hover,
-html[data-theme="dark"] .mr-ov-back:hover{background:rgba(255,255,255,0.15); color:var(--t1)}
+html[data-theme="dark"] .mr-page-back:hover{background:rgba(255,255,255,0.15); color:var(--t1)}
 html[data-theme="dark"] .mr-ov-scrim{background:linear-gradient(165deg,#1a1626,#221a2b 46%,#181a2b)}
 html[data-theme="dark"] .mr-ov{background:linear-gradient(165deg,#1a1626 0%,#221a2b 46%,#181a2b 100%)}
 html[data-theme="dark"] math-field{background:rgba(255,255,255,0.08); color:var(--t1)}
