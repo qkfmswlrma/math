@@ -122,8 +122,14 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.11.1";
+const APP_VERSION = "2.11.2";
 const CHANGELOG = [
+  {
+    v: "2.11.2",
+    date: "2026.7.28",
+    items: ["넓은 화면에서 본문을 더 넓게 쓰고, 위아래 줄과 자리를 맞췄어요"],
+    adminItems: [],
+  },
   {
     v: "2.11.1",
     date: "2026.7.27",
@@ -5309,6 +5315,8 @@ const CSS = `
   /* 화면이 통째로 움직일 때: 카드가 펼쳐지는 전환과 똑같은 곡선.
      천천히 출발해 천천히 멎어서 움직이는 내내 눈에 보인다 */
   --ease-screen:cubic-bezier(.4,0,.2,1);
+  /* 본문 기둥 폭. 헤더, 본문, 아래쪽 줄, 오버레이 뒤로가기가 전부 이 값을 쓴다 */
+  --col:960px;
   position:relative; min-height:100vh; width:100%; color:var(--t1);
   font-family:'Pretendard','Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,sans-serif;
   -webkit-font-smoothing:antialiased; padding-bottom:64px; letter-spacing:-0.2px;
@@ -5320,9 +5328,13 @@ const CSS = `
    radial-gradient(280px 280px at 62% 42%, rgba(174,195,255,0.5), transparent 66%);}
 
 /* header */
+/* 좌우 여백을 본문(.mr-main)과 똑같이 잡는다. 화면이 기둥 폭보다 넓어지면
+   본문은 가운데 기둥에 갇히는데 헤더만 끝까지 퍼져 있어서, 로고는 화면 맨
+   왼쪽에 카드는 한참 안쪽에 놓여 따로 놀았다 */
 .mr-header{
   display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;
-  padding:16px 20px; background:var(--card); border-bottom:1px solid var(--line-soft);
+  padding:16px max(20px, calc((100% - var(--col)) / 2 + 20px));
+  background:var(--card); border-bottom:1px solid var(--line-soft);
   position:sticky; top:0; z-index:300;
 }
 .mr-brand{display:flex; align-items:center; gap:11px; cursor:pointer}
@@ -5474,7 +5486,7 @@ const CSS = `
 
 /* layout */
 /* 좌우 여백은 헤더(20px)와 같게 맞춘다. 로고·본문·뒤로가기 왼쪽 끝이 한 줄로 떨어진다 */
-.mr-main{max-width:680px; margin:0 auto; padding:20px}
+.mr-main{max-width:var(--col); margin:0 auto; padding:20px}
 .mr-col{display:flex; flex-direction:column; gap:12px}
 
 /* home */
@@ -5717,6 +5729,8 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-post-divider{height:1px; background:var(--line-soft); margin:16px 0}
 .mr-notice .mr-notice-head h3{font-size:20px; line-height:1.4}
 .mr-notice-body{font-size:15.5px; line-height:1.85; color:#333D4B; margin-top:12px}
+/* 기둥이 넓어져도 읽는 글은 한 줄이 너무 길어지지 않게 잡아둔다 */
+.mr-post .mr-notice-body{max-width:740px}
 
 /* 문제 사진 업로드 */
 .mr-img-drop{
@@ -5867,7 +5881,7 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-rank-score{font-weight:800; color:var(--t1); font-variant-numeric:tabular-nums}
 
 .mr-foot{
-  max-width:680px; margin:28px auto 0; padding:0 20px;
+  max-width:var(--col); margin:28px auto 0; padding:0 20px;
   display:flex; flex-direction:column; align-items:center; gap:8px;
   font-size:12px; color:var(--t3); line-height:1.6; font-weight:500;
 }
@@ -5942,7 +5956,7 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 /* 본문(.mr-main)과 똑같은 폭 안에 넣어야 화면이 넓어져도 왼쪽 끝이 어긋나지 않는다.
    위 여백은 .mr-ov-inner 10px + .mr-main 8px 과 같은 18px */
 .mr-ov-backwrap{position:absolute; top:18px; left:0; right:0; z-index:3;
-  max-width:680px; margin:0 auto; padding:0 20px; pointer-events:none;
+  max-width:var(--col); margin:0 auto; padding:0 20px; pointer-events:none;
   transition:opacity .25s ease}
 .mr-ov-back{pointer-events:auto;
   display:inline-flex; align-items:center; gap:7px; border:1px solid var(--line); background:var(--card);
