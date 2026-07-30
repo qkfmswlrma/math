@@ -225,7 +225,6 @@ const CHANGELOG = [
     date: "2026.7.26",
     items: [
       "오늘의 문제를 매일 하나씩 크게 보고 그 자리에서 바로 푸는 방식으로 바꿨어요",
-      "며칠 연속으로 풀었는지 세어서 보여줘요",
       "지난 오늘의 문제도 달력에서 날짜를 눌러 다시 풀 수 있어요",
       "처음 열 때 더 빨라졌어요",
       "어두운 화면을 다듬었어요",
@@ -3985,15 +3984,6 @@ function TodayPuzzle({ exams, subs, student, loggedIn, allRates, onAddSub, onGue
   const myOf = (id) => mine.find((s) => s.examId === id) || null;
   const solvedIds = new Set(mine.map((s) => s.examId));
 
-  // 연속 풀이: 최근 문제부터 안 끊기고 푼 개수
-  let streak = 0, started = false;
-  for (const ex of days) {
-    const solved = solvedIds.has(ex.id);
-    if (!started) { if (solved) { started = true; streak = 1; } }
-    else if (solved) streak++;
-    else break;
-  }
-
   const [selId, setSelId] = useState(days[0] ? days[0].id : null);
   const [calOpen, setCalOpen] = useState(false);
   const sel = days.find((d) => d.id === selId) || days[0] || null;
@@ -4011,9 +4001,6 @@ function TodayPuzzle({ exams, subs, student, loggedIn, allRates, onAddSub, onGue
         <Empty text="아직 오늘의 문제가 없어요." />
       ) : (
         <>
-          {loggedIn && streak > 0 && (
-            <div className="mr-streak"><span className="mr-streak-fire">🔥</span> <b>{streak}일</b> 연속 풀이 중이에요</div>
-          )}
           <article className="mr-daily-hero">
             <div className="mr-daily-badges">
               <span className="mr-daily-badge">오늘의 문제</span>
@@ -6220,9 +6207,6 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-spark-cap{font-size:10px; font-weight:800; color:var(--t3)}
 
 /* ===== 오늘의 문제: 일일 퍼즐 ===== */
-.mr-streak{display:flex; align-items:center; gap:7px; background:var(--card); border:1px solid var(--line); box-shadow:var(--glass-sh); border-radius:16px; padding:12px 16px; font-size:14px; font-weight:700; color:var(--t2)}
-.mr-streak b{color:var(--blue); font-size:15px}
-.mr-streak-fire{font-size:18px}
 .mr-daily-hero{background:var(--card); border:1px solid var(--line); box-shadow:var(--glass-sh); border-radius:26px; padding:22px; animation:rise .5s var(--ease) both}
 .mr-daily-top{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px}
 .mr-daily-badges{display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap}
