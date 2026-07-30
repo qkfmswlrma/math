@@ -31,17 +31,32 @@ function summarize(html, limit) {
   return t.length > limit ? t.slice(0, limit) + "…" : t;
 }
 
+function keyHeaders() {
+  return {
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: "Bearer " + SUPABASE_ANON_KEY,
+    Accept: "application/json",
+  };
+}
+
 async function sb(path) {
-  const res = await fetch(SUPABASE_URL + "/rest/v1/" + path, {
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: "Bearer " + SUPABASE_ANON_KEY,
-      Accept: "application/json",
-    },
-  });
+  const res = await fetch(SUPABASE_URL + "/rest/v1/" + path, { headers: keyHeaders() });
   if (!res.ok) return null;
   const rows = await res.json();
   return Array.isArray(rows) && rows.length ? rows[0] : null;
+}
+
+// 칼럼은 회원 전용이라 표를 직접 읽을 수 없다.
+// 미리보기에 쓸 제목만 내주는 함수를 따로 부른다.
+async function sbRpc(name, args) {
+  const res = await fetch(SUPABASE_URL + "/rest/v1/rpc/" + name, {
+    method: "POST",
+    headers: Object.assign({ "Content-Type": "application/json" }, keyHeaders()),
+    body: JSON.stringify(args || {}),
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data && typeof data === "object" ? data : null;
 }
 
 // 옛 번호(prev_nos)로 들어와도 찾도록
@@ -59,8 +74,10 @@ async function lookup(kind, no) {
         desc: (r.author ? "출제 " + r.author + " · " : "") + "지금 풀어보세요",
       };
     }
-    const r = await sb("columns?" + noFilter(no) + "&select=title,body,author,category&limit=1");
-    if (!r) return null;
+    // 공지는 표에서 바로 읽힌다. 칼럼은 안 읽히므로 제목만 주는 함수로 물어본다
+    let r = await sb("columns?" + noFilter(no) + "&select=title,body,author,category&limit=1");
+    if (!r) r = await sbRpc("post_preview", { p_no: Number(no) });
+    if (!r || !r.title) return null;
     const label = r.category === "notice" ? "공지사항" : "칼럼";
     return {
       title: r.title + " · " + label,
