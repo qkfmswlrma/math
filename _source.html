@@ -122,8 +122,14 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.12.0";
+const APP_VERSION = "2.13.0";
 const CHANGELOG = [
+  {
+    v: "2.13.0",
+    date: "2026.7.30",
+    items: ["칼럼과 공지 글을 공유할 수 있어요"],
+    adminItems: [],
+  },
   {
     v: "2.12.0",
     date: "2026.7.28",
@@ -2072,6 +2078,40 @@ function Home({ role, student, loggedIn, noticeCount, columnUnread, announceCoun
   );
 }
 
+/* 글 링크 공유. 폰에서는 기본 공유 시트가 뜨고, 안 되는 곳에서는 주소를 복사한다 */
+function ShareButton({ path, title }) {
+  const [msg, setMsg] = useState("");
+  const share = async () => {
+    const url = location.origin + path;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, url });
+        return;
+      }
+    } catch (e) {
+      if (e && e.name === "AbortError") return; // 사용자가 공유를 취소한 것
+    }
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(url);
+      ok = true;
+    } catch (e) {}
+    setMsg(ok ? "주소를 복사했어요" : "주소 복사가 안 돼요");
+    setTimeout(() => setMsg(""), 1800);
+  };
+  return (
+    <button className="mr-share" onClick={share}>
+      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none"
+        stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M8 1.6 L8 9.6" />
+        <path d="M5 4.5 L8 1.5 L11 4.5" />
+        <path d="M3.2 8.6 L3.2 14 L12.8 14 L12.8 8.6" />
+      </svg>
+      {msg || "공유"}
+    </button>
+  );
+}
+
 /* 한 화면 안에서 목록과 글 사이를 오갈 때 들어오는 방향을 정한다.
    깊이가 커지면 오른쪽에서, 되돌아오면 왼쪽에서 들어온다.
    처음 들어올 때는 화면 전체 전환이 이미 돌고 있어서 아무것도 하지 않는다 */
@@ -2378,6 +2418,11 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onR
             <div className="mr-post-byline">
               <span className="mr-avatar sm">{(n.author || "익")[0]}</span>
               {n.author || "익명"} · {fmtDate(n.createdAt)}
+              {n.no && (
+                <span className="mr-post-share">
+                  <ShareButton path={"/" + urlBase + "/" + n.no} title={n.title} />
+                </span>
+              )}
             </div>
             <div className="mr-post-divider" />
             {n.body ? <div className="mr-notice-body" dangerouslySetInnerHTML={{ __html: n.body }} /> : <p className="mr-muted">내용이 없어요.</p>}
@@ -2621,6 +2666,11 @@ function Announcements({ role, student, kakaoId, posts, onAdd, onDelete, onEdit,
             <div className="mr-post-byline">
               <span className="mr-avatar sm">{(n.author || "익")[0]}</span>
               {n.author || "익명"} · {fmtDate(n.createdAt)}
+              {n.no && (
+                <span className="mr-post-share">
+                  <ShareButton path={"/" + urlBase + "/" + n.no} title={n.title} />
+                </span>
+              )}
             </div>
             <div className="mr-post-divider" />
             {n.body ? <div className="mr-notice-body" dangerouslySetInnerHTML={{ __html: n.body }} /> : <p className="mr-muted">내용이 없어요.</p>}
@@ -5802,6 +5852,15 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 /* 칼럼 상세 */
 .mr-post-title{font-size:23px; font-weight:800; line-height:1.4; letter-spacing:-0.5px}
 .mr-post-byline{display:flex; align-items:center; gap:8px; margin-top:13px; font-size:13px; color:var(--t2); font-weight:600}
+/* 글쓴이와 날짜는 왼쪽, 공유는 오른쪽 끝으로 */
+.mr-post-share{margin-left:auto}
+.mr-share{display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); background:var(--card);
+  color:var(--t2); cursor:pointer; font-family:inherit; font-size:12.5px; font-weight:700;
+  padding:7px 12px 7px 10px; border-radius:999px; white-space:nowrap;
+  transition:background .15s, color .15s}
+.mr-share:hover{background:var(--blue-bg); color:var(--blue)}
+.mr-share:active{transform:scale(.97)}
+.mr-share svg{flex:none; display:block}
 .mr-avatar.sm{width:26px; height:26px; font-size:12px}
 .mr-post-divider{height:1px; background:var(--line-soft); margin:16px 0}
 .mr-notice .mr-notice-head h3{font-size:20px; line-height:1.4}
