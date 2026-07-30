@@ -152,8 +152,13 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.13.0";
+const APP_VERSION = "2.13.1";
 const CHANGELOG = [{
+  v: "2.13.1",
+  date: "2026.7.30",
+  items: ["시험 목록에서 내 점수를 눌러 채점 결과를 다시 볼 수 있어요"],
+  adminItems: []
+}, {
   v: "2.13.0",
   date: "2026.7.30",
   items: ["칼럼과 공지 글을 공유할 수 있어요"],
@@ -5101,7 +5106,9 @@ function ExamsStudent({
   goUrl
 }) {
   const [taking, setTaking] = useState(() => initialNo ? findByNo(exams, initialNo) || null : null);
-  const step = useStep(taking ? 1 : 0);
+  // 이미 푼 시험의 채점 결과를 목록에서 바로 열어보는 화면
+  const [reviewing, setReviewing] = useState(null);
+  const step = useStep(taking || reviewing ? 1 : 0);
   const url = p => {
     if (goUrl) goUrl(p);
   };
@@ -5143,6 +5150,53 @@ function ExamsStudent({
     onGuestSubmit: onGuestSubmit,
     getAnswers: getAnswers
   }));
+  if (reviewing) {
+    const {
+      exam,
+      sub
+    } = reviewing;
+    const score = totalScore(exam, sub);
+    const max = maxScore(exam);
+    const ratio = max ? score / max : 0;
+    const tone = ratio >= 0.8 ? "good" : ratio >= 0.5 ? "mid" : "low";
+    return /*#__PURE__*/React.createElement("div", {
+      className: "mr-col" + step,
+      key: "review"
+    }, /*#__PURE__*/React.createElement("button", {
+      className: "mr-back",
+      onClick: () => setReviewing(null)
+    }, EXAM_TYPES[examType]), /*#__PURE__*/React.createElement("section", {
+      className: "mr-card",
+      style: {
+        textAlign: "center",
+        padding: "28px 20px"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "mr-card-tag",
+      style: {
+        marginBottom: "10px"
+      }
+    }, exam.title), /*#__PURE__*/React.createElement("div", {
+      className: "mr-record-score " + tone,
+      style: {
+        fontSize: "40px"
+      }
+    }, score, /*#__PURE__*/React.createElement("span", {
+      className: "mr-record-max"
+    }, " / ", max)), /*#__PURE__*/React.createElement("div", {
+      className: "mr-record-meta",
+      style: {
+        marginTop: "10px"
+      }
+    }, fmtDate(sub.submittedAt))), /*#__PURE__*/React.createElement("div", {
+      className: "mr-list-top"
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "mr-list-title"
+    }, "채점 결과")), /*#__PURE__*/React.createElement(ReviewList, {
+      exam: exam,
+      sub: sub
+    }));
+  }
   if (examType === "today") return /*#__PURE__*/React.createElement("div", {
     className: step.trim(),
     key: "today"
@@ -5226,9 +5280,15 @@ function ExamsStudent({
       }
     }, diff.label)), /*#__PURE__*/React.createElement("div", {
       className: "mr-row-end"
-    }, mine ? mine.graded ? /*#__PURE__*/React.createElement("span", {
-      className: "mr-result-pill"
-    }, "내 점수 ", totalScore(ex, mine), " / ", maxScore(ex)) : /*#__PURE__*/React.createElement("span", {
+    }, mine ? mine.graded ? /*#__PURE__*/React.createElement("button", {
+      className: "mr-result-pill mr-result-open",
+      onClick: () => setReviewing({
+        exam: ex,
+        sub: mine
+      })
+    }, "내 점수 ", totalScore(ex, mine), " / ", maxScore(ex), /*#__PURE__*/React.createElement("span", {
+      className: "mr-result-more"
+    }, "채점 결과 보기")) : /*#__PURE__*/React.createElement("span", {
       className: "mr-badge-red"
     }, "채점 중…") : /*#__PURE__*/React.createElement("button", {
       className: "mr-btn",
@@ -7237,6 +7297,15 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-take-opt.sel{background:var(--blue-bg); border-color:var(--blue); color:var(--blue); font-weight:700}
 .mr-take-opt input{width:18px; height:18px; accent-color:var(--blue); flex:none}
 .mr-result-pill{font-weight:800; color:var(--green); background:var(--green-bg); padding:9px 15px; border-radius:11px; font-size:14.5px}
+/* 이미 푼 시험은 점수를 눌러 채점 결과로 간다 */
+.mr-result-open{display:inline-flex; align-items:center; gap:9px; border:0; font-family:inherit;
+  cursor:pointer; transition:background .15s, color .15s}
+.mr-result-open:hover{background:var(--blue-bg); color:var(--blue)}
+.mr-result-open:active{transform:scale(.97)}
+.mr-result-more{font-size:12.5px; font-weight:700; opacity:.72}
+.mr-result-more::after{content:""; display:inline-block; width:6px; height:6px; margin-left:5px;
+  border-top:2px solid currentColor; border-right:2px solid currentColor;
+  transform:rotate(45deg) translateY(-1px)}
 .mr-guest-note{background:var(--red-bg); color:var(--red); font-size:13.5px; font-weight:700; padding:12px 14px; border-radius:12px; text-align:center; line-height:1.5}
 .mr-resume-note{background:var(--blue-bg); color:var(--blue); font-size:13px; font-weight:700; padding:11px 14px; border-radius:12px; text-align:center; line-height:1.5}
 .mr-c-good{color:var(--green)}
