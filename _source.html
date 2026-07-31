@@ -98,6 +98,7 @@ const padPw = (pw) => String(pw) + "__mr__";
 const mapColumn = (r) => ({
   id: r.id, no: r.no || null, prevNos: r.prev_nos || [], title: r.title, body: r.body || "", author: r.author || "", authorId: r.author_id || null,
   isDraft: !!r.is_draft, category: r.category || "elem", sortOrder: r.sort_order || 0,
+  isRule: !!r.is_rule, // 메인규칙으로 지정된 공지 (하나만)
   createdAt: r.created_at ? Date.parse(r.created_at) : 0,
 });
 const mapExam = (r) => ({
@@ -122,8 +123,23 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.13.1";
+const APP_VERSION = "2.14.0";
 const CHANGELOG = [
+  {
+    v: "2.14.0",
+    date: "2026.7.31",
+    items: [
+      "규칙은 suhakjilmoon.pages.dev/rules 로 언제나 바로 열려요",
+      "공지사항 목록 위에서 규칙을 따로 볼 수 있어요",
+    ],
+    adminItems: ["공지 하나를 메인규칙으로 지정할 수 있어요. 규칙 글을 새로 써도 주소는 그대로예요"],
+  },
+  {
+    v: "2.13.2",
+    date: "2026.7.30",
+    items: ["시험도 공유할 수 있어요"],
+    adminItems: [],
+  },
   {
     v: "2.13.1",
     date: "2026.7.30",
@@ -452,6 +468,8 @@ function parsePath() {
     const p = (String(window.location.pathname || "").replace(/\/+$/, "")) || "/";
     const seg = p.split("/").filter(Boolean);
     if (!seg.length) return null;
+    // /rules 는 규칙으로 지정된 공지를 연다. 규칙 글을 새로 써도 주소는 그대로다
+    if (seg[0] === "rules") return { tab: "announce", sub: "rules", no: null };
     const tab = PATH_TAB["/" + seg[0]];
     if (!tab) return null;
     const s2 = seg[1] || null;
@@ -1012,6 +1030,18 @@ function App() {
     await refresh();
     return true;
   };
+  // 메인규칙은 하나뿐이므로 먼저 전부 내리고 고른 글만 올린다
+  const onSetRule = async (id) => {
+    const clear = await sb.from("columns").update({ is_rule: false }).eq("is_rule", true);
+    if (clear.error) { alert("규칙 지정에 실패했어요: " + clear.error.message); return; }
+    if (id) {
+      const { error } = await sb.from("columns").update({ is_rule: true }).eq("id", id);
+      if (error) { alert("규칙 지정에 실패했어요: " + error.message); return; }
+    }
+    const n = notices.find((x) => x.id === id);
+    await logAction(id ? "메인규칙 지정" : "메인규칙 해제", n ? n.title : "");
+    await refresh();
+  };
   const onReorderColumns = async (ids) => {
     const results = await Promise.all(ids.map((cid, i) => sb.from("columns").update({ sort_order: i + 1 }).eq("id", cid)));
     const failed = results.find((r) => r && r.error);
@@ -1128,7 +1158,7 @@ function App() {
       case "admin": return role === "admin" ? <Admin key={"a" + nav} initialSub={route && route.tab === "admin" ? route.sub : null} pushUrl={pushUrl} auth={auth} isSuper={isSuper} users={users} notices={notices} exams={exams} subs={subs} auditLog={auditLog} onToggleAdmin={onToggleAdmin} onDeleteUser={onDeleteUser} onResetPassword={onResetPassword} /> : homeView;
       case "account": return loggedIn ? <Account auth={auth} theme={theme} onToggleTheme={toggleTheme} onChangePassword={onChangePassword} onUpdateKakao={onUpdateKakao} onDeleteMe={onDeleteMe} onLogout={onLogout} /> : homeView;
       case "notices": return <Notices key={"c" + nav} loggedIn={loggedIn} requireLogin={requireLogin} initialNo={route && route.tab === "notices" ? route.no : null} initialCat={route && route.tab === "notices" ? route.sub : null} urlBase="column" pushUrl={pushUrl} role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} notices={columnPosts} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} readIds={readColIds} onRead={markColumnRead} />;
-      case "announce": return <Announcements key={"n" + nav} initialNo={route && route.tab === "announce" ? route.no : null} urlBase="notice" pushUrl={pushUrl} role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} posts={noticePosts} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} readIds={readColIds} onRead={markColumnRead} />;
+      case "announce": return <Announcements key={"n" + nav} initialNo={route && route.tab === "announce" ? route.no : null} initialSub={route && route.tab === "announce" ? route.sub : null} urlBase="notice" pushUrl={pushUrl} role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} posts={noticePosts} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} onSetRule={onSetRule} readIds={readColIds} onRead={markColumnRead} />;
       case "privacy": return <Privacy onBack={() => go("home")} />;
       case "changelog": return <Changelog onBack={() => go("home")} isAdmin={role === "admin"} />;
       case "game": return <SpeedGame key={"g" + nav} initialSub={route && route.tab === "game" ? route.sub : null} pushUrl={pushUrl} onBack={closeOver} auth={auth} onGoAccount={() => { setOver(null); go("account"); }} onLogin={() => setAuthOpen(true)} />;
@@ -2085,10 +2115,11 @@ function Home({ role, student, loggedIn, noticeCount, columnUnread, announceCoun
 function ShareButton({ path, title }) {
   const [msg, setMsg] = useState("");
   const share = async () => {
-    const url = location.origin + path;
+    const url = window.location.origin + path;
+    const nav = window.navigator;
     try {
-      if (navigator.share) {
-        await navigator.share({ title, url });
+      if (nav.share) {
+        await nav.share({ title, url });
         return;
       }
     } catch (e) {
@@ -2096,7 +2127,7 @@ function ShareButton({ path, title }) {
     }
     let ok = false;
     try {
-      await navigator.clipboard.writeText(url);
+      await nav.clipboard.writeText(url);
       ok = true;
     } catch (e) {}
     setMsg(ok ? "주소를 복사했어요" : "주소 복사가 안 돼요");
@@ -2541,7 +2572,7 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onR
 /* ===================== 공지사항 =====================
    칼럼과 같은 columns 테이블을 쓰고 category 를 'notice' 로 저장한다.
    분류 탭이 없고, 최신 글이 위로 오는 단순한 게시판. */
-function Announcements({ role, student, kakaoId, posts, onAdd, onDelete, onEdit, onReorder, readIds, onRead, initialNo, urlBase, pushUrl }) {
+function Announcements({ role, student, kakaoId, posts, onAdd, onDelete, onEdit, onReorder, onSetRule, readIds, onRead, initialNo, initialSub, urlBase, pushUrl }) {
   const goUrl = (path) => { if (pushUrl) pushUrl(path); };
   const [view, setView] = useState("list"); // list | write | read | edit
   const step = useStep({ list: 0, read: 1, write: 1, edit: 2 }[view] || 0);
@@ -2553,6 +2584,7 @@ function Announcements({ role, student, kakaoId, posts, onAdd, onDelete, onEdit,
   const [q, setQ] = useState("");
 
   const authorName = () => (kakaoId || "").trim() || (student || "").trim() || "익명";
+  const rulePost = posts.find((n) => n.isRule && !n.isDraft) || null;
 
   // 주소로 들어온 공지가 있으면 자동으로 열기
   useEffect(() => {
@@ -2564,6 +2596,14 @@ function Announcements({ role, student, kakaoId, posts, onAdd, onDelete, onEdit,
       if (onRead) onRead(n.id);
     }
   }, [posts, initialNo]);
+
+  // /rules 로 들어오면 규칙으로 지정된 글을 연다
+  useEffect(() => {
+    if (initialSub !== "rules" || !rulePost) return;
+    setOpenId(rulePost.id);
+    setView("read");
+    if (onRead) onRead(rulePost.id);
+  }, [initialSub, rulePost && rulePost.id]);
 
   const openPost = (n) => {
     if (onRead) onRead(n.id);
@@ -2665,6 +2705,7 @@ function Announcements({ role, student, kakaoId, posts, onAdd, onDelete, onEdit,
           <Empty text="공지를 찾을 수 없어요." />
         ) : (
           <article className="mr-card mr-notice mr-post">
+            {n.isRule && <div className="mr-rule-tag">메인규칙</div>}
             <h1 className="mr-post-title">{n.title}</h1>
             <div className="mr-post-byline">
               <span className="mr-avatar sm">{(n.author || "익")[0]}</span>
@@ -2679,6 +2720,11 @@ function Announcements({ role, student, kakaoId, posts, onAdd, onDelete, onEdit,
             {n.body ? <div className="mr-notice-body" dangerouslySetInnerHTML={{ __html: n.body }} /> : <p className="mr-muted">내용이 없어요.</p>}
             {role === "admin" && (
               <div className="mr-detail-actions" style={{ marginTop: "20px", justifyContent: "flex-end" }}>
+                {onSetRule && (
+                  <button className="mr-mini-btn" onClick={() => onSetRule(n.isRule ? null : n.id)}>
+                    {n.isRule ? "규칙 해제" : "메인규칙으로"}
+                  </button>
+                )}
                 <button className="mr-mini-btn" onClick={() => { setTitle(n.title); setBody(n.body); setDraftId(null); setView("edit"); }}>수정</button>
                 <button className="mr-mini-btn danger" onClick={() => remove(n.id)}>삭제</button>
               </div>
@@ -2691,8 +2737,9 @@ function Announcements({ role, student, kakaoId, posts, onAdd, onDelete, onEdit,
 
   // 목록
   const kw = q.trim();
+  // 규칙은 목록에서 빼고 위쪽에 따로 둔다. 안 그러면 새 공지가 규칙 아래로 밀린다
   const published = posts
-    .filter((n) => !n.isDraft && matchPost(n, kw))
+    .filter((n) => !n.isDraft && !n.isRule && matchPost(n, kw))
     .sort((a, b) => (a.sortOrder - b.sortOrder) || (b.createdAt - a.createdAt));
   const drafts = posts.filter((n) => n.isDraft);
 
@@ -2712,6 +2759,14 @@ function Announcements({ role, student, kakaoId, posts, onAdd, onDelete, onEdit,
         <span className="mr-list-title">공지사항</span>
         {role === "admin" && <button className="mr-btn" onClick={newWrite}>공지 쓰기</button>}
       </div>
+
+      {rulePost && (
+        <button className="mr-rule-row" onClick={() => openPost(rulePost)}>
+          <span className="mr-rule-row-tag">규칙</span>
+          <span className="mr-rule-row-title">{rulePost.title}</span>
+          <span className="mr-rule-row-go" aria-hidden="true" />
+        </button>
+      )}
 
       <input
         className="mr-input mr-search"
@@ -4343,6 +4398,11 @@ function TakeExam({ exam: rawExam, student, loggedIn, onGuestSubmit, getAnswers,
         </div>
         <div className="mr-exam-meta">
           <span>출제자 {exam.author || "관리자"}</span>
+          {exam.no && (
+            <span className="mr-exam-share">
+              <ShareButton path={"/exam/" + exam.no} title={exam.title} />
+            </span>
+          )}
         </div>
       </section>
 
@@ -5731,6 +5791,8 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-sched-tag{display:inline-block; margin-top:8px; background:#FFF4E5; color:#C2540A; font-size:12.5px; font-weight:800; padding:5px 11px; border-radius:8px}
 .mr-sched-hint{font-size:12.5px; color:var(--t3); line-height:1.6; margin:8px 2px 0}
 .mr-exam-meta span:nth-child(even){color:var(--line)}
+/* 응시 화면의 공유 버튼은 오른쪽 끝으로. 버튼이 색을 직접 정하므로 위 흐린 색 규칙에 안 걸린다 */
+.mr-exam-share{margin-left:auto}
 
 /* inputs */
 .mr-input,.mr-textarea{
@@ -5851,6 +5913,17 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-post-row-meta{font-size:12.5px; color:var(--t3); font-weight:600}
 .mr-draft-head{font-size:13px; font-weight:800; color:var(--t3); padding:2px 2px 0}
 .mr-draft-badge{font-size:11px; font-weight:700; color:#B26A00; background:#FFF4E0; padding:2px 7px; border-radius:6px; margin-left:8px; vertical-align:middle}
+/* 메인규칙: 공지 목록 위에 따로 놓는 한 줄과 글 위의 표시 */
+.mr-rule-tag{display:inline-block; font-size:12px; font-weight:800; color:var(--blue); background:var(--blue-bg); padding:5px 11px; border-radius:8px; margin-bottom:11px}
+.mr-rule-row{display:flex; align-items:center; gap:10px; width:100%; text-align:left; cursor:pointer;
+  background:var(--card); border:1px solid var(--line); box-shadow:var(--glass-sh);
+  border-radius:16px; padding:14px 16px; font-family:inherit;
+  transition:background .15s}
+.mr-rule-row:hover{background:var(--blue-bg)}
+.mr-rule-row:active{transform:scale(.99)}
+.mr-rule-row-tag{flex:none; font-size:11px; font-weight:800; color:#fff; background:var(--grad); padding:3px 9px; border-radius:7px}
+.mr-rule-row-title{flex:1; min-width:0; font-size:14.5px; font-weight:800; color:var(--t1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mr-rule-row-go{flex:none; width:7px; height:7px; border-top:2px solid var(--t3); border-right:2px solid var(--t3); transform:rotate(45deg)}
 .mr-cat-label{font-size:12.5px; font-weight:700; color:var(--t2); margin-top:14px}
 .mr-cat-seg{display:flex; gap:4px; background:var(--bg); border-radius:11px; padding:4px; margin-top:8px}
 .mr-cat-seg button{flex:1; border:0; background:transparent; padding:9px; font-family:inherit; font-weight:700; font-size:13.5px; color:var(--t3); border-radius:8px; cursor:pointer; transition:background .15s,color .15s,border-color .15s,transform .15s}

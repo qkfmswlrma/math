@@ -117,6 +117,8 @@ const mapColumn = r => ({
   isDraft: !!r.is_draft,
   category: r.category || "elem",
   sortOrder: r.sort_order || 0,
+  isRule: !!r.is_rule,
+  // 메인규칙으로 지정된 공지 (하나만)
   createdAt: r.created_at ? Date.parse(r.created_at) : 0
 });
 const mapExam = r => ({
@@ -152,8 +154,18 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.13.1";
+const APP_VERSION = "2.14.0";
 const CHANGELOG = [{
+  v: "2.14.0",
+  date: "2026.7.31",
+  items: ["규칙은 suhakjilmoon.pages.dev/rules 로 언제나 바로 열려요", "공지사항 목록 위에서 규칙을 따로 볼 수 있어요"],
+  adminItems: ["공지 하나를 메인규칙으로 지정할 수 있어요. 규칙 글을 새로 써도 주소는 그대로예요"]
+}, {
+  v: "2.13.2",
+  date: "2026.7.30",
+  items: ["시험도 공유할 수 있어요"],
+  adminItems: []
+}, {
   v: "2.13.1",
   date: "2026.7.30",
   items: ["시험 목록에서 내 점수를 눌러 채점 결과를 다시 볼 수 있어요"],
@@ -362,6 +374,12 @@ function parsePath() {
     const p = String(window.location.pathname || "").replace(/\/+$/, "") || "/";
     const seg = p.split("/").filter(Boolean);
     if (!seg.length) return null;
+    // /rules 는 규칙으로 지정된 공지를 연다. 규칙 글을 새로 써도 주소는 그대로다
+    if (seg[0] === "rules") return {
+      tab: "announce",
+      sub: "rules",
+      no: null
+    };
     const tab = PATH_TAB["/" + seg[0]];
     if (!tab) return null;
     const s2 = seg[1] || null;
@@ -1120,6 +1138,30 @@ function App() {
     await refresh();
     return true;
   };
+  // 메인규칙은 하나뿐이므로 먼저 전부 내리고 고른 글만 올린다
+  const onSetRule = async id => {
+    const clear = await sb.from("columns").update({
+      is_rule: false
+    }).eq("is_rule", true);
+    if (clear.error) {
+      alert("규칙 지정에 실패했어요: " + clear.error.message);
+      return;
+    }
+    if (id) {
+      const {
+        error
+      } = await sb.from("columns").update({
+        is_rule: true
+      }).eq("id", id);
+      if (error) {
+        alert("규칙 지정에 실패했어요: " + error.message);
+        return;
+      }
+    }
+    const n = notices.find(x => x.id === id);
+    await logAction(id ? "메인규칙 지정" : "메인규칙 해제", n ? n.title : "");
+    await refresh();
+  };
   const onReorderColumns = async ids => {
     const results = await Promise.all(ids.map((cid, i) => sb.from("columns").update({
       sort_order: i + 1
@@ -1389,6 +1431,7 @@ function App() {
         return /*#__PURE__*/React.createElement(Announcements, {
           key: "n" + nav,
           initialNo: route && route.tab === "announce" ? route.no : null,
+          initialSub: route && route.tab === "announce" ? route.sub : null,
           urlBase: "notice",
           pushUrl: pushUrl,
           role: role,
@@ -1399,6 +1442,7 @@ function App() {
           onDelete: onDeleteColumn,
           onEdit: onEditColumn,
           onReorder: onReorderColumns,
+          onSetRule: onSetRule,
           readIds: readColIds,
           onRead: markColumnRead
         });
@@ -2524,10 +2568,11 @@ function ShareButton({
 }) {
   const [msg, setMsg] = useState("");
   const share = async () => {
-    const url = location.origin + path;
+    const url = window.location.origin + path;
+    const nav = window.navigator;
     try {
-      if (navigator.share) {
-        await navigator.share({
+      if (nav.share) {
+        await nav.share({
           title,
           url
         });
@@ -2538,7 +2583,7 @@ function ShareButton({
     }
     let ok = false;
     try {
-      await navigator.clipboard.writeText(url);
+      await nav.clipboard.writeText(url);
       ok = true;
     } catch (e) {}
     setMsg(ok ? "주소를 복사했어요" : "주소 복사가 안 돼요");
@@ -3059,9 +3104,11 @@ function Announcements({
   onDelete,
   onEdit,
   onReorder,
+  onSetRule,
   readIds,
   onRead,
   initialNo,
+  initialSub,
   urlBase,
   pushUrl
 }) {
@@ -3082,6 +3129,7 @@ function Announcements({
   const [savedNote, setSavedNote] = useState("");
   const [q, setQ] = useState("");
   const authorName = () => (kakaoId || "").trim() || (student || "").trim() || "익명";
+  const rulePost = posts.find(n => n.isRule && !n.isDraft) || null;
 
   // 주소로 들어온 공지가 있으면 자동으로 열기
   useEffect(() => {
@@ -3093,6 +3141,14 @@ function Announcements({
       if (onRead) onRead(n.id);
     }
   }, [posts, initialNo]);
+
+  // /rules 로 들어오면 규칙으로 지정된 글을 연다
+  useEffect(() => {
+    if (initialSub !== "rules" || !rulePost) return;
+    setOpenId(rulePost.id);
+    setView("read");
+    if (onRead) onRead(rulePost.id);
+  }, [initialSub, rulePost && rulePost.id]);
   const openPost = n => {
     if (onRead) onRead(n.id);
     setOpenId(n.id);
@@ -3244,7 +3300,9 @@ function Announcements({
       text: "공지를 찾을 수 없어요."
     }) : /*#__PURE__*/React.createElement("article", {
       className: "mr-card mr-notice mr-post"
-    }, /*#__PURE__*/React.createElement("h1", {
+    }, n.isRule && /*#__PURE__*/React.createElement("div", {
+      className: "mr-rule-tag"
+    }, "메인규칙"), /*#__PURE__*/React.createElement("h1", {
       className: "mr-post-title"
     }, n.title), /*#__PURE__*/React.createElement("div", {
       className: "mr-post-byline"
@@ -3270,7 +3328,10 @@ function Announcements({
         marginTop: "20px",
         justifyContent: "flex-end"
       }
-    }, /*#__PURE__*/React.createElement("button", {
+    }, onSetRule && /*#__PURE__*/React.createElement("button", {
+      className: "mr-mini-btn",
+      onClick: () => onSetRule(n.isRule ? null : n.id)
+    }, n.isRule ? "규칙 해제" : "메인규칙으로"), /*#__PURE__*/React.createElement("button", {
       className: "mr-mini-btn",
       onClick: () => {
         setTitle(n.title);
@@ -3286,7 +3347,8 @@ function Announcements({
 
   // 목록
   const kw = q.trim();
-  const published = posts.filter(n => !n.isDraft && matchPost(n, kw)).sort((a, b) => a.sortOrder - b.sortOrder || b.createdAt - a.createdAt);
+  // 규칙은 목록에서 빼고 위쪽에 따로 둔다. 안 그러면 새 공지가 규칙 아래로 밀린다
+  const published = posts.filter(n => !n.isDraft && !n.isRule && matchPost(n, kw)).sort((a, b) => a.sortOrder - b.sortOrder || b.createdAt - a.createdAt);
   const drafts = posts.filter(n => n.isDraft);
   const move = async (idx, dir) => {
     const j = idx + dir;
@@ -3307,7 +3369,17 @@ function Announcements({
   }, "공지사항"), role === "admin" && /*#__PURE__*/React.createElement("button", {
     className: "mr-btn",
     onClick: newWrite
-  }, "공지 쓰기")), /*#__PURE__*/React.createElement("input", {
+  }, "공지 쓰기")), rulePost && /*#__PURE__*/React.createElement("button", {
+    className: "mr-rule-row",
+    onClick: () => openPost(rulePost)
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "mr-rule-row-tag"
+  }, "규칙"), /*#__PURE__*/React.createElement("span", {
+    className: "mr-rule-row-title"
+  }, rulePost.title), /*#__PURE__*/React.createElement("span", {
+    className: "mr-rule-row-go",
+    "aria-hidden": "true"
+  })), /*#__PURE__*/React.createElement("input", {
     className: "mr-input mr-search",
     placeholder: "제목 · 내용 검색",
     value: q,
@@ -5436,7 +5508,12 @@ function TakeExam({
     className: "mr-date"
   }, "만점 ", maxScore(exam), "점")), /*#__PURE__*/React.createElement("div", {
     className: "mr-exam-meta"
-  }, /*#__PURE__*/React.createElement("span", null, "출제자 ", exam.author || "관리자"))), restored && !result && /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("span", null, "출제자 ", exam.author || "관리자"), exam.no && /*#__PURE__*/React.createElement("span", {
+    className: "mr-exam-share"
+  }, /*#__PURE__*/React.createElement(ShareButton, {
+    path: "/exam/" + exam.no,
+    title: exam.title
+  })))), restored && !result && /*#__PURE__*/React.createElement("div", {
     className: "mr-resume-note"
   }, "이전에 풀던 답안을 불러왔어요. 이어서 풀 수 있어요."), !loggedIn && /*#__PURE__*/React.createElement("div", {
     className: "mr-guest-note"
@@ -7039,6 +7116,8 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-sched-tag{display:inline-block; margin-top:8px; background:#FFF4E5; color:#C2540A; font-size:12.5px; font-weight:800; padding:5px 11px; border-radius:8px}
 .mr-sched-hint{font-size:12.5px; color:var(--t3); line-height:1.6; margin:8px 2px 0}
 .mr-exam-meta span:nth-child(even){color:var(--line)}
+/* 응시 화면의 공유 버튼은 오른쪽 끝으로. 버튼이 색을 직접 정하므로 위 흐린 색 규칙에 안 걸린다 */
+.mr-exam-share{margin-left:auto}
 
 /* inputs */
 .mr-input,.mr-textarea{
@@ -7159,6 +7238,17 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-post-row-meta{font-size:12.5px; color:var(--t3); font-weight:600}
 .mr-draft-head{font-size:13px; font-weight:800; color:var(--t3); padding:2px 2px 0}
 .mr-draft-badge{font-size:11px; font-weight:700; color:#B26A00; background:#FFF4E0; padding:2px 7px; border-radius:6px; margin-left:8px; vertical-align:middle}
+/* 메인규칙: 공지 목록 위에 따로 놓는 한 줄과 글 위의 표시 */
+.mr-rule-tag{display:inline-block; font-size:12px; font-weight:800; color:var(--blue); background:var(--blue-bg); padding:5px 11px; border-radius:8px; margin-bottom:11px}
+.mr-rule-row{display:flex; align-items:center; gap:10px; width:100%; text-align:left; cursor:pointer;
+  background:var(--card); border:1px solid var(--line); box-shadow:var(--glass-sh);
+  border-radius:16px; padding:14px 16px; font-family:inherit;
+  transition:background .15s}
+.mr-rule-row:hover{background:var(--blue-bg)}
+.mr-rule-row:active{transform:scale(.99)}
+.mr-rule-row-tag{flex:none; font-size:11px; font-weight:800; color:#fff; background:var(--grad); padding:3px 9px; border-radius:7px}
+.mr-rule-row-title{flex:1; min-width:0; font-size:14.5px; font-weight:800; color:var(--t1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mr-rule-row-go{flex:none; width:7px; height:7px; border-top:2px solid var(--t3); border-right:2px solid var(--t3); transform:rotate(45deg)}
 .mr-cat-label{font-size:12.5px; font-weight:700; color:var(--t2); margin-top:14px}
 .mr-cat-seg{display:flex; gap:4px; background:var(--bg); border-radius:11px; padding:4px; margin-top:8px}
 .mr-cat-seg button{flex:1; border:0; background:transparent; padding:9px; font-family:inherit; font-weight:700; font-size:13.5px; color:var(--t3); border-radius:8px; cursor:pointer; transition:background .15s,color .15s,border-color .15s,transform .15s}

@@ -66,6 +66,15 @@ function noFilter(no) {
 
 async function lookup(kind, no) {
   try {
+    // /rules 는 글번호가 아니라 규칙으로 지정된 공지를 찾는다
+    if (kind === "rules") {
+      const r = await sb("columns?is_rule=eq.true&category=eq.notice&select=title,body,author&limit=1");
+      if (!r) return null;
+      return {
+        title: r.title + " · 규칙",
+        desc: summarize(r.body, 80) || (r.author ? r.author + "님의 글" : DEFAULT_DESC),
+      };
+    }
     if (kind === "exam") {
       const r = await sb("exams?" + noFilter(no) + "&select=title,author&limit=1");
       if (!r) return null;
@@ -123,7 +132,8 @@ export async function onRequest(context) {
 async function handle(context) {
   const { request, next } = context;
   const url = new URL(request.url);
-  const m = url.pathname.match(/^\/(column|notice|exam)\/(\d+)\/?$/);
+  const m = url.pathname.match(/^\/(column|notice|exam)\/(\d+)\/?$/)
+    || (/^\/rules\/?$/.test(url.pathname) ? ["", "rules", null] : null);
 
   const res = await next();
   if (!m) return res;
