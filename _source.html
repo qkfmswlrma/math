@@ -123,8 +123,14 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.14.1";
+const APP_VERSION = "2.14.2";
 const CHANGELOG = [
+  {
+    v: "2.14.2",
+    date: "2026.7.31",
+    items: ["링크로 글을 본 뒤 메뉴에서 목록을 누르면 그 글이 다시 열리던 걸 고쳤어요"],
+    adminItems: [],
+  },
   {
     v: "2.14.1",
     date: "2026.7.31",
@@ -629,7 +635,9 @@ function App() {
   const [route, setRoute] = useState(parsePath);
   const [nav, setNav] = useState(0); // 뒤로가기 때 화면을 다시 그리기 위한 카운터
   // 화면 이동 + 주소 갱신 (뒤로가기 처리에선 쓰지 않음)
-  const go = (t) => { setTab(t); pushUrl(pathOfTab(t)); };
+  // route 는 주소로 들어왔을 때 어떤 글을 열지 담고 있다. 눌러서 옮길 때는 지워야
+  // 목록으로 가야 할 자리에서 아까 보던 글이 다시 열리지 않는다
+  const go = (t) => { setRoute(null); setTab(t); pushUrl(pathOfTab(t)); };
   // 어두운 화면 모드
   const [theme, setTheme] = useState(getTheme);
   useEffect(() => {
@@ -691,6 +699,7 @@ function App() {
   }, []);
   const [over, setOver] = useState(null); // {key, rect, expanded}
   const openOver = (key, rect) => {
+    setRoute(null); // 카드로 들어갈 때도 마찬가지 (위 go 참고)
     pushUrl(pathOfTab(key));
     setOver({ key, rect, expanded: false });
     requestAnimationFrame(() => requestAnimationFrame(() => setOver((o) => (o ? { ...o, expanded: true } : o))));
