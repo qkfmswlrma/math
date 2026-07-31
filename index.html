@@ -154,8 +154,13 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.14.0";
+const APP_VERSION = "2.14.1";
 const CHANGELOG = [{
+  v: "2.14.1",
+  date: "2026.7.31",
+  items: ["규칙 글 화면을 정돈했어요"],
+  adminItems: []
+}, {
   v: "2.14.0",
   date: "2026.7.31",
   items: ["규칙은 suhakjilmoon.pages.dev/rules 로 언제나 바로 열려요", "공지사항 목록 위에서 규칙을 따로 볼 수 있어요"],
@@ -2971,9 +2976,9 @@ function Notices({
       className: "mr-post-title"
     }, n.title), /*#__PURE__*/React.createElement("div", {
       className: "mr-post-byline"
-    }, /*#__PURE__*/React.createElement("span", {
+    }, !n.isRule && /*#__PURE__*/React.createElement("span", {
       className: "mr-avatar sm"
-    }, (n.author || "익")[0]), n.author || "익명", " · ", fmtDate(n.createdAt), n.no && /*#__PURE__*/React.createElement("span", {
+    }, (n.author || "익")[0]), n.isRule ? fmtDate(n.createdAt) : (n.author || "익명") + " · " + fmtDate(n.createdAt), n.no && /*#__PURE__*/React.createElement("span", {
       className: "mr-post-share"
     }, /*#__PURE__*/React.createElement(ShareButton, {
       path: "/" + urlBase + "/" + n.no,
@@ -3306,9 +3311,9 @@ function Announcements({
       className: "mr-post-title"
     }, n.title), /*#__PURE__*/React.createElement("div", {
       className: "mr-post-byline"
-    }, /*#__PURE__*/React.createElement("span", {
+    }, !n.isRule && /*#__PURE__*/React.createElement("span", {
       className: "mr-avatar sm"
-    }, (n.author || "익")[0]), n.author || "익명", " · ", fmtDate(n.createdAt), n.no && /*#__PURE__*/React.createElement("span", {
+    }, (n.author || "익")[0]), n.isRule ? fmtDate(n.createdAt) : (n.author || "익명") + " · " + fmtDate(n.createdAt), n.no && /*#__PURE__*/React.createElement("span", {
       className: "mr-post-share"
     }, /*#__PURE__*/React.createElement(ShareButton, {
       path: "/" + urlBase + "/" + n.no,

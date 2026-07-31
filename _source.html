@@ -123,8 +123,14 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.14.0";
+const APP_VERSION = "2.14.1";
 const CHANGELOG = [
+  {
+    v: "2.14.1",
+    date: "2026.7.31",
+    items: ["규칙 글 화면을 정돈했어요"],
+    adminItems: [],
+  },
   {
     v: "2.14.0",
     date: "2026.7.31",
@@ -2450,8 +2456,9 @@ function Notices({ role, student, kakaoId, notices, onAdd, onDelete, onEdit, onR
           <article className="mr-card mr-notice mr-post">
             <h1 className="mr-post-title">{n.title}</h1>
             <div className="mr-post-byline">
-              <span className="mr-avatar sm">{(n.author || "익")[0]}</span>
-              {n.author || "익명"} · {fmtDate(n.createdAt)}
+              {/* the rules post shows the date only, no author */}
+              {!n.isRule && <span className="mr-avatar sm">{(n.author || "익")[0]}</span>}
+              {n.isRule ? fmtDate(n.createdAt) : (n.author || "익명") + " · " + fmtDate(n.createdAt)}
               {n.no && (
                 <span className="mr-post-share">
                   <ShareButton path={"/" + urlBase + "/" + n.no} title={n.title} />
@@ -2708,8 +2715,9 @@ function Announcements({ role, student, kakaoId, posts, onAdd, onDelete, onEdit,
             {n.isRule && <div className="mr-rule-tag">메인규칙</div>}
             <h1 className="mr-post-title">{n.title}</h1>
             <div className="mr-post-byline">
-              <span className="mr-avatar sm">{(n.author || "익")[0]}</span>
-              {n.author || "익명"} · {fmtDate(n.createdAt)}
+              {/* the rules post shows the date only, no author */}
+              {!n.isRule && <span className="mr-avatar sm">{(n.author || "익")[0]}</span>}
+              {n.isRule ? fmtDate(n.createdAt) : (n.author || "익명") + " · " + fmtDate(n.createdAt)}
               {n.no && (
                 <span className="mr-post-share">
                   <ShareButton path={"/" + urlBase + "/" + n.no} title={n.title} />

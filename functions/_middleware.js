@@ -68,12 +68,10 @@ async function lookup(kind, no) {
   try {
     // /rules 는 글번호가 아니라 규칙으로 지정된 공지를 찾는다
     if (kind === "rules") {
-      const r = await sb("columns?is_rule=eq.true&category=eq.notice&select=title,body,author&limit=1");
+      // 규칙은 글쓴이를 드러내지 않는다
+      const r = await sb("columns?is_rule=eq.true&category=eq.notice&select=title,body&limit=1");
       if (!r) return null;
-      return {
-        title: r.title + " · 규칙",
-        desc: summarize(r.body, 80) || (r.author ? r.author + "님의 글" : DEFAULT_DESC),
-      };
+      return { title: r.title + " · 규칙", desc: summarize(r.body, 80) || DEFAULT_DESC };
     }
     if (kind === "exam") {
       const r = await sb("exams?" + noFilter(no) + "&select=title,author&limit=1");
