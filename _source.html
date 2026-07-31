@@ -123,8 +123,14 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.14.2";
+const APP_VERSION = "2.14.3";
 const CHANGELOG = [
+  {
+    v: "2.14.3",
+    date: "2026.7.31",
+    items: ["오늘의 문제에서 답을 고르면 잠깐 오답으로 보였다가 바뀌던 걸 고쳤어요"],
+    adminItems: [],
+  },
   {
     v: "2.14.2",
     date: "2026.7.31",
@@ -3886,7 +3892,8 @@ function DailySolve({ exam, loggedIn, student, onAddSub, onGuestSubmit, getAnswe
   const q = graded.questions[0];
   const [picked, setPicked] = useState(null);
   const [typed, setTyped] = useState("");
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState(false);   // 답을 골라 더 못 고치는 상태
+  const [ready, setReady] = useState(false); // 맞았는지 틀렸는지 아는 상태
   const [correct, setCorrect] = useState(false);
   const lock = React.useRef(false);
 
@@ -3911,14 +3918,18 @@ function DailySolve({ exam, loggedIn, student, onAddSub, onGuestSubmit, getAnswe
     if (!answersHidden(exam)) {
       setCorrect(isQCorrect(q, { answers, manualScores: {} }));
       setDone(true);
+      setReady(true);
       record(answers);
       return;
     }
-    setDone(true); // 먼저 잠그고 결과는 서버 답을 받은 뒤에
+    // 서버 답을 기다리는 동안은 판정을 그리지 않는다.
+    // 먼저 그리면 아직 모르는 상태가 오답으로 보였다가 정답으로 바뀐다
+    setDone(true);
     const qs = await record(answers);
     const g = qs ? withAnswers(exam, qs) : exam;
     setGraded(g);
     setCorrect(isQCorrect(g.questions[0], { answers, manualScores: {} }));
+    setReady(true);
   };
 
   if (q.type === "mc")
@@ -3927,18 +3938,20 @@ function DailySolve({ exam, loggedIn, student, onAddSub, onGuestSubmit, getAnswe
         <div className="mr-daily-opts">
           {q.options.map((opt, oi) => {
             let cls = "mr-daily-opt";
-            if (done) cls += oi === q.answer ? " right" : oi === picked ? " wrong" : " dim";
+            if (ready) cls += oi === q.answer ? " right" : oi === picked ? " wrong" : " dim";
+            else if (done && oi === picked) cls += " picked"; // 채점 중에는 고른 것만 표시
             return (
               <button key={oi} className={cls} disabled={done}
                 onClick={() => { setPicked(oi); finish({ [q.id]: oi }); }}>
                 <span className="mr-daily-opt-label">{String.fromCharCode(9311 + oi + 1)}</span>
                 <span className="mr-daily-opt-txt">{opt}</span>
-                {done && oi === q.answer && <span className="mr-daily-flag">정답</span>}
+                {ready && oi === q.answer && <span className="mr-daily-flag">정답</span>}
               </button>
             );
           })}
         </div>
-        {done && <DailyResult correct={correct} q={q} exam={graded} />}
+        {done && !ready && <div className="mr-daily-grading">채점 중…</div>}
+        {ready && <DailyResult correct={correct} q={q} exam={graded} />}
       </div>
     );
 
@@ -3954,8 +3967,9 @@ function DailySolve({ exam, loggedIn, student, onAddSub, onGuestSubmit, getAnswe
         </div>
       ) : (
         <>
-          <div className={"mr-daily-your " + (correct ? "ok" : "no")}>내 답 {typed}</div>
-          <DailyResult correct={correct} q={q} exam={graded} />
+          <div className={"mr-daily-your" + (ready ? (correct ? " ok" : " no") : "")}>내 답 {typed}</div>
+          {ready ? <DailyResult correct={correct} q={q} exam={graded} />
+                 : <div className="mr-daily-grading">채점 중…</div>}
         </>
       )}
     </div>
@@ -6318,6 +6332,9 @@ button.mr-daily-opt:active{transform:scale(.99)}
 .mr-daily-opt.right{background:var(--green-bg); border-color:var(--green); color:var(--green)}
 .mr-daily-opt.wrong{background:var(--red-bg); border-color:var(--red); color:var(--red)}
 .mr-daily-opt.dim{opacity:.5}
+/* 채점을 기다리는 동안: 고른 칸만 눌린 티를 내고 맞고 틀림은 아직 안 그린다 */
+.mr-daily-opt.picked{background:var(--blue-bg); border-color:var(--blue); color:var(--blue)}
+.mr-daily-grading{margin-top:14px; text-align:center; font-size:14px; font-weight:700; color:var(--t3)}
 .mr-daily-opt.right .mr-daily-opt-label,.mr-daily-opt.wrong .mr-daily-opt-label{color:inherit}
 .mr-daily-flag{margin-left:auto; font-size:11px; font-weight:800; color:#fff; background:var(--green); padding:3px 9px; border-radius:7px}
 .mr-daily-short{display:flex; gap:8px; align-items:stretch}
