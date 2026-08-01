@@ -154,8 +154,13 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.14.3";
+const APP_VERSION = "2.14.4";
 const CHANGELOG = [{
+  v: "2.14.4",
+  date: "2026.7.31",
+  items: ["오늘의 문제에 붙은 사진이 안 보이던 걸 고쳤어요"],
+  adminItems: []
+}, {
   v: "2.14.3",
   date: "2026.7.31",
   items: ["오늘의 문제에서 답을 고르면 잠깐 오답으로 보였다가 바뀌던 걸 고쳤어요"],
@@ -5112,11 +5117,11 @@ function TodayPuzzle({
     }
   }, "평균정답률 ", sRate, "%")), /*#__PURE__*/React.createElement("h2", {
     className: "mr-daily-title"
-  }, sel.title), sel.image && /*#__PURE__*/React.createElement("img", {
+  }, sel.title), sel.questions.length === 1 ? /*#__PURE__*/React.createElement(React.Fragment, null, sel.questions[0].image && /*#__PURE__*/React.createElement("img", {
     className: "mr-q-img",
-    src: sel.image,
+    src: sel.questions[0].image,
     alt: "문제"
-  }), sel.questions.length === 1 ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("div", {
     className: "mr-daily-q"
   }, /*#__PURE__*/React.createElement(QBody, {
     q: sel.questions[0]
