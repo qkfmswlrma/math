@@ -154,8 +154,13 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.14.4";
+const APP_VERSION = "2.15.0";
 const CHANGELOG = [{
+  v: "2.15.0",
+  date: "2026.7.31",
+  items: [],
+  adminItems: ["문제를 낼 때 조건을 담는 네모칸을 넣을 수 있어요. 그 안에도 수식이 들어가요"]
+}, {
   v: "2.14.4",
   date: "2026.7.31",
   items: ["오늘의 문제에 붙은 사진이 안 보이던 걸 고쳤어요"],
@@ -6521,15 +6526,38 @@ function QuestionBody({
   body
 }) {
   if (!body || !body.length) return null;
+  // boxstart 와 boxend 사이는 조건 박스 안에 넣는다. 표시가 없는 예전 문제는 그대로 흐른다
+  const out = [];
+  let box = null;
+  body.forEach((s, i) => {
+    if (s.type === "boxstart") {
+      box = [];
+      return;
+    }
+    if (s.type === "boxend") {
+      if (box) out.push(/*#__PURE__*/React.createElement("div", {
+        key: "box" + i,
+        className: "mr-qbox"
+      }, box));
+      box = null;
+      return;
+    }
+    const node = s.type === "text" ? /*#__PURE__*/React.createElement("span", {
+      key: i,
+      className: "mr-qbody-t"
+    }, s.v) : /*#__PURE__*/React.createElement(MathView, {
+      key: i,
+      latex: s.latex
+    });
+    (box || out).push(node);
+  });
+  if (box && box.length) out.push(/*#__PURE__*/React.createElement("div", {
+    key: "boxlast",
+    className: "mr-qbox"
+  }, box));
   return /*#__PURE__*/React.createElement("div", {
     className: "mr-qbody"
-  }, body.map((s, i) => s.type === "text" ? /*#__PURE__*/React.createElement("span", {
-    key: i,
-    className: "mr-qbody-t"
-  }, s.v) : /*#__PURE__*/React.createElement(MathView, {
-    key: i,
-    latex: s.latex
-  })));
+  }, out);
 }
 // 본문(신규 body) 우선, 없으면 옛 latex/text 폴백
 function QBody({
@@ -6583,7 +6611,23 @@ function buildMixedFragment(parts) {
 }
 function bodyToHtml(body) {
   if (!body || !body.length) return "";
-  return body.map(s => s.type === "text" ? escapeHtml(s.v) : chipHtml(s.latex, s.tree)).join("");
+  const piece = s => s.type === "text" ? escapeHtml(s.v) : chipHtml(s.latex, s.tree);
+  let html = "",
+    buf = null;
+  body.forEach(s => {
+    if (s.type === "boxstart") {
+      buf = "";
+      return;
+    }
+    if (s.type === "boxend") {
+      html += '<div class="qbox">' + (buf || "") + "</div>";
+      buf = null;
+      return;
+    }
+    if (buf === null) html += piece(s);else buf += piece(s);
+  });
+  if (buf !== null) html += '<div class="qbox">' + buf + "</div>"; // 끝이 안 닫혔어도 살린다
+  return html;
 }
 function htmlToBody(el) {
   const out = [];
@@ -6615,6 +6659,17 @@ function htmlToBody(el) {
       }
       if (n.tagName === "BR") {
         pushText("\n");
+        return;
+      }
+      // 조건 박스: 안쪽을 시작과 끝 표시로 감싼다 (아래 블록 처리보다 먼저 봐야 한다)
+      if (n.classList && n.classList.contains("qbox")) {
+        out.push({
+          type: "boxstart"
+        });
+        walk(n);
+        out.push({
+          type: "boxend"
+        });
         return;
       }
       // div/p 등 줄 단위 래퍼: 줄바꿈 후 내부를 재귀 탐색 (중첩 칩 보존)
@@ -6677,6 +6732,32 @@ function RichBody({
       e.preventDefault();
       openEdit(chip);
     }
+  };
+  // 조건 박스 넣기: 커서 자리에 빈 박스를 만들고 그 안으로 커서를 옮긴다
+  const insertBox = () => {
+    const el = ref.current;
+    if (!el) return;
+    saveRange();
+    const box = document.createElement("div");
+    box.className = "qbox";
+    box.appendChild(document.createElement("br"));
+    const range = lastRange.current && el.contains(lastRange.current.commonAncestorContainer) ? lastRange.current : null;
+    if (range) {
+      range.collapse(false);
+      range.insertNode(box);
+    } else {
+      el.appendChild(box);
+    }
+    try {
+      const r = document.createRange();
+      r.setStart(box, 0);
+      r.collapse(true);
+      const sel = document.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
+    } catch (err) {}
+    el.focus();
+    serialize();
   };
   const finishMath = () => {
     if (!building) return;
@@ -6744,9 +6825,13 @@ function RichBody({
     type: "button",
     className: "mr-btn-soft",
     onClick: openNew
-  }, "＋ 수식 넣기"), /*#__PURE__*/React.createElement("span", {
+  }, "＋ 수식 넣기"), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    className: "mr-btn-soft",
+    onClick: insertBox
+  }, "＋ 조건 박스"), /*#__PURE__*/React.createElement("span", {
     className: "mr-rich-tip"
-  }, "텍스트는 기본 키보드로, 수식은 ＋수식으로")), building && /*#__PURE__*/React.createElement("div", {
+  }, "조건 박스 안에도 수식을 넣을 수 있어요")), building && /*#__PURE__*/React.createElement("div", {
     className: "mr-rich-mathedit"
   }, /*#__PURE__*/React.createElement(MathField, {
     initialLatex: draft.current.latex,
@@ -7069,11 +7154,16 @@ const CSS = `
 .mr-qbody .katex{font-size:1em}
 .mr-qbody-t{white-space:pre-wrap}
 .mr-qbody .mr-math{margin:0 2px; vertical-align:middle}
+/* 조건 박스: 시험지의 (가) (나) 조건을 담는 네모칸. 경계가 분명히 보여야 한다 */
+.mr-qbox{display:block; border:1.5px solid rgba(120,95,170,0.38); border-radius:10px; padding:13px 15px; margin:11px 0; background:var(--card)}
+.mr-qbox .mr-qbody-t{white-space:pre-wrap}
 .mr-rich{display:flex; flex-direction:column; gap:8px; margin-top:4px}
 .mr-rich-box{min-height:80px; border:1.5px solid var(--line); border-radius:12px; padding:12px 14px; background:var(--card); font-size:15.5px; line-height:2; color:var(--t1); outline:none; white-space:pre-wrap; word-break:break-word}
 .mr-rich-box:focus{border-color:var(--blue)}
 .mr-rich-box:empty:before{content:attr(data-ph); color:var(--t3)}
 .mr-rich-box .mchip{display:inline-block; vertical-align:middle; margin:0 2px; padding:1px 5px; background:var(--blue-bg); border-radius:6px; cursor:pointer; font-size:17px}
+/* 쓰는 중에도 박스가 보이게 */
+.mr-rich-box .qbox{border:1.5px solid rgba(120,95,170,0.38); border-radius:10px; padding:10px 12px; margin:8px 0; background:var(--bg)}
 .mr-rich-mathedit{border:1.5px solid var(--blue); border-radius:12px; padding:10px; background:var(--blue-bg)}
 .mr-rich-mrow{display:flex; gap:10px; align-items:center; margin-top:8px}
 .mr-rich-add{display:flex; gap:10px; align-items:center}
@@ -7754,6 +7844,8 @@ html[data-theme="dark"] .mr-back,
 html[data-theme="dark"] .mr-page-back{background:rgba(255,255,255,0.08); color:var(--t2); box-shadow:none}
 html[data-theme="dark"] .mr-back:hover,
 html[data-theme="dark"] .mr-page-back:hover{background:rgba(255,255,255,0.15); color:var(--t1)}
+html[data-theme="dark"] .mr-qbox,
+html[data-theme="dark"] .mr-rich-box .qbox{border-color:rgba(255,255,255,0.24)}
 html[data-theme="dark"] .mr-ov-scrim{background:linear-gradient(165deg,#1a1626,#221a2b 46%,#181a2b)}
 html[data-theme="dark"] .mr-ov{background:linear-gradient(165deg,#1a1626 0%,#221a2b 46%,#181a2b 100%)}
 html[data-theme="dark"] math-field{background:rgba(255,255,255,0.08); color:var(--t1)}
