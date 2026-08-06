@@ -123,8 +123,14 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.16.0";
+const APP_VERSION = "2.16.1";
 const CHANGELOG = [
+  {
+    v: "2.16.1",
+    date: "2026.8.6",
+    items: ["핸드폰에서 모의고사 기록 창이 좌우로 밀리던 걸 고쳤어요"],
+    adminItems: [],
+  },
   {
     v: "2.16.0",
     date: "2026.8.6",
@@ -6828,9 +6834,11 @@ html[data-theme="dark"] .mr-pick-icon.green{background:linear-gradient(140deg,#5
 
 .mr-mk .fld{margin-bottom:14px}
 .mr-mk .fld label{display:block; font-size:12.5px; font-weight:700; color:var(--tx2); margin:0 0 7px 4px}
-.mr-mk .in{width:100%; padding:13px 14px; border-radius:12px; border:1px solid var(--line);
-  background:rgba(255,255,255,0.6); color:var(--tx); font-family:inherit; font-size:15px;
-  outline:none; transition:background .15s}
+/* min-width:0 이 없으면 아이폰의 날짜 칸이 제 속내용 폭만큼 자리를 우겨서
+   좁은 화면에서 옆 칸을 밀어낸다 */
+.mr-mk .in{width:100%; min-width:0; max-width:100%; padding:13px 14px; border-radius:12px;
+  border:1px solid var(--line); background:rgba(255,255,255,0.6); color:var(--tx);
+  font-family:inherit; font-size:15px; outline:none; transition:background .15s}
 .mr-mk .in::placeholder{color:var(--tx3)}
 .mr-mk .in:focus{background:rgba(255,255,255,0.92); box-shadow:inset 0 0 0 2px var(--pri)}
 .mr-mk textarea.in{min-height:78px; resize:vertical; line-height:1.6}
@@ -6838,6 +6846,12 @@ html[data-theme="dark"] .mr-pick-icon.green{background:linear-gradient(140deg,#5
 .mr-mk select.in{font-weight:600; padding-right:34px}
 .mr-mk .row{display:flex; gap:9px}
 .mr-mk .row>*{flex:1; min-width:0}
+/* 아주 좁은 화면에서는 입력칸을 한 줄에 하나씩. 둘로 나누면 날짜가 잘린다.
+   버튼만 있는 줄은 그대로 나란히 둔다 */
+@media (max-width:360px){
+  .mr-mk .row{flex-wrap:wrap}
+  .mr-mk .row>.fld{flex:1 1 100%}
+}
 
 .mr-mk .chips{display:flex; flex-wrap:wrap; gap:7px}
 .mr-mk .chip{padding:9px 14px; border-radius:999px; border:1px solid var(--line);
@@ -6899,7 +6913,11 @@ html[data-theme="dark"] .mr-pick-icon.green{background:linear-gradient(140deg,#5
   background:rgba(255,255,255,0.82); border:1px solid var(--line); border-radius:24px;
   -webkit-backdrop-filter:blur(16px) saturate(170%); backdrop-filter:blur(16px) saturate(170%);
   box-shadow:0 24px 70px rgba(72,40,110,0.3), inset 0 1px 1px rgba(255,255,255,0.92);
-  padding:22px 20px; max-height:86vh; overflow-y:auto; -webkit-overflow-scrolling:touch;
+  padding:22px 20px; max-height:86vh;
+  /* 세로만 auto 로 두면 가로축은 visible 이 auto 로 계산돼서
+     넘치는 게 없어도 아이폰에서 창이 좌우로 딸려 움직인다. 가로는 명시적으로 막는다.
+     contain 은 창 끝에서 스크롤이 뒤 화면으로 넘어가는 걸 막는다 */
+  overflow:hidden auto; overscroll-behavior:contain;
   animation:popIn .34s var(--ease) both}
 .mr-mk-modal .sheet-head{display:flex; align-items:center; gap:10px; margin-bottom:16px}
 .mr-mk-modal .sheet-title{font-size:20px; font-weight:800; letter-spacing:-0.5px; flex:1; min-width:0}
