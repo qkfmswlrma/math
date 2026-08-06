@@ -60,7 +60,7 @@
   </div>
 </div>
 <script type="text/babel" data-presets="react">
-const { useState, useEffect, useCallback } = React;
+const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
 /* ====== Supabase 설정 ====== */
 const SUPABASE_URL = "https://fhdwwqlvosbjonrenpqz.supabase.co";
@@ -123,8 +123,17 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.15.0";
+const APP_VERSION = "2.16.0";
 const CHANGELOG = [
+  {
+    v: "2.16.0",
+    date: "2026.8.6",
+    items: [
+      "모의고사 탭이 생겼어요. 점수를 남기고 시간을 재고 성적 흐름을 볼 수 있어요",
+      "등급컷만 아는 사설 모의고사도 백분위와 표준점수를 예상해서 보여줘요",
+    ],
+    adminItems: [],
+  },
   {
     v: "2.15.0",
     date: "2026.7.31",
@@ -484,6 +493,7 @@ const TAB_PATH = {
   exams: "/exam",
   game: "/game",
   records: "/records",
+  mock: "/mock",
   admin: "/admin",
   account: "/account",
   privacy: "/privacy",
@@ -1131,6 +1141,133 @@ function App() {
     }
     return null;
   };
+
+  /* ===== 모의고사 =====
+     기록과 카테고리는 본인 것만 읽고 쓴다. 표가 아직 없어도 나머지 화면은 돌아야 하므로
+     불러오기 실패는 빈 목록으로 넘긴다 */
+  const [mockRecords, setMockRecords] = useState([]);
+  const [mockCats, setMockCats] = useState([]);
+  const [mockForm, setMockForm] = useState(null);
+  const [mockSettings, setMockSettings] = useState({ tamgu1: "", tamgu2: "" });
+  const loadMock = useCallback(async (userId) => {
+    if (!userId) {
+      setMockRecords([]); setMockCats([]);
+      setMockSettings({ tamgu1: "", tamgu2: "" }); applyTamguNames(null);
+      return;
+    }
+    try { setMockRecords(await mockStore.list(userId)); }
+    catch (e) { console.warn("모의고사 기록 불러오기 실패:", e); setMockRecords([]); }
+    try { setMockCats(await mockStore.listCategories(userId)); }
+    catch (e) { console.warn("시험 카테고리 불러오기 실패:", e); setMockCats([]); }
+    try {
+      const v = await mockStore.getSettings(userId);
+      setMockSettings(v); applyTamguNames(v);
+    } catch (e) { setMockSettings({ tamgu1: "", tamgu2: "" }); applyTamguNames(null); }
+  }, []);
+  useEffect(() => { loadMock(auth ? auth.id : null); }, [auth && auth.id, loadMock]);
+
+  const saveMockRecord = async (v) => {
+    try {
+      if (mockForm && mockForm.id) {
+        const updated = await mockStore.update(mockForm.id, v);
+        setMockRecords((p) => sortRecords(p.map((r) => (r.id === mockForm.id ? updated : r))));
+      } else {
+        const added = await mockStore.add(auth.id, v);
+        setMockRecords((p) => sortRecords([added].concat(p)));
+      }
+      setMockForm(null);
+      return {};
+    } catch (e) {
+      console.warn("모의고사 저장 실패:", e);
+      if (isMissingTable(e)) return { error: "기록을 담아둘 자리가 아직 없어요. 관리자에게 알려주세요." };
+      return { error: "저장하지 못했어요. 잠시 뒤에 다시 해주세요." };
+    }
+  };
+  const deleteMockRecord = async (id) => {
+    try {
+      await mockStore.remove(id);
+      setMockRecords((p) => p.filter((r) => r.id !== id));
+      setMockForm(null);
+    } catch (e) { alert("지우지 못했어요. 잠시 뒤에 다시 해주세요."); }
+  };
+  const addMockCategory = async (name, subject) => {
+    try {
+      const added = await mockStore.addCategory(auth.id, name, subject);
+      setMockCats((p) => p.concat([added]));
+      return {};
+    } catch (e) {
+      if (isMissingTable(e)) return { error: "카테고리를 담아둘 자리가 아직 없어요." };
+      const dup = e && (e.code === "23505" || /duplicate|unique/i.test(e.message || ""));
+      return { error: dup ? "이미 있는 카테고리예요." : "추가하지 못했어요." };
+    }
+  };
+  /* 카테고리 이름을 바꾸면 그 이름으로 남긴 기록도 같이 바꾼다.
+     안 그러면 흐름 화면에서 같은 시험이 둘로 갈라진다 */
+  const renameMockCategory = async (c, name) => {
+    const next = String(name || "").trim();
+    if (!next) return { error: "이름을 적어 주세요." };
+    if (next === c.name) return {};
+    if (isBaseCat(next)) return { error: "이미 있는 카테고리예요." };
+    if (mockCats.some((x) => x.id !== c.id && x.name === next && x.subject === c.subject))
+      return { error: "이미 있는 카테고리예요." };
+    try {
+      const updated = await mockStore.renameCategory(c.id, next);
+      const touched = mockRecords.filter((r) => r.examName === c.name || r.examName.indexOf(c.name + " ") === 0);
+      for (const r of touched) {
+        await mockStore.setRecordName(r.id, next + r.examName.slice(c.name.length));
+      }
+      setMockCats((p) => p.map((x) => (x.id === c.id ? updated : x)));
+      setMockRecords((p) => p.map((r) =>
+        touched.some((t) => t.id === r.id) ? { ...r, examName: next + r.examName.slice(c.name.length) } : r
+      ));
+      return {};
+    } catch (e) {
+      console.warn("이름 바꾸기 실패:", e);
+      return { error: "바꾸지 못했어요. 잠시 뒤에 다시 해주세요." };
+    }
+  };
+  const removeMockCategory = async (c) => {
+    const used = mockRecords.filter((r) => r.examName === c.name || r.examName.indexOf(c.name + " ") === 0).length;
+    const msg = used
+      ? "'" + c.name + "' 을 지울까요? 이 카테고리로 남긴 기록 " + used + "개는 그대로 있어요."
+      : "'" + c.name + "' 을 지울까요?";
+    if (!window.confirm(msg)) return;
+    try {
+      await mockStore.removeCategory(c.id);
+      setMockCats((p) => p.filter((x) => x.id !== c.id));
+    } catch (e) { alert("지우지 못했어요. 잠시 뒤에 다시 해주세요."); }
+  };
+  /* 부분만 넘어와도 되게 지금 값 위에 덮는다.
+     탐구1을 고른 직후 탐구2를 고르면 앞의 것이 지워지던 걸 막는다 */
+  const saveMockSettings = async (patch) => {
+    const v = { ...mockSettings, ...patch };
+    try {
+      await mockStore.saveSettings(auth.id, v);
+      applyTamguNames(v);
+      setMockSettings(v);
+      return {};
+    } catch (e) {
+      console.warn("설정 저장 실패:", e);
+      if (isMissingColumn(e)) return { error: "설정을 담아둘 자리가 아직 없어요. 관리자에게 알려주세요." };
+      return { error: "저장하지 못했어요. 잠시 뒤에 다시 해주세요." };
+    }
+  };
+  const openMockNew = () => setMockForm(emptyForm());
+  // 시간 재기에서 바로 넘어오면 고른 과목과 잰 시간을 채워둔다
+  const openMockFromTimer = (v) => setMockForm(emptyForm({ subject: v.subject, durationSec: v.durationSec }));
+  const openMockEdit = (r) => setMockForm({
+    id: r.id, examName: r.examName, examDate: r.examDate, subject: r.subject, detail: r.detail,
+    rawScore: r.rawScore === null ? "" : String(r.rawScore),
+    stdScore: r.stdScore === null ? "" : String(r.stdScore),
+    percentile: r.percentile === null ? "" : String(r.percentile),
+    grade: r.grade === null ? "" : String(r.grade),
+    wrong: (r.wrongNos || []).join(" "),
+    cuts: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+      const c = (r.gradeCuts || [])[i];
+      return c === null || c === undefined ? "" : String(c);
+    }),
+    durationSec: r.durationSec, memo: r.memo,
+  });
   // 회원은 제출하고 나면 서버가 그 시험의 정답을 내준다
   const getAnswers = async (examId) => {
     for (const t of ["exams_view", "exams"]) {
@@ -1189,9 +1326,13 @@ function App() {
     switch (key) {
       case "records": return loggedIn ? <MyRecords key={"r" + nav} initialSub={route && route.tab === "records" ? route.sub : null} pushUrl={pushUrl} student={student} exams={exams} subs={subs} /> : homeView;
       case "admin": return role === "admin" ? <Admin key={"a" + nav} initialSub={route && route.tab === "admin" ? route.sub : null} pushUrl={pushUrl} auth={auth} isSuper={isSuper} users={users} notices={notices} exams={exams} subs={subs} auditLog={auditLog} onToggleAdmin={onToggleAdmin} onDeleteUser={onDeleteUser} onResetPassword={onResetPassword} /> : homeView;
-      case "account": return loggedIn ? <Account auth={auth} theme={theme} onToggleTheme={toggleTheme} onChangePassword={onChangePassword} onUpdateKakao={onUpdateKakao} onDeleteMe={onDeleteMe} onLogout={onLogout} /> : homeView;
+      case "account": return loggedIn ? <Account auth={auth} theme={theme} onToggleTheme={toggleTheme} onChangePassword={onChangePassword} onUpdateKakao={onUpdateKakao} onDeleteMe={onDeleteMe} onLogout={onLogout} mockRecords={mockRecords} mockCats={mockCats} mockSettings={mockSettings} onSaveMockSettings={saveMockSettings} onRenameMockCategory={renameMockCategory} onRemoveMockCategory={removeMockCategory} /> : homeView;
       case "notices": return <Notices key={"c" + nav} loggedIn={loggedIn} requireLogin={requireLogin} initialNo={route && route.tab === "notices" ? route.no : null} initialCat={route && route.tab === "notices" ? route.sub : null} urlBase="column" pushUrl={pushUrl} role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} notices={columnPosts} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} readIds={readColIds} onRead={markColumnRead} />;
       case "announce": return <Announcements key={"n" + nav} initialNo={route && route.tab === "announce" ? route.no : null} initialSub={route && route.tab === "announce" ? route.sub : null} urlBase="notice" pushUrl={pushUrl} role={role} student={student} kakaoId={auth ? auth.kakaoId : ""} posts={noticePosts} onAdd={onAddColumn} onDelete={onDeleteColumn} onEdit={onEditColumn} onReorder={onReorderColumns} onSetRule={onSetRule} readIds={readColIds} onRead={markColumnRead} />;
+      case "mock": return loggedIn
+        ? <Mock key={"m" + nav} initialSub={route && route.tab === "mock" ? route.sub : null} pushUrl={pushUrl}
+            records={mockRecords} onNew={openMockNew} onEdit={openMockEdit} onRecordFromTimer={openMockFromTimer} />
+        : homeView;
       case "privacy": return <Privacy onBack={() => go("home")} />;
       case "changelog": return <Changelog onBack={() => go("home")} isAdmin={role === "admin"} />;
       case "game": return <SpeedGame key={"g" + nav} initialSub={route && route.tab === "game" ? route.sub : null} pushUrl={pushUrl} onBack={closeOver} auth={auth} onGoAccount={() => { setOver(null); go("account"); }} onLogin={() => setAuthOpen(true)} />;
@@ -1287,6 +1428,11 @@ function App() {
         <InstallBanner onAdd={startInstall} onClose={closeBanner} />
       )}
       {installOpen && <InstallGuide onClose={() => setInstallOpen(false)} />}
+      {mockForm && (
+        <RecordForm init={mockForm} categories={mockCats} records={mockRecords}
+          onClose={() => setMockForm(null)} onSave={saveMockRecord}
+          onDelete={deleteMockRecord} onAddCategory={addMockCategory} />
+      )}
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} onLogin={onLogin} onSignup={onSignup} />}
     </div>
   );
@@ -1372,7 +1518,66 @@ function PersonIcon() {
 }
 
 /* ===================== 회원정보 ===================== */
-function Account({ auth, theme, onToggleTheme, onChangePassword, onUpdateKakao, onDeleteMe, onLogout }) {
+/* 계정 화면의 카테고리 한 줄. 이름을 바꾸거나 지운다.
+   여긴 수학질문방 화면 안이라 .mr-mk 가 아니라 수학질문방 쪽 모양으로 그린다 */
+function MockCategoryRow({ cat, used, first, onRename, onRemove }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(cat.name);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async () => {
+    setBusy(true);
+    const r = await onRename(cat, name);
+    setBusy(false);
+    if (r && r.error) return setErr(r.error);
+    setErr(""); setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div className={"mr-mkcat" + (first ? " first" : "")}>
+        <input className="mr-input" value={name} autoFocus style={{ marginTop: 0 }}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") submit(); }} />
+        <div className="mr-row-between" style={{ marginTop: 10 }}>
+          <span className="mr-mkcat-note">
+            {used > 0 ? "이 이름으로 남긴 기록 " + used + "개도 같이 바뀌어요." : ""}
+          </span>
+          <span style={{ display: "flex", gap: 8, flex: "none" }}>
+            <button className="mr-btn-ghost" disabled={busy} onClick={submit}>저장</button>
+            <button className="mr-btn-ghost" onClick={() => { setEditing(false); setName(cat.name); setErr(""); }}>취소</button>
+          </span>
+        </div>
+        {err && <div className="mr-mkcat-err">{err}</div>}
+      </div>
+    );
+  }
+
+  return (
+    <div className={"mr-mkcat row" + (first ? " first" : "")}>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span className="mr-mkcat-name">{cat.name}</span>
+        <span className="mr-mkcat-note">
+          {cat.subject ? subjectName(cat.subject) : "모든 과목"} · 기록 {used}개
+        </span>
+      </span>
+      <button className="mr-btn-ghost" onClick={() => setEditing(true)}>이름</button>
+      <button className="mr-btn-ghost danger" onClick={() => onRemove(cat)}>지우기</button>
+    </div>
+  );
+}
+
+function Account({ auth, theme, onToggleTheme, onChangePassword, onUpdateKakao, onDeleteMe, onLogout, mockRecords, mockCats, mockSettings, onSaveMockSettings, onRenameMockCategory, onRemoveMockCategory }) {
+  const [tamguErr, setTamguErr] = useState("");
+  const pickTamgu = async (which, value) => {
+    const r = await onSaveMockSettings({ [which]: value });
+    setTamguErr((r && r.error) || "");
+  };
+  // "이감" 카테고리는 "이감 3회" 처럼 회차가 붙은 기록도 함께 센다
+  const usedCount = (name) =>
+    (mockRecords || []).filter((r) => r.examName === name || r.examName.indexOf(name + " ") === 0).length;
+
   const [curPw, setCurPw] = useState("");
   const [newPw, setNewPw] = useState("");
   const [done, setDone] = useState(false);
@@ -1460,6 +1665,42 @@ function Account({ auth, theme, onToggleTheme, onChangePassword, onUpdateKakao, 
             변경하기
           </button>
         </div>
+      </section>
+
+      <section className="mr-card">
+        <div className="mr-card-tag">탐구 과목</div>
+        <div className="mr-setting-desc" style={{ marginTop: 0 }}>
+          지정하면 모의고사 화면에서 탐구 1, 탐구 2 대신 이 과목 이름이 나와요.
+        </div>
+        {[["tamgu1", "탐구 1"], ["tamgu2", "탐구 2"]].map(([k, label]) => (
+          <div key={k}>
+            <div className="mr-cat-label">{label}</div>
+            <select className="mr-input mr-select" value={(mockSettings && mockSettings[k]) || ""}
+              onChange={(e) => pickTamgu(k, e.target.value)}>
+              <option value="">고르지 않음</option>
+              {TAMGU_CHOICES.map((g) => (
+                <optgroup key={g.group} label={g.group}>
+                  {g.items.map((n) => <option key={n} value={n}>{n}</option>)}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+        ))}
+        {tamguErr && <div className="mr-mkcat-err">{tamguErr}</div>}
+      </section>
+
+      <section className="mr-card">
+        <div className="mr-card-tag">내가 만든 시험 카테고리</div>
+        {(mockCats || []).length === 0 ? (
+          <div className="mr-setting-desc" style={{ marginTop: 0 }}>
+            아직 없어요. 모의고사를 기록할 때 시험 고르는 칸에서 새로 만들면 여기에 모여요.
+          </div>
+        ) : (
+          mockCats.map((c, i) => (
+            <MockCategoryRow key={c.id} cat={c} used={usedCount(c.name)} first={i === 0}
+              onRename={onRenameMockCategory} onRemove={onRemoveMockCategory} />
+          ))
+        )}
       </section>
 
       <section className="mr-card">
@@ -2095,6 +2336,14 @@ function Home({ role, student, loggedIn, noticeCount, columnUnread, announceCoun
       desc: "점수와 틀린 문제 모아보기",
       meta: "오답노트 보기",
       tone: "blue",
+    });
+    sectors.push({
+      key: "mock",
+      icon: "📝",
+      title: "모의고사",
+      desc: "점수를 남기고 등급컷으로 백분위까지",
+      meta: "기록 남기기",
+      tone: "green",
     });
   }
   if (role === "admin") {
@@ -6480,6 +6729,20 @@ html[data-theme="dark"] .mr-input,
 html[data-theme="dark"] .mr-textarea{background:rgba(255,255,255,0.07); border-color:var(--line)}
 html[data-theme="dark"] .mr-input:focus,
 html[data-theme="dark"] .mr-textarea:focus{background:rgba(255,255,255,0.11)}
+/* 모의고사도 같은 어둠을 쓴다. 밝은 화면 쪽에서 흰색을 직접 적어둔 자리만 되돌린다 */
+html[data-theme="dark"] .mr-mk .card{background:rgba(255,255,255,0.05); border-color:rgba(255,255,255,0.09)}
+html[data-theme="dark"] .mr-mk .rec:hover{box-shadow:0 18px 40px rgba(0,0,0,0.5)}
+html[data-theme="dark"] .mr-mk .btn{background:rgba(255,255,255,0.08); box-shadow:none}
+html[data-theme="dark"] .mr-mk .btn:hover{background:rgba(255,255,255,0.15)}
+html[data-theme="dark"] .mr-mk .btn.pri{background:var(--grad)}
+html[data-theme="dark"] .mr-mk .btn.danger{background:var(--red-bg)}
+html[data-theme="dark"] .mr-mk .chip{background:rgba(255,255,255,0.08); box-shadow:none}
+html[data-theme="dark"] .mr-mk .chip.on{background:var(--grad); color:#fff}
+html[data-theme="dark"] .mr-mk .in{background:rgba(255,255,255,0.07)}
+html[data-theme="dark"] .mr-mk .in:focus{background:rgba(255,255,255,0.11)}
+html[data-theme="dark"] .mr-mk-modal{background:rgba(10,8,16,0.45)}
+html[data-theme="dark"] .mr-mk-modal .sheet{background:rgba(34,26,46,0.94); border-color:var(--line)}
+html[data-theme="dark"] .mr-select{background:rgba(255,255,255,0.07)}
 html[data-theme="dark"] .mr-subtabs button.on,
 html[data-theme="dark"] .mr-seg button.on,
 html[data-theme="dark"] .mr-cat-seg button.on,
@@ -6513,7 +6776,1414 @@ html[data-theme="dark"] .mr-sector-icon.blue,
 html[data-theme="dark"] .mr-pick-icon.blue{background:linear-gradient(140deg,#7b52c9,#b96a97)}
 html[data-theme="dark"] .mr-sector-icon.green,
 html[data-theme="dark"] .mr-pick-icon.green{background:linear-gradient(140deg,#5a54b4,#8a72c9)}
+
+/* 계정 화면에 붙는 모의고사 설정. 여긴 .mr-mk 밖이라 수학질문방 쪽 이름을 쓴다 */
+.mr-select{appearance:none; -webkit-appearance:none; font-weight:600; cursor:pointer;
+  background-image:linear-gradient(45deg,transparent 50%,var(--t3) 50%),linear-gradient(135deg,var(--t3) 50%,transparent 50%);
+  background-position:calc(100% - 19px) calc(50% + 2px),calc(100% - 14px) calc(50% + 2px);
+  background-size:5px 5px,5px 5px; background-repeat:no-repeat; padding-right:38px}
+.mr-mkcat{padding:13px 0; border-top:1px solid var(--line)}
+.mr-mkcat.first{border-top:0; padding-top:4px}
+.mr-mkcat.row{display:flex; align-items:center; gap:8px}
+.mr-mkcat-name{display:block; font-size:15px; font-weight:700; color:var(--t1);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mr-mkcat-note{display:block; font-size:12.5px; color:var(--t3); font-weight:600; margin-top:3px}
+.mr-mkcat-err{font-size:12.5px; color:var(--red); font-weight:700; margin-top:8px}
+
+/* ===== 모의고사 (수능 대비에서 옮겨옴) =====
+   저쪽은 card, btn 처럼 짧은 이름을 쓴다. 전부 .mr-mk 안에 가둬야
+   기존 화면에 번지지 않는다. 색 이름만 이어주면 규칙은 그대로 쓸 수 있다 */
+.mr-mk{
+  --pri:var(--blue); --pri-soft:var(--blue-bg);
+  --tx:var(--t1); --tx2:var(--t2); --tx3:var(--t3);
+  --ok:var(--green); --danger:var(--red); --warn:#d98324;
+  color:var(--tx);
+}
+/* 카드는 .mr-card 와 같은 유리다. 목록에 여러 장 깔리므로 실시간 블러는 쓰지 않는다 */
+.mr-mk .card{background:rgba(255,255,255,0.72); border:1px solid var(--line);
+  border-radius:26px; box-shadow:var(--glass-sh); animation:rise .5s var(--ease) both}
+.mr-mk .pad{padding:20px}
+.mr-mk .sec{margin-top:16px}
+.mr-mk .sec-t{font-size:12.5px; font-weight:700; color:var(--tx3); margin:0 0 9px 6px; letter-spacing:-0.2px}
+.mr-mk .h1{font-size:22px; font-weight:800; letter-spacing:-0.5px; margin:20px 0 4px}
+.mr-mk .sub{font-size:13.5px; color:var(--tx2); margin:0 0 2px; line-height:1.55; font-weight:500}
+
+/* 버튼도 유리판. 주 버튼만 앱과 같은 보라~분홍 그라데이션을 쓴다 */
+.mr-mk .btn{display:inline-flex; align-items:center; justify-content:center; gap:6px;
+  border:1px solid var(--line); border-radius:14px; padding:12px 16px;
+  font-family:inherit; font-weight:700; font-size:14.5px;
+  background:rgba(255,255,255,0.6); color:var(--tx); cursor:pointer;
+  box-shadow:0 4px 14px rgba(91,55,140,0.10);
+  transition:background .15s, color .15s, transform .08s}
+.mr-mk .btn:hover{background:rgba(255,255,255,0.88)}
+.mr-mk .btn:active{transform:scale(0.98)}
+.mr-mk .btn.pri{background:var(--grad); color:#fff; border-color:transparent;
+  box-shadow:0 8px 20px rgba(124,92,255,0.35), inset 0 1px 1px rgba(255,255,255,0.5)}
+.mr-mk .btn.pri:hover{filter:brightness(1.05); background:var(--grad)}
+.mr-mk .btn.danger{background:var(--red-bg); color:var(--danger); border-color:transparent; box-shadow:none}
+.mr-mk .btn.danger:hover{background:var(--red-bg); filter:brightness(.97)}
+.mr-mk .btn.wide{width:100%}
+.mr-mk .btn.sm{padding:9px 13px; font-size:13px; border-radius:12px}
+.mr-mk .btn:disabled{opacity:.45; box-shadow:none}
+
+.mr-mk .fld{margin-bottom:14px}
+.mr-mk .fld label{display:block; font-size:12.5px; font-weight:700; color:var(--tx2); margin:0 0 7px 4px}
+.mr-mk .in{width:100%; padding:13px 14px; border-radius:12px; border:1px solid var(--line);
+  background:rgba(255,255,255,0.6); color:var(--tx); font-family:inherit; font-size:15px;
+  outline:none; transition:background .15s}
+.mr-mk .in::placeholder{color:var(--tx3)}
+.mr-mk .in:focus{background:rgba(255,255,255,0.92); box-shadow:inset 0 0 0 2px var(--pri)}
+.mr-mk textarea.in{min-height:78px; resize:vertical; line-height:1.6}
+/* 아이폰은 select 를 눌러야 목록이 뜬다. 고른 값이 잘 보이게 굵게 둔다 */
+.mr-mk select.in{font-weight:600; padding-right:34px}
+.mr-mk .row{display:flex; gap:9px}
+.mr-mk .row>*{flex:1; min-width:0}
+
+.mr-mk .chips{display:flex; flex-wrap:wrap; gap:7px}
+.mr-mk .chip{padding:9px 14px; border-radius:999px; border:1px solid var(--line);
+  background:rgba(255,255,255,0.6); font-family:inherit; font-size:13px; font-weight:700;
+  color:var(--tx2); cursor:pointer; box-shadow:0 2px 8px rgba(91,55,140,0.07);
+  transition:background .15s, color .15s, transform .08s}
+.mr-mk .chip:active{transform:scale(.97)}
+.mr-mk .chip.on{background:var(--grad); border-color:transparent; color:#fff;
+  box-shadow:0 6px 16px rgba(124,92,255,0.32), inset 0 1px 1px rgba(255,255,255,0.4)}
+.mr-mk .chip:disabled{cursor:default}
+.mr-mk .badge{display:inline-block; padding:4px 10px; border-radius:9px; font-size:11.5px;
+  font-weight:800; color:#fff; box-shadow:0 3px 10px rgba(91,55,140,0.18)}
+
+.mr-mk .lst{display:flex; flex-direction:column; gap:10px}
+.mr-mk .rec{padding:17px 18px; display:block; width:100%; text-align:left; font-family:inherit;
+  cursor:pointer; border-radius:22px; transition:box-shadow .15s, transform .08s}
+.mr-mk .rec:hover{box-shadow:0 18px 40px rgba(91,55,140,0.2), inset 0 1px 1px rgba(255,255,255,0.92)}
+.mr-mk .rec:active{transform:scale(.99)}
+.mr-mk .rec .top{display:flex; align-items:center; gap:8px; margin-bottom:10px}
+.mr-mk .rec .ttl{flex:1; min-width:0; font-weight:700; font-size:15px; letter-spacing:-0.3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.mr-mk .rec .dt{font-size:12px; color:var(--tx3); flex:none; font-weight:600}
+.mr-mk .rec .nums{display:flex; flex-wrap:wrap; column-gap:18px; row-gap:9px}
+/* 숫자 한 칸은 기록 카드 밖(성적 흐름의 응시·평균·최고)에서도 쓴다.
+   .rec 안으로 묶어두면 그쪽에서 숫자와 이름이 옆으로 붙어버린다 */
+.mr-mk .nm-i{display:flex; flex-direction:column; gap:1px}
+.mr-mk .nm-i b{font-size:18px; font-weight:800; letter-spacing:-0.5px; font-variant-numeric:tabular-nums}
+.mr-mk .nm-i span{font-size:11px; color:var(--tx3); font-weight:600}
+
+.mr-mk .tmr{display:flex; flex-direction:column; align-items:center; gap:4px; padding:24px 20px 26px}
+.mr-mk .tmr .clock{font-size:46px; font-weight:800; letter-spacing:-1.8px; color:var(--tx);
+  font-variant-numeric:tabular-nums; line-height:1.05; white-space:nowrap}
+.mr-mk .tmr .clock.warn{color:var(--warn)}
+.mr-mk .tmr .clock.danger{color:var(--danger)}
+.mr-mk .tmr .lbl{font-size:13.5px; color:var(--tx2); font-weight:700}
+/* 링은 232px 로 그리되 좁은 화면에서는 같은 비율로 줄어든다.
+   안 그러면 320px 짜리 아이폰에서 카드 밖으로 비어져 나간다 */
+.mr-mk .ring{position:relative; width:232px; height:232px; max-width:100%; margin:6px 0 14px}
+.mr-mk .ring svg{transform:rotate(-90deg); max-width:100%; height:auto;
+  filter:drop-shadow(0 6px 14px rgba(91,55,140,0.16))}
+.mr-mk .ring .mid{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px}
+
+.mr-mk .banner{display:flex; gap:10px; align-items:flex-start; padding:13px 15px; border-radius:16px;
+  background:var(--pri-soft); color:var(--tx2); font-size:12.5px; line-height:1.6; margin-top:16px; font-weight:600}
+.mr-mk .empty{text-align:center; padding:44px 16px; color:var(--tx3); font-size:13.5px; line-height:1.7; font-weight:600}
+.mr-mk .err{color:var(--danger); font-size:12.5px; font-weight:700; margin:2px 0 10px 4px}
+.mr-mk .dday{display:flex; align-items:baseline; gap:8px}
+.mr-mk .dday b{font-size:42px; font-weight:800; letter-spacing:-1.6px; line-height:1; font-variant-numeric:tabular-nums}
+.mr-mk .tbl{width:100%; border-collapse:collapse; font-size:13px}
+.mr-mk .tbl th{text-align:left; color:var(--tx3); font-weight:700; font-size:11.5px; padding:0 0 8px}
+.mr-mk .tbl td{padding:9px 0; border-top:1px solid var(--line-soft)}
+
+/* 기록 입력 창. 앱의 다른 창(.mr-modal-overlay + .mr-modal)과 같은 유리와 같은 등장 */
+.mr-mk-modal{position:fixed; inset:0; z-index:400; background:rgba(180,170,200,.10);
+  -webkit-backdrop-filter:blur(14px) saturate(120%); backdrop-filter:blur(14px) saturate(120%);
+  display:flex; align-items:center; justify-content:center;
+  padding:20px 16px calc(20px + env(safe-area-inset-bottom));
+  animation:fade .28s var(--ease) both}
+.mr-mk-modal .sheet{width:100%; max-width:460px; color:var(--t1);
+  background:rgba(255,255,255,0.82); border:1px solid var(--line); border-radius:24px;
+  -webkit-backdrop-filter:blur(16px) saturate(170%); backdrop-filter:blur(16px) saturate(170%);
+  box-shadow:0 24px 70px rgba(72,40,110,0.3), inset 0 1px 1px rgba(255,255,255,0.92);
+  padding:22px 20px; max-height:86vh; overflow-y:auto; -webkit-overflow-scrolling:touch;
+  animation:popIn .34s var(--ease) both}
+.mr-mk-modal .sheet-head{display:flex; align-items:center; gap:10px; margin-bottom:16px}
+.mr-mk-modal .sheet-title{font-size:20px; font-weight:800; letter-spacing:-0.5px; flex:1; min-width:0}
+.mr-mk-modal .sheet-x{border:0; background:none; font-size:26px; line-height:1; color:var(--t3);
+  cursor:pointer; padding:0 2px; flex:none}
+.mr-mk-modal .sheet-x:hover{color:var(--t1)}
 `;
+
+/* =========================================================
+   모의고사 (수능 대비에서 옮겨옴)
+   화면 조각은 전부 .mr-mk 안에서만 그리고, 그 안에서 쓰는 클래스 이름은
+   card, btn 처럼 짧다. 반드시 .mr-mk 로 감싸야 다른 화면에 번지지 않는다.
+   ========================================================= */
+
+/* 시간과 문항 수는 수능 시간표를 따른다.
+   색은 수능 대비 쪽의 원색을 그대로 쓰지 않고 이 앱의 보라~분홍 계열로 다시 골랐다.
+   원색 파랑이나 주황을 두면 유리 느낌 배경 위에서 저 혼자 튄다 */
+const SUBJECTS = [
+  { key: "korean",  name: "국어",           minutes: 80,  count: 45, max: 100, at: "08:40~10:00", color: "#e8639b" },
+  { key: "math",    name: "수학",           minutes: 100, count: 30, max: 100, at: "10:30~12:10", color: "#8a5cf0" },
+  { key: "english", name: "영어",           minutes: 70,  count: 45, max: 100, at: "13:10~14:20", color: "#16a394" },
+  { key: "history", name: "한국사",         minutes: 30,  count: 20, max: 50,  at: "14:50~15:20", color: "#b06ad4" },
+  { key: "tamgu1",  name: "탐구 1",         minutes: 30,  count: 20, max: 50,  at: "15:35~16:05", color: "#5c86e6" },
+  { key: "tamgu2",  name: "탐구 2",         minutes: 30,  count: 20, max: 50,  at: "16:07~16:37", color: "#e0845c" },
+  { key: "lang2",   name: "제2외국어·한문", minutes: 40,  count: 30, max: 50,  at: "17:05~17:45", color: "#8e8aa8" },
+];
+const subjectOf = (k) => SUBJECTS.find((s) => s.key === k) || SUBJECTS[0];
+/* 여기는 수학질문방이라 처음 고른 과목을 수학으로 둔다. 수능 대비 쪽은 국어부터였다 */
+const MOCK_FIRST_SUBJECT = "math";
+
+/* 탐구는 사람마다 고른 과목이 달라서 계정 설정에서 지정한다.
+   화면 조각마다 설정을 넘기면 손댈 곳이 너무 많아져서 여기 담아두고 App 이 채운다 */
+const TAMGU_NAMES = { tamgu1: "", tamgu2: "" };
+const applyTamguNames = (v) => {
+  TAMGU_NAMES.tamgu1 = ((v && v.tamgu1) || "").trim();
+  TAMGU_NAMES.tamgu2 = ((v && v.tamgu2) || "").trim();
+};
+const subjectName = (k) => TAMGU_NAMES[k] || subjectOf(k).name;
+
+const TAMGU_CHOICES = [
+  { group: "사회탐구", items: ["생활과 윤리", "윤리와 사상", "한국지리", "세계지리", "동아시아사", "세계사", "경제", "정치와 법", "사회·문화"] },
+  { group: "과학탐구", items: ["물리학Ⅰ", "화학Ⅰ", "생명과학Ⅰ", "지구과학Ⅰ", "물리학Ⅱ", "화학Ⅱ", "생명과학Ⅱ", "지구과학Ⅱ"] },
+];
+
+/* 평가원과 교육청 시험은 누가 봐도 같으니 처음부터 깔아둔다.
+   사설처럼 사람마다 다른 건 각자 추가해서 쓴다 */
+const BASE_CATEGORIES = [
+  "3월 학력평가", "5월 학력평가", "6월 모의평가",
+  "7월 학력평가", "9월 모의평가", "10월 학력평가", "수능",
+];
+const isBaseCat = (n) => BASE_CATEGORIES.indexOf(n) !== -1;
+
+/* 저장은 합쳐진 이름 한 줄로 한다.
+   평가원과 교육청은 몇 년도 시험인지를 앞에 붙인다. 이건 응시일과 다르다.
+   2026년에 2024년 기출을 풀 수 있으니 따로 받아야 한다.
+   내가 만든 건 몇 회차인지를 뒤에 붙인다. "2024 6월 모의평가" "이감 3회" */
+function composeExamName(p) {
+  if (!p || !p.cat) return p && p.orphan ? p.orphan : "";
+  if (isBaseCat(p.cat)) return (p.year ? p.year + " " : "") + p.cat;
+  return p.cat + (p.round ? " " + p.round + "회" : "");
+}
+/* 합쳐진 이름을 도로 쪼갠다. 못 알아보면 orphan 으로 두고 그대로 보여준다 */
+function parseExamName(name, myNames) {
+  const s = String(name || "").trim();
+  const none = { cat: "", year: "", round: "", orphan: "" };
+  if (!s) return none;
+  const withYear = s.match(/^(\d{4})\s+(.+)$/);
+  if (withYear && isBaseCat(withYear[2])) return { cat: withYear[2], year: withYear[1], round: "", orphan: "" };
+  if (isBaseCat(s)) return { cat: s, year: "", round: "", orphan: "" };
+  const withRound = s.match(/^(.+?)\s+(\d+)회$/);
+  if (withRound && (myNames || []).indexOf(withRound[1]) !== -1)
+    return { cat: withRound[1], year: "", round: withRound[2], orphan: "" };
+  if ((myNames || []).indexOf(s) !== -1) return { cat: s, year: "", round: "", orphan: "" };
+  return { cat: "", year: "", round: "", orphan: s };
+}
+// 기출은 옛날 것도 푼다. 올해부터 거슬러 내려간다
+const EXAM_YEARS = (() => {
+  const now = new Date().getFullYear();
+  const out = [];
+  for (let y = now; y >= 2005; y--) out.push(String(y));
+  return out;
+})();
+
+/* ====== 등급컷으로 백분위 잡기 ======
+   사설 모의고사는 표본이 적어 백분위를 못 내고 예상 등급컷만 주는 곳이 많다.
+   등급별 누적 비율은 정해져 있으니, 등급컷 표와 내 원점수가 있으면
+   내가 어느 등급 어디쯤인지 비례로 잡을 수 있다.
+   1등급컷에 딱 걸치면 상위 4% 이므로 백분위 96 이다 */
+const CUT_PERCENTILES = [96, 89, 77, 60, 40, 23, 11, 4];
+// 영어와 한국사는 절대평가라 백분위 자체가 없다
+const hasPercentile = (subjectKey) => subjectKey !== "english" && subjectKey !== "history";
+
+function estimatePercentile(cuts, rawScore, subjectKey) {
+  if (!hasPercentile(subjectKey)) return null;
+  if (!Array.isArray(cuts) || rawScore === null || rawScore === undefined || rawScore === "") return null;
+  const R = Number(rawScore);
+  if (!isFinite(R)) return null;
+
+  const pts = [];
+  cuts.forEach((c, i) => {
+    const v = Number(c);
+    if (c === null || c === undefined || c === "" || !isFinite(v)) return;
+    if (i < CUT_PERCENTILES.length) pts.push({ s: v, p: CUT_PERCENTILES[i] });
+  });
+  if (!pts.length) return null;
+  pts.sort((a, b) => a.s - b.s);
+
+  // 0점은 백분위 0, 만점은 100 으로 양끝을 잡아두고 그 사이를 잇는다
+  const max = subjectOf(subjectKey).max;
+  const all = [{ s: 0, p: 0 }];
+  pts.forEach((q) => { if (q.s > all[all.length - 1].s) all.push(q); });
+  if (max > all[all.length - 1].s) all.push({ s: max, p: 100 });
+
+  if (R <= all[0].s) return all[0].p;
+  if (R >= all[all.length - 1].s) return all[all.length - 1].p;
+  const v = monotoneAt(all.map((q) => q.s), all.map((q) => q.p), R);
+  return v === null ? null : Math.max(0, Math.min(100, Math.round(v)));
+}
+
+/* 점들을 매끄럽게 잇되 오르내리지 않게 (단조 3차 보간).
+   직선으로 이으면 등급컷마다 꺾여서 실제보다 어긋난다 */
+function monotoneAt(xs, ys, x) {
+  const n = xs.length;
+  if (n < 2) return null;
+  if (n === 2) {
+    const t = xs[1] === xs[0] ? 1 : (x - xs[0]) / (xs[1] - xs[0]);
+    return ys[0] + t * (ys[1] - ys[0]);
+  }
+  const d = [], m = [];
+  for (let i = 0; i < n - 1; i++) d.push((ys[i + 1] - ys[i]) / (xs[i + 1] - xs[i]));
+  m.push(d[0]);
+  for (let i = 1; i < n - 1; i++) m.push(d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2);
+  m.push(d[n - 2]);
+  for (let i = 0; i < n - 1; i++) {
+    if (d[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; }
+    const a = m[i] / d[i], b = m[i + 1] / d[i], s = a * a + b * b;
+    if (s > 9) { const t = 3 / Math.sqrt(s); m[i] = t * a * d[i]; m[i + 1] = t * b * d[i]; }
+  }
+  for (let i = 0; i < n - 1; i++) {
+    if (x >= xs[i] && x <= xs[i + 1]) {
+      const h = xs[i + 1] - xs[i], t = (x - xs[i]) / h;
+      const h00 = 2*t*t*t - 3*t*t + 1, h10 = t*t*t - 2*t*t + t;
+      const h01 = -2*t*t*t + 3*t*t, h11 = t*t*t - t*t;
+      return h00 * ys[i] + h10 * h * m[i] + h01 * ys[i + 1] + h11 * h * m[i + 1];
+    }
+  }
+  return null;
+}
+/* 적어둔 백분위가 있으면 그걸 쓰고, 없으면 등급컷으로 잡은 값을 쓴다 */
+function percentileOf(r) {
+  if (r.percentile !== null && r.percentile !== undefined) return { v: r.percentile, guess: false };
+  const g = estimatePercentile(r.gradeCuts, r.rawScore, r.subject);
+  return g === null ? { v: null, guess: false } : { v: g, guess: true };
+}
+
+/* ====== 등급컷으로 표준점수 잡기 ======
+   등급컷마다 대응하는 z 값이 정해져 있다. 상위 4% 자리의 z 는 1.751 이다.
+   (z, 원점수) 짝을 여러 개 놓고 직선을 맞추면 평균과 표준편차가 나온다.
+
+   이건 성적이 정규분포를 이룬다고 가정하는 것이다. 실제로는 만점자가 몰리거나
+   한쪽으로 쏠려서 어긋난다. 그래서 화면에서는 반드시 예상값이라고 밝힌다 */
+const CUT_Z = [1.751, 1.227, 0.739, 0.253, -0.253, -0.739, -1.227, -1.751];
+// 국어와 수학은 평균 100 표준편차 20, 탐구와 제2외국어는 평균 50 표준편차 10
+const stdScale = (k) => (k === "korean" || k === "math" ? { m: 100, sd: 20 } : { m: 50, sd: 10 });
+
+function estimateStdScore(cuts, rawScore, subjectKey) {
+  if (!hasPercentile(subjectKey)) return null; // 영어와 한국사는 절대평가
+  if (!Array.isArray(cuts) || rawScore === null || rawScore === undefined || rawScore === "") return null;
+  const R = Number(rawScore);
+  if (!isFinite(R)) return null;
+
+  const zs = [], ss = [];
+  cuts.forEach((c, i) => {
+    const v = Number(c);
+    if (c === null || c === undefined || c === "" || !isFinite(v)) return;
+    if (i < CUT_Z.length) { zs.push(CUT_Z[i]); ss.push(v); }
+  });
+  if (zs.length < 2) return null; // 점이 둘은 있어야 직선을 그린다
+
+  const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+  const zbar = mean(zs), sbar = mean(ss);
+  let num = 0, den = 0;
+  for (let i = 0; i < zs.length; i++) {
+    num += (zs[i] - zbar) * (ss[i] - sbar);
+    den += (zs[i] - zbar) * (zs[i] - zbar);
+  }
+  if (den === 0) return null;
+  const sd = num / den;          // 원점수 기준 표준편차
+  if (!isFinite(sd) || sd <= 0) return null;
+  const avg = sbar - sd * zbar;  // 원점수 기준 평균
+
+  const sc = stdScale(subjectKey);
+  const out = Math.round(sc.m + sc.sd * ((R - avg) / sd));
+  return isFinite(out) ? Math.max(0, out) : null;
+}
+function stdScoreOf(r) {
+  if (r.stdScore !== null && r.stdScore !== undefined) return { v: r.stdScore, guess: false };
+  const g = estimateStdScore(r.gradeCuts, r.rawScore, r.subject);
+  return g === null ? { v: null, guess: false } : { v: g, guess: true };
+}
+
+/* 이 카테고리로 몇 회차까지 기록했는지 보고 다음 회차를 미리 골라준다 */
+function suggestRound(records, cat) {
+  let max = 0;
+  (records || []).forEach((r) => {
+    const s = String(r.examName || "");
+    if (s.indexOf(cat + " ") !== 0) return;
+    const m = s.slice(cat.length + 1).match(/^(\d+)회$/);
+    if (m) max = Math.max(max, Number(m[1]));
+  });
+  return max ? String(max + 1) : "";
+}
+
+/* ====== 수능 날짜 ======
+   해마다 11월 셋째 주 목요일. 발표된 날짜가 다르면 SUNEUNG_FIXED 를 고친다 */
+const SUNEUNG_FIXED = "2026-11-19";
+function thirdThursday(year) {
+  const d = new Date(year, 10, 1);
+  const shift = (4 - d.getDay() + 7) % 7; // 목요일 = 4
+  return new Date(year, 10, 1 + shift + 14);
+}
+function nextSuneung() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const fixed = new Date(SUNEUNG_FIXED + "T00:00:00");
+  if (fixed >= today) return fixed;
+  let y = today.getFullYear();
+  let d = thirdThursday(y);
+  if (d < today) d = thirdThursday(y + 1);
+  return d;
+}
+const dayGap = (to) => {
+  const a = new Date(); a.setHours(0, 0, 0, 0);
+  return Math.round((to - a) / 86400000);
+};
+
+/* ====== 작은 도구들 ====== */
+const pad2 = (n) => String(n).padStart(2, "0");
+const hhmmss = (sec) => {
+  const s = Math.max(0, Math.floor(sec));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return (h > 0 ? h + ":" : "") + pad2(m) + ":" + pad2(s % 60);
+};
+const minText = (sec) => {
+  if (sec === null || sec === undefined || sec === "") return "";
+  const m = Math.round(Number(sec) / 60);
+  return m >= 60 ? Math.floor(m / 60) + "시간 " + (m % 60) + "분" : m + "분";
+};
+const todayStr = () => {
+  const d = new Date();
+  return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
+};
+// 수학질문방의 fmtDay 는 밀리초를 받는다. 이건 "2026-07-30" 같은 글자를 받아서 이름이 다르다
+const mkDay = (s) => {
+  if (!s) return "";
+  const [y, m, d] = String(s).split("-");
+  const cur = String(new Date().getFullYear());
+  return (y === cur ? "" : y + ". ") + Number(m) + "월 " + Number(d) + "일";
+};
+const numOrNull = (v) => (v === "" || v === null || v === undefined ? null : Number(v));
+const parseWrong = (s) =>
+  String(s || "")
+    .split(/[^0-9]+/)
+    .filter(Boolean)
+    .map(Number)
+    .filter((n) => n > 0 && n <= 100)
+    .filter((n, i, a) => a.indexOf(n) === i)
+    .sort((a, b) => a - b);
+const gradeColor = (g) => {
+  if (!g) return "var(--t3)";
+  if (g <= 2) return "var(--green)";
+  if (g <= 4) return "var(--blue)";
+  if (g <= 6) return "#d98324";
+  return "var(--red)";
+};
+
+/* ====== 저장소 ======
+   수학질문방은 언제나 Supabase 를 쓰므로 기기 저장 갈래는 옮기지 않았다 */
+const mapRecord = (r) => ({
+  id: r.id,
+  examName: r.exam_name || "",
+  examDate: r.exam_date || "",
+  subject: r.subject || "korean",
+  detail: r.detail || "",
+  rawScore: r.raw_score === null || r.raw_score === undefined ? null : Number(r.raw_score),
+  stdScore: r.std_score === null || r.std_score === undefined ? null : Number(r.std_score),
+  percentile: r.percentile === null || r.percentile === undefined ? null : Number(r.percentile),
+  grade: r.grade === null || r.grade === undefined ? null : Number(r.grade),
+  wrongNos: r.wrong_nos || [],
+  gradeCuts: r.grade_cuts || [],
+  durationSec: r.duration_sec === null || r.duration_sec === undefined ? null : Number(r.duration_sec),
+  memo: r.memo || "",
+  createdAt: r.created_at ? Date.parse(r.created_at) : Date.now(),
+});
+const toRow = (v) => ({
+  exam_name: v.examName, exam_date: v.examDate, subject: v.subject, detail: v.detail || "",
+  raw_score: v.rawScore, std_score: v.stdScore, percentile: v.percentile, grade: v.grade,
+  wrong_nos: v.wrongNos || [], grade_cuts: v.gradeCuts || null,
+  duration_sec: v.durationSec, memo: v.memo || "",
+});
+const mapCategory = (r) => ({
+  id: r.id, name: r.name || "",
+  subject: r.subject || null, // 비어 있으면 전 과목
+  createdAt: r.created_at ? Date.parse(r.created_at) : 0,
+});
+const sortRecords = (rows) =>
+  rows.slice().sort((a, b) => (a.examDate === b.examDate ? b.createdAt - a.createdAt : (a.examDate < b.examDate ? 1 : -1)));
+/* 표가 아직 없을 때 Supabase 가 주는 응답. 기다린다고 낫는 게 아니라서
+   "잠시 뒤에 다시" 라고 하면 안 된다 */
+const isMissingTable = (e) =>
+  !!e && (e.code === "PGRST205" || /Could not find the table|schema cache/i.test(e.message || ""));
+const isMissingColumn = (e) =>
+  !!e && (e.code === "PGRST204" || e.code === "42703" || /Could not find the '.*' column/i.test(e.message || ""));
+
+const mockStore = {
+  async list(userId) {
+    if (!userId) return [];
+    const { data, error } = await sb.from("exam_records").select("*").eq("user_id", userId);
+    if (error) throw error;
+    return sortRecords((data || []).map(mapRecord));
+  },
+  async add(userId, v) {
+    const { data, error } = await sb.from("exam_records").insert({ ...toRow(v), user_id: userId }).select().single();
+    if (error) throw error;
+    return mapRecord(data);
+  },
+  async update(id, v) {
+    const { data, error } = await sb.from("exam_records").update(toRow(v)).eq("id", id).select().single();
+    if (error) throw error;
+    return mapRecord(data);
+  },
+  async remove(id) {
+    const { error } = await sb.from("exam_records").delete().eq("id", id);
+    if (error) throw error;
+  },
+  async listCategories(userId) {
+    if (!userId) return [];
+    const { data, error } = await sb.from("exam_categories").select("*").eq("user_id", userId);
+    if (error) throw error;
+    return (data || []).map(mapCategory).sort((a, b) => a.createdAt - b.createdAt);
+  },
+  async addCategory(userId, name, subject) {
+    const { data, error } = await sb.from("exam_categories")
+      .insert({ name, subject: subject || null, user_id: userId }).select().single();
+    if (error) throw error;
+    return mapCategory(data);
+  },
+  async removeCategory(id) {
+    const { error } = await sb.from("exam_categories").delete().eq("id", id);
+    if (error) throw error;
+  },
+  async renameCategory(id, name) {
+    const { data, error } = await sb.from("exam_categories").update({ name }).eq("id", id).select().single();
+    if (error) throw error;
+    return mapCategory(data);
+  },
+  // 카테고리 이름을 바꾸면 그 이름으로 남긴 기록도 따라가야 한다
+  async setRecordName(id, examName) {
+    const { error } = await sb.from("exam_records").update({ exam_name: examName }).eq("id", id);
+    if (error) throw error;
+  },
+  async getSettings(userId) {
+    if (!userId) return { tamgu1: "", tamgu2: "" };
+    const { data, error } = await sb.from("profiles").select("tamgu1,tamgu2").eq("id", userId).maybeSingle();
+    if (error) throw error;
+    return { tamgu1: (data && data.tamgu1) || "", tamgu2: (data && data.tamgu2) || "" };
+  },
+  async saveSettings(userId, v) {
+    const { error } = await sb.from("profiles").update({ tamgu1: v.tamgu1 || null, tamgu2: v.tamgu2 || null }).eq("id", userId);
+    if (error) throw error;
+    return v;
+  },
+};
+
+/* ---- 모의고사: 공통 조각 ---- */
+/* 뒤에 깔리는 원은 var(--line-soft) 로 그린다.
+   var(--line) 은 거의 흰색이라 유리 배경 위에서 보이지 않는다 */
+function Ring({ ratio, color, size = 232, stroke = 14, children }) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const off = c * (1 - Math.max(0, Math.min(1, ratio)));
+  return (
+    <div className="ring" style={{ width: size, height: size }}>
+      <svg width={size} height={size}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--line-soft)" strokeWidth={stroke} />
+        <circle
+          cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+          strokeLinecap="round" strokeDasharray={c} strokeDashoffset={off}
+          style={{ transition: "stroke-dashoffset .3s linear, stroke .3s" }}
+        />
+      </svg>
+      <div className="mid">{children}</div>
+    </div>
+  );
+}
+
+function SubjectBadge({ subject }) {
+  const s = subjectOf(subject);
+  return <span className="badge" style={{ background: s.color }}>{subjectName(subject)}</span>;
+}
+
+// 아래에서 올라오는 시트. mr-mk 를 함께 붙여야 안쪽 색 이름이 살아있다
+function Modal({ title, onClose, children }) {
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+  return (
+    <div className="mr-mk mr-mk-modal" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-head">
+          <div className="sheet-title">{title}</div>
+          <button className="sheet-x" onClick={onClose} aria-label="닫기">×</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function RecordCard({ rec, onClick }) {
+  // 적어둔 값이 없으면 등급컷으로 잡은 값
+  const pc = percentileOf(rec);
+  const ss = stdScoreOf(rec);
+  return (
+    <button className="card rec" onClick={onClick}>
+      <div className="top">
+        <SubjectBadge subject={rec.subject} />
+        <div className="ttl">{rec.examName || "이름 없는 시험"}{rec.detail ? " · " + rec.detail : ""}</div>
+        <div className="dt">{mkDay(rec.examDate)}</div>
+      </div>
+      <div className="nums">
+        <div className="nm-i"><b>{rec.rawScore === null ? "—" : rec.rawScore}</b><span>원점수</span></div>
+        <div className="nm-i"><b style={{ color: gradeColor(rec.grade) }}>{rec.grade || "—"}</b><span>등급</span></div>
+        <div className="nm-i">
+          <b style={pc.guess ? { color: "var(--tx2)" } : null}>{pc.v === null ? "—" : pc.v}</b>
+          <span>{pc.guess ? "예상 백분위" : "백분위"}</span>
+        </div>
+        <div className="nm-i">
+          <b style={ss.guess ? { color: "var(--tx2)" } : null}>{ss.v === null ? "—" : ss.v}</b>
+          <span>{ss.guess ? "예상 표준점수" : "표준점수"}</span>
+        </div>
+        {rec.wrongNos.length > 0 && (
+          <div className="nm-i"><b style={{ color: "var(--danger)" }}>{rec.wrongNos.length}</b><span>틀린 문항</span></div>
+        )}
+      </div>
+      {rec.durationSec ? (
+        <div style={{ marginTop: 8, fontSize: 12, color: "var(--tx3)", fontWeight: 600 }}>푼 시간 {minText(rec.durationSec)}</div>
+      ) : null}
+    </button>
+  );
+}
+
+const emptyForm = (over) => ({
+  examName: "", examDate: todayStr(), subject: MOCK_FIRST_SUBJECT, detail: "",
+  rawScore: "", stdScore: "", percentile: "", grade: "", wrong: "",
+  cuts: ["", "", "", "", "", "", "", ""], durationSec: null, memo: "",
+  ...over,
+});
+
+/* 시험 고르는 창.
+   목록에서 하나 고르면 되고, 내가 만든 카테고리는 회차까지 한 번 더 고른다.
+   평가원과 교육청은 연도를 고르고 끝난다 */
+function ExamPicker({ subject, categories, records, onClose, onDone, onAddCategory }) {
+  const [q, setQ] = useState("");
+  const [roundFor, setRoundFor] = useState(""); // 회차를 적는 중인 카테고리
+  const [roundText, setRoundText] = useState("");
+  const [yearFor, setYearFor] = useState("");   // 연도를 고르는 중인 카테고리
+  const [adding, setAdding] = useState(false);
+  const [newCat, setNewCat] = useState("");
+  const [newCatAll, setNewCatAll] = useState(false);
+  const [catErr, setCatErr] = useState("");
+
+  const mine = categories.filter((c) => !c.subject || c.subject === subject).map((c) => c.name);
+  const hit = (n) => !q.trim() || n.toLowerCase().indexOf(q.trim().toLowerCase()) !== -1;
+  const baseHits = BASE_CATEGORIES.filter(hit);
+  const mineHits = mine.filter(hit);
+
+  const choose = (cat) => {
+    if (isBaseCat(cat)) return setYearFor(cat);
+    // 지난 기록을 보고 다음 회차를 미리 넣어둔다. 그대로 확인만 누르면 되게
+    setRoundText(suggestRound(records, cat));
+    setRoundFor(cat);
+  };
+  const submitCat = async () => {
+    const name = newCat.trim();
+    setCatErr("");
+    if (!name) return setCatErr("이름을 적어 주세요.");
+    if (isBaseCat(name) || mine.indexOf(name) !== -1) return setCatErr("이미 있는 카테고리예요.");
+    const r = await onAddCategory(name, newCatAll ? null : subject);
+    if (r && r.error) return setCatErr(r.error);
+    setNewCat(""); setAdding(false); setNewCatAll(false);
+    setRoundText(""); setRoundFor(name);
+  };
+
+  if (yearFor) {
+    const thisYear = String(new Date().getFullYear());
+    return (
+      <Modal title={yearFor + " · 몇 년도 시험인가요"} onClose={() => setYearFor("")}>
+        <div className="chips">
+          {EXAM_YEARS.map((y) => (
+            <button key={y} className={"chip" + (y === thisYear ? " on" : "")}
+              onClick={() => onDone({ cat: yearFor, year: y, round: "", orphan: "" })}>
+              {y}
+            </button>
+          ))}
+        </div>
+        <p className="sub" style={{ marginTop: 12, marginBottom: 0, fontSize: 12.5 }}>
+          푼 날짜가 아니라 그 시험이 치러진 해예요. 옛날 기출을 풀었으면 그 해를 고르세요.
+        </p>
+      </Modal>
+    );
+  }
+
+  if (roundFor) {
+    const suggested = suggestRound(records, roundFor);
+    const done = () => {
+      const n = String(roundText).trim().replace(/[^0-9]/g, "");
+      onDone({ cat: roundFor, year: "", round: n, orphan: "" });
+    };
+    return (
+      <Modal title={roundFor + " · 몇 회차인가요"} onClose={() => setRoundFor("")}>
+        <div className="row">
+          <input className="in" type="number" inputMode="numeric" autoFocus value={roundText}
+            onChange={(e) => setRoundText(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") done(); }}
+            placeholder="회차" />
+          <button className="btn pri" style={{ flex: "none" }} onClick={done}>확인</button>
+        </div>
+        <button className="btn wide" style={{ marginTop: 9 }}
+          onClick={() => onDone({ cat: roundFor, year: "", round: "", orphan: "" })}>
+          회차 없이
+        </button>
+        <p className="sub" style={{ marginTop: 12, marginBottom: 0, fontSize: 12.5 }}>
+          {suggested
+            ? Number(suggested) - 1 + "회까지 기록하셨어요. " + suggested + "회를 미리 넣어뒀으니 그대로 확인을 누르면 돼요."
+            : "회차가 몇 번이든 적을 수 있어요."}
+        </p>
+      </Modal>
+    );
+  }
+
+  return (
+    <Modal title="시험 고르기" onClose={onClose}>
+      <input className="in" value={q} onChange={(e) => setQ(e.target.value)} placeholder="이름으로 찾기" />
+
+      {baseHits.length > 0 && (
+        <div className="sec">
+          <div className="sec-t">평가원·교육청</div>
+          <div className="chips">
+            {baseHits.map((n) => <button key={n} className="chip" onClick={() => choose(n)}>{n}</button>)}
+          </div>
+        </div>
+      )}
+
+      {mineHits.length > 0 && (
+        <div className="sec">
+          <div className="sec-t">사설 모의고사</div>
+          <div className="chips">
+            {mineHits.map((n) => <button key={n} className="chip" onClick={() => choose(n)}>{n}</button>)}
+          </div>
+        </div>
+      )}
+
+      {baseHits.length === 0 && mineHits.length === 0 && (
+        <div className="empty" style={{ padding: 28 }}>찾는 시험이 없어요.<br />아래에서 새로 만들 수 있어요.</div>
+      )}
+
+      <div className="sec">
+        {!adding ? (
+          <button className="btn wide" onClick={() => { setAdding(true); setNewCat(q.trim()); setCatErr(""); }}>
+            + 새 카테고리 만들기
+          </button>
+        ) : (
+          <div>
+            <div className="row">
+              <input className="in" value={newCat} autoFocus
+                onChange={(e) => setNewCat(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") submitCat(); }}
+                placeholder="예: 이감, 더프리미엄" />
+              <button className="btn pri sm" style={{ flex: "none" }} onClick={submitCat}>만들기</button>
+              <button className="btn sm" style={{ flex: "none" }} onClick={() => { setAdding(false); setCatErr(""); }}>취소</button>
+            </div>
+            <div className="chips" style={{ marginTop: 8 }}>
+              <button className={"chip" + (newCatAll ? "" : " on")} onClick={() => setNewCatAll(false)}>{subjectName(subject)} 에서만</button>
+              <button className={"chip" + (newCatAll ? " on" : "")} onClick={() => setNewCatAll(true)}>모든 과목에서</button>
+            </div>
+            {catErr && <div className="err" style={{ marginTop: 7 }}>{catErr}</div>}
+            <div style={{ fontSize: 12, color: "var(--tx3)", marginTop: 7, marginLeft: 3, lineHeight: 1.5 }}>
+              회차는 넣지 마세요. 만들고 나서 따로 고르게 돼요.
+            </div>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function RecordForm({ init, categories, records, onClose, onSave, onDelete, onAddCategory }) {
+  const [f, setF] = useState(init);
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const s = subjectOf(f.subject);
+  const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
+  const wrongList = parseWrong(f.wrong);
+
+  /* 저장되는 건 합쳐진 이름 한 줄이다. "2026 6월 모의평가", "이감 3회" 처럼.
+     고칠 때는 그 이름을 도로 쪼개서 고른 상태로 되돌린다 */
+  const allNames = categories.map((c) => c.name);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pick, setPick] = useState(() => parseExamName(init.examName, allNames));
+
+  useEffect(() => {
+    setF((p) => {
+      const name = composeExamName(pick);
+      return p.examName === name ? p : { ...p, examName: name };
+    });
+  }, [pick]);
+
+  /* 등급컷. 아는 자리만 적어도 되고, 하나라도 있으면 백분위를 잡아준다 */
+  const [cutsOpen, setCutsOpen] = useState(() => (init.cuts || []).some((c) => c !== "" && c !== null));
+  const cutsFilled = (f.cuts || []).some((c) => c !== "" && c !== null);
+  const guessed = estimatePercentile(f.cuts, f.rawScore, f.subject);
+  const guessedStd = estimateStdScore(f.cuts, f.rawScore, f.subject);
+  const setCut = (i, v) => setF((p) => {
+    const next = (p.cuts || []).slice();
+    next[i] = v;
+    return { ...p, cuts: next };
+  });
+
+  /* 이 과목으로 최근에 기록한 시험. 같은 걸 또 볼 때가 많아서 앞에 깔아둔다 */
+  const recent = useMemo(() => {
+    const out = [];
+    (records || []).forEach((r) => {
+      if (r.subject !== f.subject || !r.examName) return;
+      if (out.indexOf(r.examName) === -1) out.push(r.examName);
+    });
+    return out.slice(0, 4);
+  }, [records, f.subject]);
+  const pickRecent = (name) => setPick(parseExamName(name, allNames));
+
+  const save = async () => {
+    setErr("");
+    if (!f.examName.trim()) return setErr("어떤 시험이었는지 골라 주세요.");
+    if (!f.examDate) return setErr("응시한 날짜를 골라 주세요.");
+    const grade = numOrNull(f.grade);
+    if (grade !== null && (grade < 1 || grade > 9)) return setErr("등급은 1부터 9까지예요.");
+    setBusy(true);
+    const r = await onSave({
+      examName: f.examName.trim(), examDate: f.examDate, subject: f.subject, detail: f.detail.trim(),
+      rawScore: numOrNull(f.rawScore), stdScore: numOrNull(f.stdScore),
+      percentile: numOrNull(f.percentile), grade, wrongNos: wrongList,
+      gradeCuts: cutsFilled ? f.cuts.map(numOrNull) : null,
+      durationSec: f.durationSec, memo: f.memo.trim(),
+    });
+    setBusy(false);
+    if (r && r.error) setErr(r.error);
+  };
+
+  return (
+    <Modal title={init.id ? "기록 고치기" : "모의고사 기록"} onClose={onClose}>
+      <div className="fld">
+        <label>과목</label>
+        <div className="chips">
+          {SUBJECTS.map((x) => (
+            <button key={x.key} className={"chip" + (x.key === f.subject ? " on" : "")}
+              onClick={() => set("subject", x.key)}>
+              {subjectName(x.key)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="fld">
+        <label>어떤 시험이었나요</label>
+        {recent.length > 0 && (
+          <div className="chips" style={{ marginBottom: 8 }}>
+            {recent.map((n) => (
+              <button key={n} className={"chip" + (f.examName === n ? " on" : "")} onClick={() => pickRecent(n)}>
+                {n}
+              </button>
+            ))}
+          </div>
+        )}
+        <button className="btn wide" style={{ justifyContent: "space-between", fontWeight: f.examName ? 700 : 500 }}
+          onClick={() => setPickerOpen(true)}>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {f.examName || "눌러서 고르기"}
+          </span>
+          <span style={{ color: "var(--tx3)", flex: "none", marginLeft: 8 }}>▾</span>
+        </button>
+      </div>
+
+      <div className="row">
+        <div className="fld">
+          <label>세부 과목</label>
+          <input className="in" value={f.detail} onChange={(e) => set("detail", e.target.value)} placeholder="미적분, 생명과학Ⅰ" />
+        </div>
+        <div className="fld">
+          <label>응시일</label>
+          <input className="in" type="date" value={f.examDate} onChange={(e) => set("examDate", e.target.value)} />
+        </div>
+      </div>
+
+      <div className="row">
+        <div className="fld">
+          <label>원점수 (만점 {s.max})</label>
+          <input className="in" type="number" inputMode="numeric" value={f.rawScore} onChange={(e) => set("rawScore", e.target.value)} />
+        </div>
+        <div className="fld">
+          <label>등급</label>
+          <input className="in" type="number" inputMode="numeric" value={f.grade} onChange={(e) => set("grade", e.target.value)} placeholder="1~9" />
+        </div>
+      </div>
+
+      <div className="row">
+        <div className="fld">
+          <label>표준점수</label>
+          <input className="in" type="number" inputMode="numeric" value={f.stdScore} onChange={(e) => set("stdScore", e.target.value)} />
+        </div>
+        <div className="fld">
+          <label>백분위</label>
+          <input className="in" type="number" inputMode="numeric" value={f.percentile} onChange={(e) => set("percentile", e.target.value)} />
+        </div>
+      </div>
+
+      {hasPercentile(f.subject) && (
+        <div className="fld">
+          {!cutsOpen ? (
+            <button className="btn wide sm" onClick={() => setCutsOpen(true)}>등급컷 적기</button>
+          ) : (
+            <div>
+              <label>등급컷 원점수</label>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 7 }}>
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((g, i) => (
+                  <div key={g}>
+                    <div style={{ fontSize: 11, color: "var(--tx3)", fontWeight: 700, marginBottom: 3, textAlign: "center" }}>{g}등급</div>
+                    <input className="in" style={{ padding: "9px 6px", textAlign: "center", fontSize: 14 }}
+                      type="number" inputMode="numeric" value={f.cuts[i] || ""}
+                      onChange={(e) => setCut(i, e.target.value)} />
+                  </div>
+                ))}
+              </div>
+              <p className="sub" style={{ marginTop: 8, marginBottom: 0, fontSize: 12 }}>
+                {guessed !== null
+                  ? "이 등급컷이면 백분위 " + guessed +
+                    (guessedStd !== null ? ", 표준점수 " + guessedStd : "") +
+                    " 쯤이에요. 위 칸을 비워두면 이 값으로 흐름에 넣어드려요." +
+                    (guessedStd !== null ? " 표준점수는 분포를 정규분포로 놓고 잡은 거라 몇 점씩 어긋날 수 있어요." : "")
+                  : "아는 등급만 적어도 돼요. 원점수까지 있으면 백분위를 잡아드려요."}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="fld">
+        <label>틀린 문항 번호</label>
+        <input className="in" value={f.wrong} inputMode="numeric" onChange={(e) => set("wrong", e.target.value)} placeholder="14 20 22 처럼 띄어서" />
+        {wrongList.length > 0 && (
+          <div style={{ marginTop: 7, fontSize: 12, color: "var(--tx2)", fontWeight: 600 }}>
+            {wrongList.length}문항 · {wrongList.join(", ")}번
+          </div>
+        )}
+      </div>
+
+      <div className="fld">
+        <label>푼 시간</label>
+        <div className="row" style={{ alignItems: "center" }}>
+          <input className="in" type="number" inputMode="numeric"
+            value={f.durationSec === null || f.durationSec === undefined ? "" : Math.round(f.durationSec / 60)}
+            onChange={(e) => set("durationSec", e.target.value === "" ? null : Number(e.target.value) * 60)} placeholder="분" />
+          <div style={{ flex: 2, fontSize: 12, color: "var(--tx3)" }}>제한 시간은 {s.minutes}분이에요.</div>
+        </div>
+      </div>
+
+      <div className="fld">
+        <label>메모</label>
+        <textarea className="in" value={f.memo} onChange={(e) => set("memo", e.target.value)} placeholder="시간이 모자랐던 부분, 실수한 유형" />
+      </div>
+
+      {err && <div className="err">{err}</div>}
+      <button className="btn pri wide" disabled={busy} onClick={save}>{busy ? "저장 중…" : "저장"}</button>
+      {init.id && (
+        <button className="btn danger wide" style={{ marginTop: 9 }}
+          onClick={() => { if (window.confirm("이 기록을 지울까요? 되돌릴 수 없어요.")) onDelete(init.id); }}>
+          기록 지우기
+        </button>
+      )}
+
+      {pickerOpen && (
+        <ExamPicker
+          subject={f.subject} categories={categories} records={records}
+          onClose={() => setPickerOpen(false)}
+          onDone={(p) => { setPick(p); setPickerOpen(false); }}
+          onAddCategory={onAddCategory}
+        />
+      )}
+    </Modal>
+  );
+}
+
+/* 수능까지 남은 날. 모의고사 화면 맨 위에만 둔다.
+   수학질문방은 초등도 쓰는 곳이라 홈에 걸면 대부분에게 상관없는 숫자가 된다 */
+function MockDday() {
+  const target = useMemo(nextSuneung, []);
+  const dd = dayGap(target);
+  return (
+    <div className="card pad">
+      <div style={{ fontSize: 12.5, color: "var(--tx2)", fontWeight: 700, marginBottom: 8 }}>
+        수능까지 · {target.getFullYear()}년 {target.getMonth() + 1}월 {target.getDate()}일
+      </div>
+      <div className="dday">
+        <b style={{ color: "var(--pri)" }}>{dd > 0 ? "D-" + dd : dd === 0 ? "D-DAY" : "D+" + -dd}</b>
+        <span style={{ fontSize: 13, color: "var(--tx3)", fontWeight: 600 }}>
+          {dd > 0 ? "남았어요" : dd === 0 ? "오늘이에요" : "지났어요"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* 모의고사 기록 목록. 수학질문방 안에서는 로그인 확인을 App 이 하므로 여기선 안 한다 */
+function MockList({ records, onNew, onEdit }) {
+  const [filter, setFilter] = useState("all");
+  const shown = filter === "all" ? records : records.filter((r) => r.subject === filter);
+  const used = SUBJECTS.filter((s) => records.some((r) => r.subject === s.key));
+
+  return (
+    <div>
+      <div className="sec"><MockDday /></div>
+
+      <div className="sec" style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <p className="sub" style={{ margin: 0 }}>{records.length}개를 남겼어요.</p>
+        <button className="btn pri sm" style={{ marginLeft: "auto" }} onClick={onNew}>+ 기록</button>
+      </div>
+
+      {used.length > 0 && (
+        <div className="chips sec">
+          <button className={"chip" + (filter === "all" ? " on" : "")} onClick={() => setFilter("all")}>전체</button>
+          {used.map((s) => (
+            <button key={s.key} className={"chip" + (filter === s.key ? " on" : "")} onClick={() => setFilter(s.key)}>{subjectName(s.key)}</button>
+          ))}
+        </div>
+      )}
+
+      <div className="lst sec">
+        {shown.length === 0 ? (
+          <div className="card"><div className="empty">아직 기록이 없어요.<br />위 기록 버튼으로 점수를 남겨보세요.</div></div>
+        ) : (
+          shown.map((r) => <RecordCard key={r.id} rec={r} onClick={() => onEdit(r)} />)
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ====== 시간 재기 ====== */
+const MOCK_TIMER_KEY = "mr-mock-timer";
+function beep(times) {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ctx = new AC();
+    for (let i = 0; i < times; i++) {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value = 880;
+      const t0 = ctx.currentTime + i * 0.28;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.25, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+      o.start(t0); o.stop(t0 + 0.24);
+    }
+    setTimeout(() => { try { ctx.close(); } catch (e) {} }, times * 300 + 400);
+  } catch (e) {}
+}
+
+function MockTimer({ onRecord }) {
+  const [subject, setSubject] = useState(MOCK_FIRST_SUBJECT);
+  const [custom, setCustom] = useState("");
+  const [total, setTotal] = useState(subjectOf(MOCK_FIRST_SUBJECT).minutes * 60);
+  const [endsAt, setEndsAt] = useState(null);   // 돌아가는 중이면 끝나는 시각
+  const [left, setLeft] = useState(subjectOf(MOCK_FIRST_SUBJECT).minutes * 60);
+  const [done, setDone] = useState(false);
+  const notified = useRef({});
+  const wake = useRef(null);
+
+  const s = subjectOf(subject);
+  const running = endsAt !== null;
+
+  /* 새로고침해도 이어서 돌아가게 남겨둔다 */
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(MOCK_TIMER_KEY);
+      if (!raw) return;
+      const v = JSON.parse(raw);
+      if (!v || !v.endsAt) return;
+      const rest = Math.round((v.endsAt - Date.now()) / 1000);
+      if (rest <= 0) { localStorage.removeItem(MOCK_TIMER_KEY); return; }
+      setSubject(v.subject); setTotal(v.total); setEndsAt(v.endsAt); setLeft(rest);
+    } catch (e) {}
+  }, []);
+
+  useEffect(() => {
+    if (!running) return;
+    const tick = () => {
+      const rest = Math.round((endsAt - Date.now()) / 1000);
+      setLeft(Math.max(0, rest));
+      [600, 300, 60].forEach((mark) => {
+        if (rest <= mark && rest > mark - 2 && !notified.current[mark]) {
+          notified.current[mark] = true;
+          beep(1);
+        }
+      });
+      if (rest <= 0) {
+        setEndsAt(null); setDone(true);
+        try { localStorage.removeItem(MOCK_TIMER_KEY); } catch (e) {}
+        beep(3);
+        try { if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]); } catch (e) {}
+      }
+    };
+    tick();
+    const t = setInterval(tick, 250);
+    return () => clearInterval(t);
+  }, [running, endsAt]);
+
+  /* 화면이 꺼지면 시험 도중에 시간을 못 본다 */
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        if (running && navigator.wakeLock && !wake.current) {
+          wake.current = await navigator.wakeLock.request("screen");
+        }
+      } catch (e) {}
+      if (!alive) return;
+    })();
+    if (!running && wake.current) {
+      try { wake.current.release(); } catch (e) {}
+      wake.current = null;
+    }
+    // 화면을 떠날 때도 놓아준다. 안 놓으면 붙잡은 걸 되찾을 길이 없어
+    // 타이머를 껐는데도 화면이 계속 켜져 있다
+    return () => {
+      alive = false;
+      if (wake.current) {
+        try { wake.current.release(); } catch (e) {}
+        wake.current = null;
+      }
+    };
+  }, [running]);
+
+  const pickSubject = (k) => {
+    if (running) return;
+    setSubject(k); setCustom("");
+    const sec = subjectOf(k).minutes * 60;
+    setTotal(sec); setLeft(sec); setDone(false);
+  };
+  const applyCustom = (v) => {
+    setCustom(v);
+    if (v === "") { // 비우면 고른 과목의 제한 시간으로 되돌린다
+      const sec = subjectOf(subject).minutes * 60;
+      setTotal(sec); setLeft(sec); setDone(false);
+      return;
+    }
+    const m = Number(v);
+    if (m > 0 && m <= 300) { setTotal(m * 60); setLeft(m * 60); setDone(false); }
+  };
+  const start = () => {
+    notified.current = {};
+    const at = Date.now() + left * 1000;
+    setEndsAt(at); setDone(false);
+    try { localStorage.setItem(MOCK_TIMER_KEY, JSON.stringify({ subject, total, endsAt: at })); } catch (e) {}
+  };
+  const pause = () => {
+    setEndsAt(null);
+    try { localStorage.removeItem(MOCK_TIMER_KEY); } catch (e) {}
+  };
+  const reset = () => {
+    setEndsAt(null); setLeft(total); setDone(false); notified.current = {};
+    try { localStorage.removeItem(MOCK_TIMER_KEY); } catch (e) {}
+  };
+
+  const ratio = total > 0 ? left / total : 0;
+  const cls = left <= 60 ? "danger" : left <= 300 ? "warn" : "";
+  const color = left <= 60 ? "var(--danger)" : left <= 300 ? "var(--warn)" : s.color;
+
+  return (
+    <div>
+      <p className="sub sec">과목을 고르면 실제 시험과 같은 시간으로 맞춰져요.</p>
+
+      <div className="chips sec">
+        {SUBJECTS.map((x) => (
+          <button key={x.key} className={"chip" + (x.key === subject && !custom ? " on" : "")}
+            disabled={running} onClick={() => pickSubject(x.key)}>
+            {subjectName(x.key)}
+          </button>
+        ))}
+      </div>
+
+      <div className="card sec">
+        <div className="tmr">
+          <Ring ratio={ratio} color={color}>
+            <div className={"clock " + cls}>{hhmmss(left)}</div>
+            <div className="lbl">{custom ? "직접 맞춘 시간" : subjectName(subject)}</div>
+          </Ring>
+
+          {done ? (
+            <div style={{ textAlign: "center", marginBottom: 14 }}>
+              <div style={{ fontWeight: 800, fontSize: 18, marginBottom: 4 }}>시간이 다 됐어요</div>
+              <div style={{ fontSize: 13, color: "var(--tx2)" }}>답안지에서 손을 떼세요.</div>
+            </div>
+          ) : (
+            <div style={{ fontSize: 12.5, color: "var(--tx3)", marginBottom: 14, fontWeight: 600, textAlign: "center", lineHeight: 1.5 }}>
+              {custom ? Math.round(total / 60) + "분" : s.minutes + "분 · " + s.count + "문항 · " + s.at}
+              {running && left > 600 ? <br /> : ""}
+              {running && left > 600 ? "10분 전에 알려드려요" : ""}
+            </div>
+          )}
+
+          <div className="row" style={{ width: "100%" }}>
+            {!running ? (
+              <button className="btn pri" style={{ flex: 2 }} onClick={start}>
+                {left === total ? "시작" : done ? "다시" : "이어서"}
+              </button>
+            ) : (
+              <button className="btn" style={{ flex: 2 }} onClick={pause}>일시정지</button>
+            )}
+            <button className="btn" onClick={reset}>처음으로</button>
+          </div>
+
+          <button className="btn wide" style={{ marginTop: 9 }}
+            onClick={() => onRecord({ subject, durationSec: total - left })}>
+            점수 기록하기
+          </button>
+        </div>
+      </div>
+
+      <div className="sec">
+        <div className="sec-t">시간 직접 맞추기</div>
+        <div className="card pad">
+          <div className="row" style={{ alignItems: "center" }}>
+            <input className="in" type="number" inputMode="numeric" value={custom} disabled={running}
+              onChange={(e) => applyCustom(e.target.value)} placeholder="분" />
+            <div style={{ flex: 2, fontSize: 12.5, color: "var(--tx3)", lineHeight: 1.5 }}>
+              실전보다 짧게 잡고 푸는 연습에 써요. 최대 300분까지 돼요.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="banner">
+        <span>🔔</span>
+        <span>10분, 5분, 1분 남았을 때 소리로 알려드려요. 소리가 안 나면 아이폰 무음 스위치를 확인해 주세요.</span>
+      </div>
+    </div>
+  );
+}
+
+/* ====== 성적 흐름 ====== */
+function MockLineChart({ points, color, min, max, invert }) {
+  const W = 300, H = 130, P = 14;
+  if (points.length === 0) return null;
+  const top = max || Math.max.apply(null, points.map((p) => p.v)) || 1;
+  const bottom = min || 0;
+  const span = top - bottom || 1;
+  const x = (i) => (points.length === 1 ? W / 2 : P + (i * (W - P * 2)) / (points.length - 1));
+  const y = (v) => invert
+    ? P + ((v - bottom) / span) * (H - P * 2)
+    : H - P - ((v - bottom) / span) * (H - P * 2);
+  const d = points.map((p, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(p.v).toFixed(1)).join(" ");
+  // 채우는 면의 바닥. 뒤집힌 그래프는 위쪽이 바닥이다
+  const base = invert ? P : H - P;
+  const area = d + " L" + x(points.length - 1).toFixed(1) + " " + base + " L" + x(0).toFixed(1) + " " + base + " Z";
+  return (
+    <svg viewBox={"0 0 " + W + " " + H} style={{ width: "100%", height: 130, display: "block" }}>
+      <path d={area} fill={color} opacity="0.10" />
+      <path d={d} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+      {points.map((p, i) => (
+        <g key={i}>
+          <circle cx={x(i)} cy={y(p.v)} r="4" fill="var(--card)" stroke={color} strokeWidth="2.5" />
+          <text x={x(i)} y={invert ? y(p.v) + 17 : y(p.v) - 9} textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--tx2)">{p.v}</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function MockStats({ records }) {
+  const used = SUBJECTS.filter((s) => records.some((r) => r.subject === s.key));
+  const [pick, setPick] = useState(null);
+  // 처음 보여줄 과목은 수학. 없으면 기록이 있는 첫 과목
+  const first = used.some((u) => u.key === MOCK_FIRST_SUBJECT) ? MOCK_FIRST_SUBJECT : (used[0] && used[0].key);
+  const key = pick && used.some((u) => u.key === pick) ? pick : first;
+  const s = key ? subjectOf(key) : null;
+
+  /* 원점수는 시험마다 난이도가 달라서 흐름을 보기 어렵다.
+     백분위는 남들과 견준 자리라 좋지만, 사설 모의고사는 표본이 적어 집계를 못 내고
+     예상 등급컷만 주는 곳이 많다. 그래서 기출과 사설을 함께 이어서 볼 수 있는 건
+     등급뿐이다. 등급을 먼저 둔다.
+     등급은 숫자가 작을수록 좋아서 그래프를 뒤집는다. */
+  const METRICS = [
+    { key: "grade", name: "등급", get: (r) => r.grade, min: 1, max: 9, invert: true },
+    { key: "percentile", name: "백분위", get: (r) => percentileOf(r).v, min: 0, max: 100, invert: false },
+    { key: "stdScore", name: "표준점수", get: (r) => stdScoreOf(r).v, min: null, max: null, invert: false },
+    { key: "rawScore", name: "원점수", get: (r) => r.rawScore, min: 0, max: null, invert: false },
+  ];
+  const [metricKey, setMetricKey] = useState("grade");
+
+  const mine = useMemo(
+    () => records.filter((r) => r.subject === key).slice().reverse(),
+    [records, key]
+  );
+  const has = (mm) => mine.filter((r) => mm.get(r) !== null && mm.get(r) !== undefined).length;
+  // 고른 것에 값이 없으면 값이 있는 쪽으로 넘어간다. 빈 그래프를 보여줄 이유가 없다
+  const asked = METRICS.find((x) => x.key === metricKey) || METRICS[0];
+  const m = has(asked) > 0 ? asked : (METRICS.find((x) => has(x) > 0) || asked);
+
+  const vals = mine.filter((r) => m.get(r) !== null && m.get(r) !== undefined);
+  const avg = (arr, f) => (arr.length ? Math.round((arr.reduce((a, b) => a + f(b), 0) / arr.length) * 10) / 10 : null);
+  const best = vals.length
+    ? (m.invert ? Math.min.apply(null, vals.map(m.get)) : Math.max.apply(null, vals.map(m.get)))
+    : null;
+  const avgVal = avg(vals, m.get);
+  const missing = mine.length - vals.length;
+  // 등급컷으로 잡은 값이 섞였는지
+  const guessCount = vals.filter((r) =>
+    (m.key === "percentile" && percentileOf(r).guess) || (m.key === "stdScore" && stdScoreOf(r).guess)
+  ).length;
+  /* 표준점수는 100 언저리에서 오르내려서 0부터 그리면 변화가 안 보인다.
+     값 주변만 잘라 보여준다. 원점수는 과목 만점을 위쪽으로 쓴다. */
+  const nums = vals.map(m.get);
+  const lo = m.min !== null ? m.min : Math.max(0, Math.min.apply(null, nums) - 5);
+  const hi = m.max !== null ? m.max
+    : (m.key === "rawScore" ? s.max : Math.max.apply(null, nums) + 5);
+
+  const wrongTop = useMemo(() => {
+    const cnt = {};
+    mine.forEach((r) => (r.wrongNos || []).forEach((n) => { cnt[n] = (cnt[n] || 0) + 1; }));
+    return Object.keys(cnt).map(Number).map((n) => ({ n, c: cnt[n] })).filter((x) => x.c >= 2)
+      .sort((a, b) => b.c - a.c || a.n - b.n).slice(0, 8);
+  }, [mine]);
+
+  if (!key) {
+    return (
+      <div className="card sec">
+        <div className="empty">기록이 두 개 이상 쌓이면<br />점수가 어떻게 움직였는지 보여드려요.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p className="sub sec">과목을 골라서 점수가 어떻게 움직였는지 봐요.</p>
+
+      <div className="chips sec">
+        {used.map((x) => (
+          <button key={x.key} className={"chip" + (x.key === key ? " on" : "")} onClick={() => setPick(x.key)}>{subjectName(x.key)}</button>
+        ))}
+      </div>
+
+      <div className="chips" style={{ marginTop: 10 }}>
+        {METRICS.map((x) => (
+          <button key={x.key} className={"chip" + (x.key === m.key ? " on" : "")}
+            disabled={has(x) === 0} style={has(x) === 0 ? { opacity: 0.4 } : null}
+            onClick={() => setMetricKey(x.key)}>
+            {x.name}
+          </button>
+        ))}
+      </div>
+
+      <div className="card pad sec">
+        <div style={{ display: "flex", gap: 18, marginBottom: 12 }}>
+          <div className="nm-i">
+            <b style={{ fontSize: 20, fontWeight: 800 }}>{mine.length}</b>
+            <span style={{ fontSize: 11, color: "var(--tx3)", fontWeight: 600 }}>응시</span>
+          </div>
+          <div className="nm-i">
+            <b style={{ fontSize: 20, fontWeight: 800, color: m.key === "grade" ? gradeColor(avgVal) : "inherit" }}>{avgVal === null ? "—" : avgVal}</b>
+            <span style={{ fontSize: 11, color: "var(--tx3)", fontWeight: 600 }}>평균 {m.name}</span>
+          </div>
+          <div className="nm-i">
+            <b style={{ fontSize: 20, fontWeight: 800, color: m.key === "grade" ? gradeColor(best) : "inherit" }}>{best === null ? "—" : best}</b>
+            <span style={{ fontSize: 11, color: "var(--tx3)", fontWeight: 600 }}>최고 {m.name}</span>
+          </div>
+        </div>
+        {vals.length > 0 ? (
+          <MockLineChart points={vals.map((r) => ({ v: m.get(r) }))} color={s.color}
+            min={lo} max={hi} invert={m.invert} />
+        ) : (
+          <div className="empty" style={{ padding: 24 }}>{m.name}를 적은 기록이 없어요.</div>
+        )}
+        <div style={{ fontSize: 11.5, color: "var(--tx3)", textAlign: "center", marginTop: 4, fontWeight: 600, lineHeight: 1.6 }}>
+          왼쪽이 예전, 오른쪽이 최근이에요{m.invert ? " · 위로 갈수록 좋은 등급이에요" : ""}
+          {guessCount > 0 && <br />}
+          {guessCount > 0 ? "그중 " + guessCount + "개는 등급컷으로 잡은 예상값이에요" : ""}
+          {missing > 0 && <br />}
+          {missing > 0 ? m.name + "를 알 수 없는 기록 " + missing + "개는 빠졌어요" : ""}
+        </div>
+      </div>
+
+      {wrongTop.length > 0 && (
+        <div className="sec">
+          <div className="sec-t">자주 틀리는 문항</div>
+          <div className="card pad">
+            <div className="chips">
+              {wrongTop.map((w) => (
+                <span key={w.n} className="chip" style={{ color: "var(--danger)", borderColor: "var(--danger)" }}>
+                  {w.n}번 · {w.c}회
+                </span>
+              ))}
+            </div>
+            <p className="sub" style={{ marginTop: 10, marginBottom: 0, fontSize: 12.5 }}>
+              같은 자리에서 두 번 넘게 틀린 문항이에요. 그 번호대가 어떤 유형인지 살펴보면 좋아요.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="sec">
+        <div className="sec-t">{subjectName(key)} 기록</div>
+        <div className="card pad" style={{ overflowX: "auto" }}>
+          <table className="tbl">
+            <thead><tr><th>날짜</th><th>시험</th><th>백분위</th><th>원점수</th><th>등급</th></tr></thead>
+            <tbody>
+              {mine.slice().reverse().map((r) => {
+                const pc = percentileOf(r);
+                return (
+                  <tr key={r.id}>
+                    <td style={{ color: "var(--tx3)", whiteSpace: "nowrap" }}>{mkDay(r.examDate)}</td>
+                    <td style={{ fontWeight: 600 }}>{r.examName}</td>
+                    <td style={pc.guess ? { color: "var(--tx3)" } : null}>
+                      {pc.v === null ? "—" : pc.v + (pc.guess ? "*" : "")}
+                    </td>
+                    <td>{r.rawScore === null ? "—" : r.rawScore}</td>
+                    <td style={{ fontWeight: 800, color: gradeColor(r.grade) }}>{r.grade || "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* 모의고사 화면. 기록, 시간 재기, 성적 흐름을 주소로 나눈다.
+   수학질문방의 다른 화면과 같게 SegBar 로 옮겨 다닌다 */
+const MOCK_SUBS = ["list", "timer", "stats"];
+const MOCK_SUB_PATH = { list: "/mock", timer: "/mock/timer", stats: "/mock/stats" };
+function Mock({ records, onNew, onEdit, onRecordFromTimer, initialSub, pushUrl }) {
+  const [sub0, setSub0] = useState(MOCK_SUBS.indexOf(initialSub) !== -1 ? initialSub : "list");
+  const goSub = (t) => {
+    setSub0(t);
+    if (pushUrl) pushUrl(MOCK_SUB_PATH[t]);
+  };
+
+  return (
+    <div className="mr-mk mr-col">
+      <div className="mr-list-top">
+        <span className="mr-list-title">모의고사</span>
+      </div>
+
+      <SegBar cls="mr-subtabs" n={3} i={MOCK_SUBS.indexOf(sub0)} onPick={(k) => goSub(MOCK_SUBS[k])}>
+        <button className={sub0 === "list" ? "on" : ""} onClick={() => goSub("list")}>기록</button>
+        <button className={sub0 === "timer" ? "on" : ""} onClick={() => goSub("timer")}>시간 재기</button>
+        <button className={sub0 === "stats" ? "on" : ""} onClick={() => goSub("stats")}>성적 흐름</button>
+      </SegBar>
+
+      {sub0 === "timer" ? (
+        <MockTimer onRecord={onRecordFromTimer} />
+      ) : sub0 === "stats" ? (
+        <MockStats records={records} />
+      ) : (
+        <MockList records={records} onNew={onNew} onEdit={onEdit} />
+      )}
+    </div>
+  );
+}
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(<App />);
