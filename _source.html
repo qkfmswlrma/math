@@ -123,8 +123,14 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.17.2";
+const APP_VERSION = "2.18.0";
 const CHANGELOG = [
+  {
+    v: "2.18.0",
+    date: "2026.9.1",
+    items: ["오늘의 문제에 난이도가 표시되고 달력에서도 한눈에 보여요"],
+    adminItems: ["문제를 낼 때 난이도를 직접 고를 수 있어요"],
+  },
   {
     v: "2.17.2",
     date: "2026.8.31",
@@ -648,6 +654,23 @@ function combinedRate(stat) {
   return tot ? Math.round((100 * cor) / tot) : null;
 }
 // 평균 정답률로 난이도를 나눔 (높을수록 쉬움). 데이터 없으면 null
+/* 출제자가 정해 둔 난이도. 없으면 null */
+const LEVELS = [
+  { v: 1, label: "쉬움", cls: "easy" },
+  { v: 2, label: "보통", cls: "mid" },
+  { v: 3, label: "어려움", cls: "hard" },
+];
+function levelOf(q) {
+  if (!q) return null;
+  return LEVELS.find((l) => l.v === q.level) || null;
+}
+/* 시험의 난이도 — 문항들 중 가장 높은 것 */
+function examLevel(exam) {
+  const qs = (exam && exam.questions) || [];
+  let best = null;
+  qs.forEach((q) => { const l = levelOf(q); if (l && (!best || l.v > best.v)) best = l; });
+  return best;
+}
 function difficultyOf(rate) {
   if (rate === null || rate === undefined) return null;
   if (rate >= 70) return { label: "쉬움", cls: "easy" };
@@ -3765,7 +3788,7 @@ function ExamsAdmin({ exams, isSuper, allRates, onAddExam, onEditExam, onDeleteE
 /* ---------- 시험 출제/수정 에디터 ---------- */
 function ExamEditor({ initial, defaultType, onCancel, onSave }) {
   function blankQ() {
-    return { id: uid(), type: "mc", text: "", image: "", latex: "", mathTree: null, body: [{ id: segId(), type: "text", v: "" }], points: 10, options: ["", ""], answer: 0, accept: "", explain: null };
+    return { id: uid(), type: "mc", text: "", image: "", latex: "", mathTree: null, body: [{ id: segId(), type: "text", v: "" }], points: 10, options: ["", ""], answer: 0, accept: "", explain: null, level: undefined };
   }
   const [title, setTitle] = useState(initial ? initial.title : "");
   const [examType, setExamType] = useState(initial ? (initial.examType || "level") : (defaultType || "level"));
@@ -3977,6 +4000,18 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
               />
             </div>
           )}
+          <div className="mr-cat-label">난이도</div>
+          <div className="mr-lv-pick">
+            {LEVELS.map((l) => (
+              <button key={l.v}
+                className={"mr-lv-btn lv-" + l.cls + (q.level === l.v ? " on" : "")}
+                onClick={() => update(q.id, { level: q.level === l.v ? undefined : l.v })}>
+                {l.label}
+              </button>
+            ))}
+          </div>
+          <p className="mf-hint">고르지 않으면 정답률이 쌓인 뒤 자동으로 표시돼요.</p>
+
           {expOpen[q.id] || hasExplain(q) ? (
             <>
               <div className="mr-cat-label">해설 (선택 — 채점 결과에서 보여요)</div>
@@ -4368,16 +4403,21 @@ function DailyCalendar({ days, solvedIds, selId, onPick, onClose }) {
             const ex = byDay[ym.y * 10000 + (ym.m + 1) * 100 + d];
             const solved = ex && solvedIds.has(ex.id);
             const isSel = ex && ex.id === selId;
+            const lv = ex ? examLevel(ex) : null;
             const cls = "mr-cal-cell" + (ex ? " has" : " none") + (solved ? " solved" : "") + (isSel ? " sel" : "");
             return (
               <button key={d} className={cls} disabled={!ex} onClick={() => { if (ex) { onPick(ex); onClose(); } }}>
                 <span className="mr-cal-num">{d}</span>
                 {solved && <span className="mr-cal-check">✓</span>}
+                {lv && <span className={"mr-cal-dot lv-" + lv.cls} />}
               </button>
             );
           })}
         </div>
-        <div className="mr-cal-legend"><span className="mr-cal-check">✓</span> 푼 문제</div>
+        <div className="mr-cal-legend">
+          <span className="mr-cal-check">✓</span> 푼 문제
+          <span className="mr-cal-lv"><i className="mr-cal-dot lv-easy" />쉬움<i className="mr-cal-dot lv-mid" />보통<i className="mr-cal-dot lv-hard" />어려움</span>
+        </div>
       </div>
     </div>
   );
@@ -4397,7 +4437,8 @@ function TodayPuzzle({ exams, subs, student, loggedIn, allRates, onAddSub, onGue
   const older = idx >= 0 && idx < days.length - 1 ? days[idx + 1] : null; // 더 지난 문제
   const sSub = sel ? myOf(sel.id) : null;
   const sRate = sel && allRates && typeof allRates === "object" ? combinedRate(allRates[sel.id]) : null;
-  const sDiff = difficultyOf(sRate);
+  const sLevel = sel ? examLevel(sel) : null;
+  const sDiff = sLevel || difficultyOf(sRate);
 
   return (
     <div className="mr-col">
@@ -4412,7 +4453,7 @@ function TodayPuzzle({ exams, subs, student, loggedIn, allRates, onAddSub, onGue
           <article className="mr-daily-hero">
             <div className="mr-daily-badges">
               <span className="mr-daily-badge">오늘의 문제</span>
-              {sDiff && <span className="mr-diff" style={{ color: rateColor(sRate), background: rateColor(sRate) + "22" }}>{sDiff.label}</span>}
+              {sDiff && <span className={"mr-diff lv-" + sDiff.cls}>{sDiff.label}</span>}
               {sRate !== null && <span className="mr-daily-rate" style={{ color: rateColor(sRate) }}>평균정답률 {sRate}%</span>}
             </div>
             <h2 className="mr-daily-title">{sel.title}</h2>
@@ -4563,7 +4604,7 @@ function ExamsStudent({ student, loggedIn, allRates, requireLogin, exams, subs, 
               const mine = subs.find((s) => s.examId === ex.id && s.student === student && student);
               const unread = examType === "today" && !isExamViewed(ex, readIds);
               const rate = rateOf(ex);
-              const diff = difficultyOf(rate);
+              const diff = examLevel(ex) || difficultyOf(rate);
               return (
                 <article className="mr-card" key={ex.id} style={{ animationDelay: `${Math.min(i, 5) * 45}ms` }}>
                   <div className="mr-notice-head">
@@ -4580,7 +4621,7 @@ function ExamsStudent({ student, loggedIn, allRates, requireLogin, exams, subs, 
                     {allRates && allRates !== true
                       ? <ExamAvgRate stat={allRates[ex.id]} />
                       : <ExamAvgRateSolo examId={ex.id} questions={ex.questions} />}
-                    {diff && <b className="mr-diff" style={{ color: rateColor(rate), background: rateColor(rate) + "22" }}>{diff.label}</b>}
+                    {diff && <b className={"mr-diff lv-" + diff.cls}>{diff.label}</b>}
                   </div>
                   <div className="mr-row-end">
                     {mine ? (
@@ -6789,6 +6830,22 @@ button.mr-daily-opt:active{transform:scale(.99)}
 .mr-cal-check{position:absolute; top:4px; right:6px; font-size:10px; color:var(--blue); font-weight:900; line-height:1}
 .mr-cal-cell.sel .mr-cal-check{color:#fff}
 .mr-cal-legend{margin-top:14px; font-size:12.5px; color:var(--t3); font-weight:600; text-align:center}
+.mr-cal-lv{display:inline-flex; align-items:center; gap:4px; margin-left:12px}
+.mr-cal-lv i{margin-left:6px}
+.mr-cal-dot{position:absolute; bottom:5px; left:50%; transform:translateX(-50%); width:5px; height:5px; border-radius:50%}
+.mr-cal-lv .mr-cal-dot{position:static; transform:none; display:inline-block}
+.mr-cal-cell.sel .mr-cal-dot{box-shadow:0 0 0 1.5px rgba(255,255,255,0.9)}
+.lv-easy{background:var(--green)}
+.lv-mid{background:#d98324}
+.lv-hard{background:var(--red)}
+.mr-diff.lv-easy{color:var(--green); background:var(--green-bg)}
+.mr-diff.lv-mid{color:#d98324; background:rgba(217,131,36,0.13)}
+.mr-diff.lv-hard{color:var(--red); background:var(--red-bg)}
+.mr-lv-pick{display:flex; gap:8px; margin-top:6px}
+.mr-lv-btn{flex:1; border:2px solid var(--line); background:var(--bg); color:var(--t2); font-family:inherit; font-weight:700; font-size:14px; padding:11px; border-radius:12px; cursor:pointer; transition:border-color .15s, color .15s, background .15s}
+.mr-lv-btn.on.lv-easy{border-color:var(--green); color:var(--green); background:var(--green-bg)}
+.mr-lv-btn.on.lv-mid{border-color:#d98324; color:#d98324; background:rgba(217,131,36,0.13)}
+.mr-lv-btn.on.lv-hard{border-color:var(--red); color:var(--red); background:var(--red-bg)}
 .mr-cal-legend .mr-cal-check{position:static; color:var(--blue)}
 
 /* ============ 어두운 화면 모드 ============ */
