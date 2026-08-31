@@ -156,8 +156,13 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.18.2";
+const APP_VERSION = "2.18.3";
 const CHANGELOG = [{
+  v: "2.18.3",
+  date: "2026.9.1",
+  items: ["난이도는 출제자가 정한 것만 보여주고, 정답률은 따로 확인할 수 있어요"],
+  adminItems: []
+}, {
   v: "2.18.2",
   date: "2026.9.1",
   items: ["달력에서 예전 문제도 난이도가 보여요"],
@@ -5535,8 +5540,7 @@ function DailyCalendar({
     const ex = byDay[ym.y * 10000 + (ym.m + 1) * 100 + d];
     const solved = ex && solvedIds.has(ex.id);
     const isSel = ex && ex.id === selId;
-    // 출제자가 정한 난이도가 없으면 정답률로 판정한다 (히어로·목록과 같은 규칙)
-    const lv = ex ? examLevel(ex) || (allRates && typeof allRates === "object" ? difficultyOf(combinedRate(allRates[ex.id])) : null) : null;
+    const lv = ex ? examLevel(ex) : null;
     const cls = "mr-cal-cell" + (ex ? " has" : " none") + (solved ? " solved" : "") + (isSel ? " sel" : "");
     return /*#__PURE__*/React.createElement("button", {
       key: d,
@@ -5602,8 +5606,7 @@ function TodayPuzzle({
   const older = idx >= 0 && idx < days.length - 1 ? days[idx + 1] : null; // 더 지난 문제
   const sSub = sel ? myOf(sel.id) : null;
   const sRate = sel && allRates && typeof allRates === "object" ? combinedRate(allRates[sel.id]) : null;
-  const sLevel = sel ? examLevel(sel) : null;
-  const sDiff = sLevel || difficultyOf(sRate);
+  const sDiff = sel ? examLevel(sel) : null;
   return /*#__PURE__*/React.createElement("div", {
     className: "mr-col"
   }, /*#__PURE__*/React.createElement("button", {
@@ -5852,7 +5855,7 @@ function ExamsStudent({
     const mine = subs.find(s => s.examId === ex.id && s.student === student && student);
     const unread = examType === "today" && !isExamViewed(ex, readIds);
     const rate = rateOf(ex);
-    const diff = examLevel(ex) || difficultyOf(rate);
+    const diff = examLevel(ex);
     return /*#__PURE__*/React.createElement("article", {
       className: "mr-card",
       key: ex.id,
