@@ -156,8 +156,13 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.18.1";
+const APP_VERSION = "2.18.2";
 const CHANGELOG = [{
+  v: "2.18.2",
+  date: "2026.9.1",
+  items: ["달력에서 예전 문제도 난이도가 보여요"],
+  adminItems: []
+}, {
   v: "2.18.1",
   date: "2026.9.1",
   items: ["달력의 난이도 표시를 알아보기 쉽게 바꿨어요"],
@@ -5454,7 +5459,8 @@ function DailyCalendar({
   solvedIds,
   selId,
   onPick,
-  onClose
+  onClose,
+  allRates
 }) {
   const byDay = {};
   days.forEach(ex => {
@@ -5529,7 +5535,8 @@ function DailyCalendar({
     const ex = byDay[ym.y * 10000 + (ym.m + 1) * 100 + d];
     const solved = ex && solvedIds.has(ex.id);
     const isSel = ex && ex.id === selId;
-    const lv = ex ? examLevel(ex) : null;
+    // 출제자가 정한 난이도가 없으면 정답률로 판정한다 (히어로·목록과 같은 규칙)
+    const lv = ex ? examLevel(ex) || (allRates && typeof allRates === "object" ? difficultyOf(combinedRate(allRates[ex.id])) : null) : null;
     const cls = "mr-cal-cell" + (ex ? " has" : " none") + (solved ? " solved" : "") + (isSel ? " sel" : "");
     return /*#__PURE__*/React.createElement("button", {
       key: d,
@@ -5674,6 +5681,7 @@ function TodayPuzzle({
     days: days,
     solvedIds: solvedIds,
     selId: sel.id,
+    allRates: allRates,
     onPick: ex => setSelId(ex.id),
     onClose: () => setCalOpen(false)
   })));
