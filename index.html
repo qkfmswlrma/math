@@ -156,8 +156,13 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.18.4";
+const APP_VERSION = "2.18.5";
 const CHANGELOG = [{
+  v: "2.18.5",
+  date: "2026.9.1",
+  items: ["핸드폰에서 버튼 글자가 세로로 접히던 걸 고치고 해설을 더 넓게 폈어요"],
+  adminItems: []
+}, {
   v: "2.18.4",
   date: "2026.9.1",
   items: ["핸드폰에서 해설이 좁게 눌리던 걸 고쳤어요"],
@@ -7834,6 +7839,7 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-btn-ghost{
   border:0; background:var(--blue-bg); color:var(--blue); padding:11px 18px; border-radius:13px;
   font-family:inherit; font-weight:700; font-size:14.5px; cursor:pointer; transition:background .15s;
+  white-space:nowrap; flex:none;
 }
 .mr-btn-ghost:hover{background:#DBEAFE}
 .mr-btn-ghost.danger{background:var(--red-bg); color:var(--red)}
@@ -7846,8 +7852,8 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
    .mr-col 의 gap 12px 만큼을 직접 띄워 화면 안 뒤로가기와 간격을 맞춘다 */
 .mr-page-back{display:flex; width:fit-content; margin-bottom:18px}
 .mr-row-end{display:flex; justify-content:flex-end; margin-top:14px}
-.mr-row-between{display:flex; justify-content:space-between; align-items:center; gap:10px}
-.mr-gap{display:flex; gap:8px; align-items:center}
+.mr-row-between{display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap}
+.mr-gap{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
 
 /* exam editor */
 .mr-qedit-head{display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin-bottom:4px}
@@ -8517,11 +8523,16 @@ html[data-theme="dark"] .mr-pick-icon.green{background:linear-gradient(140deg,#5
 
 /* 히어로 > 채점결과 > 해설 로 상자가 겹치면 좁은 화면에서 글 폭이 남지 않는다 */
 @media (max-width:480px){
-  .mr-daily-hero{padding:16px; border-radius:20px}
-  .mr-daily-result{padding:12px}
-  .mr-explain{padding:11px 12px}
-  .mr-explain .mr-qbox{padding-left:10px; margin:10px 0}
-  .mr-qbox{padding:11px 12px}
+  .mr-daily-hero{padding:14px; border-radius:20px}
+  .mr-daily-result{padding:12px 8px}
+  .mr-explain{padding:10px}
+  .mr-explain .mr-qbox{padding-left:9px; margin:10px 0}
+  .mr-qbox{padding:10px 11px}
+  /* 버튼이 네 개까지 붙는 줄이 있다. 글자가 접히느니 작아지는 편이 낫다 */
+  .mr-btn-ghost{padding:10px 12px; font-size:13.5px; border-radius:11px}
+  .mr-gap{gap:6px}
+  /* 들여쓴 수식은 접히기보다 옆으로 밀리게 */
+  .mr-explain .mr-qbody{overflow-x:auto; -webkit-overflow-scrolling:touch}
 }
 
 .mr-mk .chips{display:flex; flex-wrap:wrap; gap:7px}
