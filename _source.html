@@ -123,8 +123,14 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.18.3";
+const APP_VERSION = "2.18.4";
 const CHANGELOG = [
+  {
+    v: "2.18.4",
+    date: "2026.9.1",
+    items: ["핸드폰에서 해설이 좁게 눌리던 걸 고쳤어요"],
+    adminItems: [],
+  },
   {
     v: "2.18.3",
     date: "2026.9.1",
@@ -6525,6 +6531,9 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-explain{margin-top:14px; background:var(--blue-bg); border-radius:12px; padding:12px 14px}
 .mr-explain-tag{font-size:12px; font-weight:800; color:var(--blue); margin-bottom:7px}
 .mr-explain .mr-qbody{font-size:14px; line-height:1.85}
+/* 해설은 이미 상자 안이다. 그 안에서 또 상자를 그리면 좁은 화면에서 글이 갇힌다 */
+.mr-explain .mr-qbox{border:0; background:transparent; border-left:2.5px solid rgba(120,95,170,0.45);
+  border-radius:0; padding:2px 0 2px 12px; margin:12px 0}
 .mr-explain-none{margin-top:14px; font-size:12.5px; color:var(--t3); font-weight:600; line-height:1.6; background:var(--bg); border-radius:11px; padding:11px 13px}
 .mr-explain-none b{color:var(--t2); font-weight:800}
 .mr-search{margin-top:0}
@@ -7011,6 +7020,15 @@ html[data-theme="dark"] .mr-pick-icon.green{background:linear-gradient(140deg,#5
 @media (max-width:360px){
   .mr-mk .row{flex-wrap:wrap}
   .mr-mk .row>.fld{flex:1 1 100%}
+}
+
+/* 히어로 > 채점결과 > 해설 로 상자가 겹치면 좁은 화면에서 글 폭이 남지 않는다 */
+@media (max-width:480px){
+  .mr-daily-hero{padding:16px; border-radius:20px}
+  .mr-daily-result{padding:12px}
+  .mr-explain{padding:11px 12px}
+  .mr-explain .mr-qbox{padding-left:10px; margin:10px 0}
+  .mr-qbox{padding:11px 12px}
 }
 
 .mr-mk .chips{display:flex; flex-wrap:wrap; gap:7px}
