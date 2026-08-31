@@ -123,8 +123,14 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.16.1";
+const APP_VERSION = "2.17.0";
 const CHANGELOG = [
+  {
+    v: "2.17.0",
+    date: "2026.8.31",
+    items: [],
+    adminItems: ["출제한 문제를 학생에게 보이는 화면 그대로 미리 풀어볼 수 있어요"],
+  },
   {
     v: "2.16.1",
     date: "2026.8.6",
@@ -3497,9 +3503,10 @@ function ExamChooser({ onPick, todayUnread }) {
 }
 
 /* 시험 응시 래퍼 (관리자/학생 공용 - TakeExam 연결을 한 곳에서 관리) */
-function ExamTaker({ taking, setTaking, student, loggedIn, onAddSub, onGuestSubmit }) {
+function ExamTaker({ taking, setTaking, student, loggedIn, onAddSub, onGuestSubmit, preview }) {
   return (
     <TakeExam
+      preview={preview}
       exam={taking}
       student={student}
       loggedIn={loggedIn}
@@ -3572,8 +3579,11 @@ function ExamsAdmin({ exams, isSuper, allRates, onAddExam, onEditExam, onDeleteE
   const [mode, setMode] = useState("list");
   const [activeExam, setActiveExam] = useState(null);
   const [taking, setTaking] = useState(() => (initialNo ? findByNo(exams, initialNo) || null : null));
+  // 미리보기: 학생에게 보이는 응시 화면을 그대로 열되 제출은 저장하지 않는다
+  const [preview, setPreview] = useState(false);
   const url = (p) => { if (goUrl) goUrl(p); };
-  const closeExam = () => { setTaking(null); url("/exam/" + examType); };
+  const closeExam = () => { setTaking(null); setPreview(false); url("/exam/" + examType); };
+  const openPreview = (ex) => { setPreview(true); setTaking(ex); };
 
   const openGrade = (exam) => {
     setActiveExam(exam);
@@ -3590,7 +3600,7 @@ function ExamsAdmin({ exams, isSuper, allRates, onAddExam, onEditExam, onDeleteE
 
   if (taking)
     return (
-      <ExamTaker taking={taking} setTaking={closeExam} student={student} loggedIn={loggedIn} onAddSub={onAddSub} getAnswers={getAnswers} />
+      <ExamTaker taking={taking} setTaking={closeExam} student={student} loggedIn={loggedIn} onAddSub={onAddSub} getAnswers={getAnswers} preview={preview} />
     );
 
   if (mode === "create")
@@ -3698,6 +3708,9 @@ function ExamsAdmin({ exams, isSuper, allRates, onAddExam, onEditExam, onDeleteE
                       삭제
                     </button>
                   )}
+                  <button className="mr-btn-ghost" onClick={() => openPreview(ex)}>
+                    미리보기
+                  </button>
                   <button className="mr-btn-ghost" onClick={() => openGrade(ex)}>
                     제출/채점 보기
                   </button>
@@ -4557,12 +4570,13 @@ function ExamsStudent({ student, loggedIn, allRates, requireLogin, exams, subs, 
   );
 }
 
-function TakeExam({ exam: rawExam, student, loggedIn, onGuestSubmit, getAnswers, onCancel, onSubmit }) {
+function TakeExam({ exam: rawExam, student, loggedIn, onGuestSubmit, getAnswers, onCancel, onSubmit, preview }) {
   // 제출 전에는 정답이 빠진 채로 온다. 제출하면 서버가 정답을 주고 그때부터 이걸 쓴다
   const [graded, setGraded] = useState(null);
   const exam = graded || rawExam;
   const draftKey = "mrdraft:" + exam.id + ":" + ((student || "").trim() || "guest");
   const [answers, setAnswers] = useState(() => {
+    if (preview) return {}; // 미리보기는 임시저장을 건드리지 않는다
     try {
       const raw = localStorage.getItem(draftKey);
       return raw ? JSON.parse(raw) : {};
@@ -4579,6 +4593,7 @@ function TakeExam({ exam: rawExam, student, loggedIn, onGuestSubmit, getAnswers,
 
   // 마운트 시 임시저장된 답안이 있었는지 표시
   useEffect(() => {
+    if (preview) return;
     try {
       const raw = localStorage.getItem(draftKey);
       if (raw && Object.keys(JSON.parse(raw) || {}).length > 0) setRestored(true);
@@ -4587,7 +4602,7 @@ function TakeExam({ exam: rawExam, student, loggedIn, onGuestSubmit, getAnswers,
 
   // 답안이 바뀔 때마다 자동 임시저장 (제출 전까지)
   useEffect(() => {
-    if (result) return;
+    if (result || preview) return;
     try {
       localStorage.setItem(draftKey, JSON.stringify(answers));
     } catch (e) {}
@@ -4617,9 +4632,6 @@ function TakeExam({ exam: rawExam, student, loggedIn, onGuestSubmit, getAnswers,
     }).length;
     if (unanswered > 0 && !confirm(`아직 풀지 않은 문항이 ${unanswered}개 있어요. 그래도 제출할까요?`)) return;
 
-    submitLock.current = true;
-    setSubmitting(true);
-
     const sub = {
       id: uid(),
       examId: exam.id,
@@ -4629,6 +4641,11 @@ function TakeExam({ exam: rawExam, student, loggedIn, onGuestSubmit, getAnswers,
       graded: true,
       submittedAt: Date.now(),
     };
+    // 미리보기는 서버에 아무것도 보내지 않고 채점 화면만 그린다
+    if (preview) { setResult(sub); return; }
+
+    submitLock.current = true;
+    setSubmitting(true);
     const hidden = answersHidden(rawExam);
     if (loggedIn && student.trim()) {
       const res = await onSubmit(sub); // 회원: 기록 저장 (목록 이동은 리뷰 화면에서)
@@ -4665,7 +4682,12 @@ function TakeExam({ exam: rawExam, student, loggedIn, onGuestSubmit, getAnswers,
             {score}
             <span className="mr-record-max"> / {max}</span>
           </div>
-          {!loggedIn && (
+          {preview && (
+            <p className="mr-guest-note" style={{ marginTop: "16px" }}>
+              미리보기라서 이 점수는 저장되지 않았어요
+            </p>
+          )}
+          {!loggedIn && !preview && (
             <p className="mr-guest-note" style={{ marginTop: "16px" }}>
               비회원은 시험 기록이 저장되지 않습니다
             </p>
@@ -4705,11 +4727,15 @@ function TakeExam({ exam: rawExam, student, loggedIn, onGuestSubmit, getAnswers,
         </div>
       </section>
 
+      {preview && (
+        <div className="mr-guest-note">학생에게 보이는 화면이에요. 여기서 제출해도 기록에 남지 않아요.</div>
+      )}
+
       {restored && !result && (
         <div className="mr-resume-note">이전에 풀던 답안을 불러왔어요. 이어서 풀 수 있어요.</div>
       )}
 
-      {!loggedIn && (
+      {!loggedIn && !preview && (
         <div className="mr-guest-note">비회원은 시험 기록이 저장되지 않습니다</div>
       )}
 
@@ -4755,7 +4781,7 @@ function TakeExam({ exam: rawExam, student, loggedIn, onGuestSubmit, getAnswers,
 
       <div className="mr-row-end">
         <button className="mr-btn" onClick={submit} disabled={submitting}>
-          {submitting ? "제출 중…" : "제출하기"}
+          {preview ? "채점해 보기" : submitting ? "제출 중…" : "제출하기"}
         </button>
       </div>
     </div>
