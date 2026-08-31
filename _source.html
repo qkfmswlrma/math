@@ -123,8 +123,17 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.17.0";
+const APP_VERSION = "2.17.1";
 const CHANGELOG = [
+  {
+    v: "2.17.1",
+    date: "2026.8.31",
+    items: [],
+    adminItems: [
+      "미리보기가 학생이 실제로 보는 날짜와 달력 화면 그대로 열려요",
+      "시험 목록이 문제 날짜순으로 정렬돼요",
+    ],
+  },
   {
     v: "2.17.0",
     date: "2026.8.31",
@@ -3579,11 +3588,13 @@ function ExamsAdmin({ exams, isSuper, allRates, onAddExam, onEditExam, onDeleteE
   const [mode, setMode] = useState("list");
   const [activeExam, setActiveExam] = useState(null);
   const [taking, setTaking] = useState(() => (initialNo ? findByNo(exams, initialNo) || null : null));
-  // 미리보기: 학생에게 보이는 응시 화면을 그대로 열되 제출은 저장하지 않는다
+  // 미리보기: 학생에게 보이는 화면을 그대로 열되 아무것도 저장하지 않는다.
+  // 오늘의 문제는 날짜바와 달력이 있는 학생 화면(TodayPuzzle)을 그대로 띄운다
   const [preview, setPreview] = useState(false);
+  const [dailyPreview, setDailyPreview] = useState(false);
   const url = (p) => { if (goUrl) goUrl(p); };
-  const closeExam = () => { setTaking(null); setPreview(false); url("/exam/" + examType); };
-  const openPreview = (ex) => { setPreview(true); setTaking(ex); };
+  const closeExam = () => { setTaking(null); setPreview(false); setDailyPreview(false); url("/exam/" + examType); };
+  const openPreview = (ex) => { setPreview(true); setDailyPreview(examType === "today"); setTaking(ex); };
 
   const openGrade = (exam) => {
     setActiveExam(exam);
@@ -3597,6 +3608,26 @@ function ExamsAdmin({ exams, isSuper, allRates, onAddExam, onEditExam, onDeleteE
     if (!confirm(`'${exam.title}' 시험을 삭제할까요? 되돌릴 수 없어요.`)) return;
     await onDeleteExam(exam.id);
   };
+
+  // 오늘의 문제 미리보기: 학생이 보는 그 화면. 제출/읽음 처리는 전부 빈 함수로 막는다
+  if (taking && preview && dailyPreview)
+    return (
+      <TodayPuzzle
+        exams={exams}
+        initialId={taking.id}
+        subs={[]}
+        student={student}
+        loggedIn={loggedIn}
+        allRates={allRates}
+        onAddSub={async () => {}}
+        onGuestSubmit={async () => null}
+        getAnswers={null}
+        onOpen={() => setDailyPreview(false)}
+        onView={() => {}}
+        onBackToChooser={closeExam}
+        previewNote
+      />
+    );
 
   if (taking)
     return (
@@ -3655,7 +3686,8 @@ function ExamsAdmin({ exams, isSuper, allRates, onAddExam, onEditExam, onDeleteE
       {exams.length === 0 ? (
         <Empty text="아직 출제된 시험이 없어요." />
       ) : (
-        exams.map((ex, i) => {
+        // 예약분이 뒤섞이지 않게 문제 날짜(공개일) 순으로 세운다. 학생 달력과 같은 기준
+        exams.slice().sort((a, b) => dailyDay(b) - dailyDay(a)).map((ex, i) => {
           const exSubs = subs.filter((s) => s.examId === ex.id);
           const pending = exSubs.filter((s) => !s.graded).length;
           const isMine = ex.authorId && myId && ex.authorId === myId;
@@ -3666,7 +3698,7 @@ function ExamsAdmin({ exams, isSuper, allRates, onAddExam, onEditExam, onDeleteE
             <article className="mr-card" key={ex.id} style={{ animationDelay: `${Math.min(i, 5) * 45}ms` }}>
               <div className="mr-notice-head">
                 <h3>{unread && <span className="mr-unread-dot" />}{ex.title}</h3>
-                <span className="mr-date">{fmtDate(ex.createdAt)}</span>
+                <span className="mr-date">{fmtDate(dailyDay(ex))}</span>
               </div>
               {!isPublished(ex) && (
                 <div className="mr-sched-tag">⏰ 예약됨 · {new Date(ex.publishAt).getMonth() + 1}월 {new Date(ex.publishAt).getDate()}일 공개</div>
@@ -4344,13 +4376,13 @@ function DailyCalendar({ days, solvedIds, selId, onPick, onClose }) {
   );
 }
 
-function TodayPuzzle({ exams, subs, student, loggedIn, allRates, onAddSub, onGuestSubmit, getAnswers, onOpen, onView, onBackToChooser }) {
+function TodayPuzzle({ exams, subs, student, loggedIn, allRates, onAddSub, onGuestSubmit, getAnswers, onOpen, onView, onBackToChooser, initialId, previewNote }) {
   const days = (exams || []).slice().sort((a, b) => dailyDay(b) - dailyDay(a));
   const mine = (subs || []).filter((s) => s.student && student && s.student === student);
   const myOf = (id) => mine.find((s) => s.examId === id) || null;
   const solvedIds = new Set(mine.map((s) => s.examId));
 
-  const [selId, setSelId] = useState(days[0] ? days[0].id : null);
+  const [selId, setSelId] = useState(initialId || (days[0] ? days[0].id : null));
   const [calOpen, setCalOpen] = useState(false);
   const sel = days.find((d) => d.id === selId) || days[0] || null;
   const idx = sel ? days.findIndex((d) => d.id === sel.id) : -1;
@@ -4363,6 +4395,9 @@ function TodayPuzzle({ exams, subs, student, loggedIn, allRates, onAddSub, onGue
   return (
     <div className="mr-col">
       <button className="mr-back" onClick={onBackToChooser}>시험 종류</button>
+      {previewNote && (
+        <div className="mr-guest-note">학생에게 보이는 화면이에요. 여기서 풀어도 기록에 남지 않아요.</div>
+      )}
       {!sel ? (
         <Empty text="아직 오늘의 문제가 없어요." />
       ) : (
