@@ -123,8 +123,14 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.17.1";
+const APP_VERSION = "2.17.2";
 const CHANGELOG = [
+  {
+    v: "2.17.2",
+    date: "2026.8.31",
+    items: ["객관식 보기에도 수식이 제대로 나와요"],
+    adminItems: ["보기를 쓸 때 수식 부분을 $ 로 감싸면 수식으로 나와요"],
+  },
   {
     v: "2.17.1",
     date: "2026.8.31",
@@ -1874,7 +1880,7 @@ function MyRecords({ student, exams, subs, initialSub, pushUrl }) {
                         return (
                           <div key={oi} className={cls}>
                             <span className="mr-opt-label">{String.fromCharCode(9311 + oi + 1)}</span>
-                            {opt}
+                            <OptText text={opt} />
                             {isAns && <span className="mr-opt-flag ans">정답</span>}
                             {isMine && !isAns && <span className="mr-opt-flag mine">내 답</span>}
                           </div>
@@ -3958,6 +3964,7 @@ function ExamEditor({ initial, defaultType, onCancel, onSave }) {
               <button className="mr-add-opt" onClick={() => addOption(q.id)}>
                 + 보기 추가
               </button>
+              <p className="mf-hint">보기에도 수식을 쓸 수 있어요. 수식으로 쓸 부분을 <b>$</b> 로 감싸면 돼요. 예를 들어 <b>$x^2+1$</b> 처럼요.</p>
               <div className="mr-hint">왼쪽 ○ 를 눌러 정답을 지정하세요.</div>
             </div>
           ) : (
@@ -4127,7 +4134,7 @@ function SubmissionRow({ exam, sub, users, open, onToggle, onSaveGrade }) {
                           (oi === a && oi !== q.answer ? " is-wrong" : "")
                         }
                       >
-                        {String.fromCharCode(9311 + oi + 1)} {opt}
+                        {String.fromCharCode(9311 + oi + 1)} <OptText text={opt} />
                         {oi === q.answer && <span className="mr-tag-correct">정답</span>}
                         {oi === a && <span className="mr-tag-chosen">선택</span>}
                       </div>
@@ -4256,7 +4263,7 @@ function DailySolve({ exam, loggedIn, student, onAddSub, onGuestSubmit, getAnswe
               <button key={oi} className={cls} disabled={done}
                 onClick={() => { setPicked(oi); finish({ [q.id]: oi }); }}>
                 <span className="mr-daily-opt-label">{String.fromCharCode(9311 + oi + 1)}</span>
-                <span className="mr-daily-opt-txt">{opt}</span>
+                <span className="mr-daily-opt-txt"><OptText text={opt} /></span>
                 {ready && oi === q.answer && <span className="mr-daily-flag">정답</span>}
               </button>
             );
@@ -4303,7 +4310,7 @@ function DailyReview({ exam, sub }) {
             return (
               <div key={oi} className={cls}>
                 <span className="mr-daily-opt-label">{String.fromCharCode(9311 + oi + 1)}</span>
-                <span className="mr-daily-opt-txt">{opt}</span>
+                <span className="mr-daily-opt-txt"><OptText text={opt} /></span>
                 {oi === q.answer && <span className="mr-daily-flag">정답</span>}
               </div>
             );
@@ -4798,7 +4805,7 @@ function TakeExam({ exam: rawExam, student, loggedIn, onGuestSubmit, getAnswers,
                     onChange={() => set(q.id, oi)}
                   />
                   <span className="mr-opt-label">{String.fromCharCode(9311 + oi + 1)}</span>
-                  {opt}
+                  <OptText text={opt} />
                 </label>
               ))}
             </div>
@@ -5340,7 +5347,7 @@ function ReviewList({ exam, sub }) {
                   return (
                     <div key={oi} className={cls}>
                       <span className="mr-opt-label">{String.fromCharCode(9311 + oi + 1)}</span>
-                      {opt}
+                      <OptText text={opt} />
                       {isAns && <span className="mr-opt-flag ans">정답</span>}
                       {isMine && !isAns && <span className="mr-opt-flag mine">내 답</span>}
                     </div>
@@ -5532,6 +5539,21 @@ function PolicyModal({ onClose }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/* 보기 안의 $수식$ 을 KaTeX 로 그린다. $ 가 없으면 글자 그대로 나간다 */
+function OptText({ text }) {
+  const s = String(text == null ? "" : text);
+  if (s.indexOf("$") === -1) return s;
+  return (
+    <React.Fragment>
+      {s.split(/\$([^$]*)\$/).map((part, i) =>
+        i % 2 === 1
+          ? (part ? <MathView key={i} latex={part} /> : null)
+          : (part ? <span key={i}>{part}</span> : null)
+      )}
+    </React.Fragment>
   );
 }
 

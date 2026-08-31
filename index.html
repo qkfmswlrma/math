@@ -156,8 +156,13 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.17.1";
+const APP_VERSION = "2.17.2";
 const CHANGELOG = [{
+  v: "2.17.2",
+  date: "2026.8.31",
+  items: ["객관식 보기에도 수식이 제대로 나와요"],
+  adminItems: ["보기를 쓸 때 수식 부분을 $ 로 감싸면 수식으로 나와요"]
+}, {
   v: "2.17.1",
   date: "2026.8.31",
   items: [],
@@ -2430,7 +2435,9 @@ function MyRecords({
         className: cls
       }, /*#__PURE__*/React.createElement("span", {
         className: "mr-opt-label"
-      }, String.fromCharCode(9311 + oi + 1)), opt, isAns && /*#__PURE__*/React.createElement("span", {
+      }, String.fromCharCode(9311 + oi + 1)), /*#__PURE__*/React.createElement(OptText, {
+        text: opt
+      }), isAns && /*#__PURE__*/React.createElement("span", {
         className: "mr-opt-flag ans"
       }, "정답"), isMine && !isAns && /*#__PURE__*/React.createElement("span", {
         className: "mr-opt-flag mine"
@@ -4940,7 +4947,9 @@ function ExamEditor({
   }, "×"))), /*#__PURE__*/React.createElement("button", {
     className: "mr-add-opt",
     onClick: () => addOption(q.id)
-  }, "+ 보기 추가"), /*#__PURE__*/React.createElement("div", {
+  }, "+ 보기 추가"), /*#__PURE__*/React.createElement("p", {
+    className: "mf-hint"
+  }, "보기에도 수식을 쓸 수 있어요. 수식으로 쓸 부분을 ", /*#__PURE__*/React.createElement("b", null, "$"), " 로 감싸면 돼요. 예를 들어 ", /*#__PURE__*/React.createElement("b", null, "$x^2+1$"), " 처럼요."), /*#__PURE__*/React.createElement("div", {
     className: "mr-hint"
   }, "왼쪽 ○ 를 눌러 정답을 지정하세요.")) : /*#__PURE__*/React.createElement("div", {
     className: "mr-short-answer"
@@ -5125,7 +5134,9 @@ function SubmissionRow({
       }, q.options.map((opt, oi) => /*#__PURE__*/React.createElement("div", {
         key: oi,
         className: "mr-mc-opt" + (oi === q.answer ? " is-answer" : "") + (oi === a && oi !== q.answer ? " is-wrong" : "")
-      }, String.fromCharCode(9311 + oi + 1), " ", opt, oi === q.answer && /*#__PURE__*/React.createElement("span", {
+      }, String.fromCharCode(9311 + oi + 1), " ", /*#__PURE__*/React.createElement(OptText, {
+        text: opt
+      }), oi === q.answer && /*#__PURE__*/React.createElement("span", {
         className: "mr-tag-correct"
       }, "정답"), oi === a && /*#__PURE__*/React.createElement("span", {
         className: "mr-tag-chosen"
@@ -5287,7 +5298,9 @@ function DailySolve({
       className: "mr-daily-opt-label"
     }, String.fromCharCode(9311 + oi + 1)), /*#__PURE__*/React.createElement("span", {
       className: "mr-daily-opt-txt"
-    }, opt), ready && oi === q.answer && /*#__PURE__*/React.createElement("span", {
+    }, /*#__PURE__*/React.createElement(OptText, {
+      text: opt
+    })), ready && oi === q.answer && /*#__PURE__*/React.createElement("span", {
       className: "mr-daily-flag"
     }, "정답"));
   })), done && !ready && /*#__PURE__*/React.createElement("div", {
@@ -5350,7 +5363,9 @@ function DailyReview({
       className: "mr-daily-opt-label"
     }, String.fromCharCode(9311 + oi + 1)), /*#__PURE__*/React.createElement("span", {
       className: "mr-daily-opt-txt"
-    }, opt), oi === q.answer && /*#__PURE__*/React.createElement("span", {
+    }, /*#__PURE__*/React.createElement(OptText, {
+      text: opt
+    })), oi === q.answer && /*#__PURE__*/React.createElement("span", {
       className: "mr-daily-flag"
     }, "정답"));
   })) : /*#__PURE__*/React.createElement("div", {
@@ -6026,7 +6041,9 @@ function TakeExam({
     onChange: () => set(q.id, oi)
   }), /*#__PURE__*/React.createElement("span", {
     className: "mr-opt-label"
-  }, String.fromCharCode(9311 + oi + 1)), opt))) : /*#__PURE__*/React.createElement("textarea", {
+  }, String.fromCharCode(9311 + oi + 1)), /*#__PURE__*/React.createElement(OptText, {
+    text: opt
+  })))) : /*#__PURE__*/React.createElement("textarea", {
     className: "mr-textarea",
     rows: 3,
     placeholder: "답안을 작성하세요",
@@ -6698,7 +6715,9 @@ function ReviewList({
         className: cls
       }, /*#__PURE__*/React.createElement("span", {
         className: "mr-opt-label"
-      }, String.fromCharCode(9311 + oi + 1)), opt, isAns && /*#__PURE__*/React.createElement("span", {
+      }, String.fromCharCode(9311 + oi + 1)), /*#__PURE__*/React.createElement(OptText, {
+        text: opt
+      }), isAns && /*#__PURE__*/React.createElement("span", {
         className: "mr-opt-flag ans"
       }, "정답"), isMine && !isAns && /*#__PURE__*/React.createElement("span", {
         className: "mr-opt-flag mine"
@@ -6862,6 +6881,20 @@ function PolicyModal({
   }, "×")), /*#__PURE__*/React.createElement("div", {
     className: "mr-policy-scroll"
   }, /*#__PURE__*/React.createElement(PrivacyBody, null))));
+}
+
+/* 보기 안의 $수식$ 을 KaTeX 로 그린다. $ 가 없으면 글자 그대로 나간다 */
+function OptText({
+  text
+}) {
+  const s = String(text == null ? "" : text);
+  if (s.indexOf("$") === -1) return s;
+  return /*#__PURE__*/React.createElement(React.Fragment, null, s.split(/\$([^$]*)\$/).map((part, i) => i % 2 === 1 ? part ? /*#__PURE__*/React.createElement(MathView, {
+    key: i,
+    latex: part
+  }) : null : part ? /*#__PURE__*/React.createElement("span", {
+    key: i
+  }, part) : null));
 }
 function MathView({
   latex,
