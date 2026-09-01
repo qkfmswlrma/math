@@ -123,8 +123,14 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.18.5";
+const APP_VERSION = "2.18.6";
 const CHANGELOG = [
+  {
+    v: "2.18.6",
+    date: "2026.9.1",
+    items: ["해설 배경색을 걷어내 읽기 편하게 했어요"],
+    adminItems: [],
+  },
   {
     v: "2.18.5",
     date: "2026.9.1",
@@ -6535,7 +6541,8 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-sr-v.no{color:var(--red)}
 .mr-explain-btn{margin-top:14px; width:100%; border:0; background:var(--blue-bg); color:var(--blue); font-family:inherit; font-weight:700; font-size:14px; padding:12px; border-radius:12px; cursor:pointer; transition:background .15s}
 .mr-explain-btn:active{background:rgba(140,92,240,0.26)}
-.mr-explain{margin-top:14px; background:var(--blue-bg); border-radius:12px; padding:12px 14px}
+.mr-explain{margin-top:14px; background:transparent; border-radius:0; padding:13px 0 2px;
+  border-top:1px solid rgba(120,95,170,0.22)}
 .mr-explain-tag{font-size:12px; font-weight:800; color:var(--blue); margin-bottom:7px}
 .mr-explain .mr-qbody{font-size:14px; line-height:1.85}
 /* 해설은 이미 상자 안이다. 그 안에서 또 상자를 그리면 좁은 화면에서 글이 갇힌다 */
@@ -7033,7 +7040,7 @@ html[data-theme="dark"] .mr-pick-icon.green{background:linear-gradient(140deg,#5
 @media (max-width:480px){
   .mr-daily-hero{padding:14px; border-radius:20px}
   .mr-daily-result{padding:12px 8px}
-  .mr-explain{padding:10px}
+  .mr-explain{padding:12px 0 2px}
   .mr-explain .mr-qbox{padding-left:9px; margin:10px 0}
   .mr-qbox{padding:10px 11px}
   /* 버튼이 네 개까지 붙는 줄이 있다. 글자가 접히느니 작아지는 편이 낫다 */
