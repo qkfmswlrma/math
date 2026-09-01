@@ -1,7 +1,7 @@
 // ============================================================
 // 카톡·메신저 링크 미리보기
 //
-// /column/110001, /notice/200003, /exam/310001 같은 주소로 들어오면
+// /column/110001, /notice/200003, /exam/310001, /exam/daily/06/01 같은 주소로 들어오면
 // 그 글·시험의 제목을 미리보기(og 태그)에 넣어서 돌려준다.
 // 그 외 주소는 손대지 않고 그대로 통과시킨다.
 //
@@ -39,6 +39,22 @@ function keyHeaders() {
   };
 }
 
+// 하루치 오늘의 문제를 찾을 때는 여러 줄을 받아 날짜로 고른다
+async function sbList(path) {
+  const res = await fetch(SUPABASE_URL + "/rest/v1/" + path, { headers: keyHeaders() });
+  if (!res.ok) return [];
+  const rows = await res.json();
+  return Array.isArray(rows) ? rows : [];
+}
+
+// 한국 시각 기준 연·월·일
+function kstYMD(iso) {
+  const t = new Date(iso).getTime();
+  if (!t && t !== 0) return { y: 0, m: 0, d: 0 };
+  const d = new Date(t + 9 * 3600 * 1000);
+  return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate() };
+}
+
 async function sb(path) {
   const res = await fetch(SUPABASE_URL + "/rest/v1/" + path, { headers: keyHeaders() });
   if (!res.ok) return null;
@@ -72,6 +88,22 @@ async function lookup(kind, no) {
       const r = await sb("columns?is_rule=eq.true&category=eq.notice&select=title,body&limit=1");
       if (!r) return null;
       return { title: r.title + " · 규칙", desc: summarize(r.body, 80) || DEFAULT_DESC };
+    }
+    // /exam/daily/06/01 — 그 날짜의 오늘의 문제. no 자리에 {y,m,d} 가 온다
+    if (kind === "daily") {
+      const rows = await sbList(
+        "exams?exam_type=eq.today&select=title,author,publish_at,created_at&order=publish_at.desc&limit=500"
+      );
+      const want = no;
+      const hit = rows.filter((r) => {
+        const t = kstYMD(r.publish_at || r.created_at);
+        return t.m === want.m && t.d === want.d && (!want.y || t.y === want.y);
+      })[0];
+      if (!hit) return null;
+      return {
+        title: hit.title + " · 오늘의 문제",
+        desc: (hit.author ? "출제 " + hit.author + " · " : "") + "지금 풀어보세요",
+      };
     }
     if (kind === "exam") {
       const r = await sb("exams?" + noFilter(no) + "&select=title,author&limit=1");
@@ -130,8 +162,14 @@ export async function onRequest(context) {
 async function handle(context) {
   const { request, next } = context;
   const url = new URL(request.url);
-  const m = url.pathname.match(/^\/(column|notice|exam)\/(\d+)\/?$/)
-    || (/^\/rules\/?$/.test(url.pathname) ? ["", "rules", null] : null);
+  // /exam/daily/06/01 과 /exam/daily/2026/06/01 둘 다 받는다
+  const dm = url.pathname.match(/^\/exam\/daily\/(\d{1,4})\/(\d{1,2})(?:\/(\d{1,2}))?\/?$/);
+  const m = dm
+    ? ["", "daily", dm[3]
+        ? { y: Number(dm[1]), m: Number(dm[2]), d: Number(dm[3]) }
+        : { y: null, m: Number(dm[1]), d: Number(dm[2]) }]
+    : (url.pathname.match(/^\/(column|notice|exam)\/(\d+)\/?$/)
+      || (/^\/rules\/?$/.test(url.pathname) ? ["", "rules", null] : null));
 
   const res = await next();
   if (!m) return res;

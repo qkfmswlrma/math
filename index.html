@@ -156,8 +156,13 @@ const mapProfile = r => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.18.7";
+const APP_VERSION = "2.19.0";
 const CHANGELOG = [{
+  v: "2.19.0",
+  date: "2026.9.1",
+  items: ["오늘의 문제마다 날짜 주소가 생겨서 그날 문제만 바로 열고 공유할 수 있어요"],
+  adminItems: []
+}, {
   v: "2.18.7",
   date: "2026.9.1",
   items: ["해설의 참고 부분이 눈에 잘 띄게 됐어요"],
@@ -476,6 +481,25 @@ function parsePath() {
     const tab = PATH_TAB["/" + seg[0]];
     if (!tab) return null;
     const s2 = seg[1] || null;
+    // /exam/daily/06/01 또는 /exam/daily/2026/06/01 — 그 날짜의 오늘의 문제
+    if (tab === "exams" && s2 === "daily" && seg.length >= 4) {
+      const nn = seg.slice(2).map(Number);
+      const day = nn.length >= 3 ? {
+        y: nn[0],
+        m: nn[1],
+        d: nn[2]
+      } : {
+        y: null,
+        m: nn[0],
+        d: nn[1]
+      };
+      if (day.m >= 1 && day.m <= 12 && day.d >= 1 && day.d <= 31) return {
+        tab,
+        sub: "today",
+        no: null,
+        day
+      };
+    }
     if (s2 && /^\d+$/.test(s2)) return {
       tab,
       no: Number(s2),
@@ -506,6 +530,12 @@ function findByNo(list, no) {
 function pushUrl(path) {
   try {
     if (window.location.pathname !== path) window.history.pushState({}, "", path);
+  } catch (e) {}
+}
+// 같은 화면에서 날짜만 옮길 때. 뒤로가기 기록을 쌓지 않고 주소만 맞춰 둔다
+function replaceUrl(path) {
+  try {
+    if (window.location.pathname !== path) window.history.replaceState({}, "", path);
   } catch (e) {}
 }
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -1798,6 +1828,7 @@ function App() {
           key: "e" + nav,
           initialSub: route && route.tab === "exams" ? route.sub : null,
           initialNo: route && route.tab === "exams" ? route.no : null,
+          initialDay: route && route.tab === "exams" ? route.day : null,
           pushUrl: pushUrl,
           role: role,
           isSuper: isSuper,
@@ -4529,12 +4560,13 @@ function Exams(props) {
   const {
     initialSub,
     initialNo,
+    initialDay,
     pushUrl
   } = props;
   const allRates = useAllExamRates(); // null=로딩중, false=서버에 함수 없음, {}=결과
   // 주소가 /exam/310001 이면 그 시험의 종류로 시작
   const byNo = initialNo ? findByNo(props.exams, initialNo) : null;
-  const startType = byNo ? byNo.examType || "level" : initialSub === "level" || initialSub === "today" ? initialSub : null;
+  const startType = byNo ? byNo.examType || "level" : initialDay ? "today" : initialSub === "level" || initialSub === "today" ? initialSub : null;
   const [examType, setExamType] = useState(startType); // null=선택화면
   const goUrl = path => {
     if (pushUrl) pushUrl(path);
@@ -4557,6 +4589,7 @@ function Exams(props) {
     examType,
     onBackToChooser,
     initialNo,
+    initialDay,
     goUrl,
     allRates
   };
@@ -4592,15 +4625,18 @@ function ExamsAdmin({
   readIds,
   onView,
   initialNo,
+  initialDay,
   goUrl
 }) {
   const [mode, setMode] = useState("list");
   const [activeExam, setActiveExam] = useState(null);
-  const [taking, setTaking] = useState(() => initialNo ? findByNo(exams, initialNo) || null : null);
+  // /exam/daily/06/01 로 들어오면 그 날짜 문제를 학생 화면 그대로 연다
+  const dayExam = initialDay ? findByDay(exams, initialDay) : null;
+  const [taking, setTaking] = useState(() => dayExam || (initialNo ? findByNo(exams, initialNo) || null : null));
   // 미리보기: 학생에게 보이는 화면을 그대로 열되 아무것도 저장하지 않는다.
   // 오늘의 문제는 날짜바와 달력이 있는 학생 화면(TodayPuzzle)을 그대로 띄운다
-  const [preview, setPreview] = useState(false);
-  const [dailyPreview, setDailyPreview] = useState(false);
+  const [preview, setPreview] = useState(!!dayExam);
+  const [dailyPreview, setDailyPreview] = useState(!!dayExam);
   const url = p => {
     if (goUrl) goUrl(p);
   };
@@ -5291,6 +5327,27 @@ function fmtDay(ms) {
   const d = new Date(ms);
   return d.getMonth() + 1 + "월 " + d.getDate() + "일";
 }
+/* 하루치 문제의 고유 주소. /exam/daily/06/01 처럼 날짜만 담는다 */
+function dailyPath(ex) {
+  const d = new Date(dailyDay(ex));
+  const p = v => String(v).padStart(2, "0");
+  const y = d.getFullYear() !== new Date().getFullYear() ? d.getFullYear() + "/" : "";
+  return "/exam/daily/" + y + p(d.getMonth() + 1) + "/" + p(d.getDate());
+}
+function sameYMD(a, b) {
+  const x = new Date(a),
+    y = new Date(b);
+  return x.getFullYear() === y.getFullYear() && x.getMonth() === y.getMonth() && x.getDate() === y.getDate();
+}
+// 연도를 적지 않은 주소는 그 날짜 중 가장 최근 것을 연다
+function findByDay(exams, day) {
+  if (!day) return null;
+  const hit = (exams || []).filter(e => {
+    const d = new Date(dailyDay(e));
+    return d.getMonth() + 1 === day.m && d.getDate() === day.d && (!day.y || d.getFullYear() === day.y);
+  });
+  return hit.sort((a, b) => dailyDay(b) - dailyDay(a))[0] || null;
+}
 
 /* 정답을 맞히면 초록, 틀리면 빨강으로 즉시 반응하고 제출을 기록한다 (1문항 전용) */
 function DailySolve({
@@ -5618,9 +5675,26 @@ function TodayPuzzle({
   const mine = (subs || []).filter(s => s.student && student && s.student === student);
   const myOf = id => mine.find(s => s.examId === id) || null;
   const solvedIds = new Set(mine.map(s => s.examId));
-  const [selId, setSelId] = useState(initialId || (days[0] ? days[0].id : null));
+
+  // 주소에 날짜가 없으면 오늘 문제부터. 오늘 것이 없으면 가장 최근 것
+  const todayEx = days.find(d => sameYMD(dailyDay(d), Date.now())) || null;
+  const [selId, setSelId] = useState(initialId || (todayEx || days[0] || {}).id || null);
   const [calOpen, setCalOpen] = useState(false);
   const sel = days.find(d => d.id === selId) || days[0] || null;
+  // 날짜를 옮기면 주소도 그 날짜로 바뀐다. 뒤로가기 기록은 쌓지 않는다
+  const pickDay = ex => {
+    if (!ex) return;
+    setSelId(ex.id);
+    replaceUrl(dailyPath(ex));
+  };
+  // 문제가 없는 날짜로 들어오면 다른 날이 열린다. 주소를 실제로 보이는 날로 맞춰 둔다
+  const selKey = sel ? sel.id : null;
+  useEffect(() => {
+    if (!sel) return;
+    try {
+      if (String(window.location.pathname || "").indexOf("/exam/daily/") === 0) replaceUrl(dailyPath(sel));
+    } catch (e) {}
+  }, [selKey]);
   const idx = sel ? days.findIndex(d => d.id === sel.id) : -1;
   const newer = idx > 0 ? days[idx - 1] : null; // 더 최신 문제
   const older = idx >= 0 && idx < days.length - 1 ? days[idx + 1] : null; // 더 지난 문제
@@ -5649,7 +5723,12 @@ function TodayPuzzle({
     style: {
       color: rateColor(sRate)
     }
-  }, "평균정답률 ", sRate, "%")), /*#__PURE__*/React.createElement("h2", {
+  }, "평균정답률 ", sRate, "%"), /*#__PURE__*/React.createElement("span", {
+    className: "mr-daily-share"
+  }, /*#__PURE__*/React.createElement(ShareButton, {
+    path: dailyPath(sel),
+    title: fmtDay(dailyDay(sel)) + " 오늘의 문제"
+  }))), /*#__PURE__*/React.createElement("h2", {
     className: "mr-daily-title"
   }, sel.title), sel.questions.length === 1 ? /*#__PURE__*/React.createElement(React.Fragment, null, sel.questions[0].image && /*#__PURE__*/React.createElement("img", {
     className: "mr-q-img",
@@ -5686,7 +5765,7 @@ function TodayPuzzle({
   }, /*#__PURE__*/React.createElement("button", {
     className: "mr-daily-arrow",
     disabled: !older,
-    onClick: () => older && setSelId(older.id),
+    onClick: () => pickDay(older),
     "aria-label": "이전 문제"
   }, "‹"), /*#__PURE__*/React.createElement("button", {
     className: "mr-daily-datebtn",
@@ -5698,14 +5777,14 @@ function TodayPuzzle({
   }, "날짜 선택")), /*#__PURE__*/React.createElement("button", {
     className: "mr-daily-arrow",
     disabled: !newer,
-    onClick: () => newer && setSelId(newer.id),
+    onClick: () => pickDay(newer),
     "aria-label": "다음 문제"
   }, "›")), calOpen && /*#__PURE__*/React.createElement(DailyCalendar, {
     days: days,
     solvedIds: solvedIds,
     selId: sel.id,
     allRates: allRates,
-    onPick: ex => setSelId(ex.id),
+    onPick: pickDay,
     onClose: () => setCalOpen(false)
   })));
 }
@@ -5726,8 +5805,11 @@ function ExamsStudent({
   readIds,
   onView,
   initialNo,
+  initialDay,
   goUrl
 }) {
+  // /exam/daily/06/01 로 들어왔을 때 열 하루치 문제
+  const dayExam = initialDay ? findByDay(exams, initialDay) : null;
   const [taking, setTaking] = useState(() => initialNo ? findByNo(exams, initialNo) || null : null);
   // 이미 푼 시험의 채점 결과를 목록에서 바로 열어보는 화면
   const [reviewing, setReviewing] = useState(null);
@@ -5829,6 +5911,7 @@ function ExamsStudent({
     student: student,
     loggedIn: loggedIn,
     allRates: allRates,
+    initialId: dayExam ? dayExam.id : null,
     onAddSub: onAddSub,
     onGuestSubmit: onGuestSubmit,
     getAnswers: getAnswers,
@@ -8298,6 +8381,8 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-daily-hero{background:var(--card); border:1px solid var(--line); box-shadow:var(--glass-sh); border-radius:26px; padding:22px; animation:rise .5s var(--ease) both}
 .mr-daily-top{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px}
 .mr-daily-badges{display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap}
+.mr-daily-share{margin-left:auto}
+.mr-daily-share .mr-share{padding:5px 10px; font-size:12px; border-radius:10px}
 .mr-daily-rate{font-size:13px; font-weight:800; letter-spacing:-0.2px}
 .mr-daily-badge{display:inline-block; font-size:12px; font-weight:800; color:#fff; background:var(--grad); padding:5px 12px; border-radius:20px; letter-spacing:-0.2px}
 .mr-daily-title{font-size:20px; font-weight:800; letter-spacing:-0.5px; line-height:1.4; color:var(--t1); margin:0 0 14px}
