@@ -3748,6 +3748,13 @@ function ExamsAdmin({ exams, banked, isSuper, allRates, onAddExam, onEditExam, o
   const closeExam = () => { setTaking(null); setPreview(false); setDailyPreview(false); url("/exam/" + examType); };
   const openPreview = (ex) => { setPreview(true); setDailyPreview(examType === "today"); setTaking(ex); };
 
+  // 날짜를 떼어 문제은행으로 보낸다. 은행 안에서는 맨 뒤에 선다
+  const toBank = async (ex) => {
+    if (!confirm(`'${ex.title}' 의 날짜를 떼고 문제은행에 넣을까요?`)) return;
+    const last = (banked || []).reduce((m, b) => Math.max(m, b.publishAt || 0), 0);
+    const slot = last ? last + DAY_MS : BANK_BASE;
+    await onEditExam(ex.id, { ...ex, publishAt: slot });
+  };
   const openGrade = (exam) => {
     setActiveExam(exam);
     setMode("grade");
@@ -3888,6 +3895,11 @@ function ExamsAdmin({ exams, banked, isSuper, allRates, onAddExam, onEditExam, o
                   {canEdit && (
                     <button className="mr-btn-ghost" onClick={() => openEdit(ex)}>
                       수정
+                    </button>
+                  )}
+                  {canEdit && examType === "today" && (
+                    <button className="mr-btn-ghost" onClick={() => toBank(ex)}>
+                      은행에 넣기
                     </button>
                   )}
                   {canEdit && (
