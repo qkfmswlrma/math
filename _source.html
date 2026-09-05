@@ -123,8 +123,14 @@ const mapProfile = (r) => ({
    업데이트할 때마다 APP_VERSION 을 올리고 CHANGELOG 맨 위에 한 줄 추가하세요.
    items      = 모든 이용자에게 보임
    adminItems = 관리자로 로그인했을 때만 보임 (출제·권한 같은 관리 기능) */
-const APP_VERSION = "2.19.0";
+const APP_VERSION = "2.20.0";
 const CHANGELOG = [
+  {
+    v: "2.20.0",
+    date: "2026.9.5",
+    items: [],
+    adminItems: ["날짜를 정하지 않은 문제를 문제은행에 넣어두면 빈 날에 하나씩 올라가요"],
+  },
   {
     v: "2.19.0",
     date: "2026.9.1",
@@ -3617,6 +3623,14 @@ function ExamTaker({ taking, setTaking, student, loggedIn, onAddSub, onGuestSubm
 function isPublished(exam) {
   return !exam.publishAt || exam.publishAt <= Date.now();
 }
+/* 문제은행: 아직 날짜를 안 잡은 오늘의 문제.
+   공개 시각을 먼 미래로 두어 감춰 두고, 빈 날이 생기면 서버가 하루치씩 앞으로 당긴다 */
+const BANK_AFTER = Date.UTC(2090, 0, 1);
+const BANK_BASE = Date.UTC(2095, 0, 1);
+const DAY_MS = 86400000;
+function isBanked(exam) {
+  return !!(exam && exam.publishAt && exam.publishAt >= BANK_AFTER);
+}
 
 /* 칼럼 읽음 추적 (기기에 저장) */
 const COL_READ_KEY = "mrreadcols";
@@ -3662,18 +3676,65 @@ function Exams(props) {
   const goUrl = (path) => { if (pushUrl) pushUrl(path); };
   const pick = (t) => { setExamType(t); goUrl("/exam/" + t); };
   if (!examType) return <ExamChooser onPick={pick} todayUnread={todayUnreadCount((props.exams || []).filter(isPublished), props.readIds || new Set())} />;
-  const filtered = (props.exams || []).filter((e) => (e.examType || "level") === examType);
+  const ofType = (props.exams || []).filter((e) => (e.examType || "level") === examType);
+  const filtered = ofType.filter((e) => !isBanked(e));
+  const banked = ofType.filter(isBanked);
   const onBackToChooser = () => { setExamType(null); goUrl("/exam"); };
   const shared = { ...props, examType, onBackToChooser, initialNo, initialDay, goUrl, allRates };
   if (props.role === "admin")
-    return <ExamsAdmin {...shared} exams={filtered} />;
+    return <ExamsAdmin {...shared} exams={filtered} banked={banked} />;
   // 학생/비회원: 공개 시각이 지난 시험만 노출
   const visible = filtered.filter(isPublished);
   return <ExamsStudent {...shared} exams={visible} />;
 }
 
+/* ---------- 관리자: 문제은행 ---------- */
+/* 날짜를 안 잡아 둔 오늘의 문제들. 빈 날이 생기면 서버가 맨 앞에 있는 것부터 하루씩 올린다.
+   순서는 공개 시각 자체로 나타낸다. 맨 앞으로 보내면 지금 맨 앞보다 하루 앞선 시각을 준다 */
+function BankList({ banked, onEditExam, myId, isSuper, onPreview }) {
+  const list = (banked || []).slice().sort((a, b) => (a.publishAt || 0) - (b.publishAt || 0));
+  const toFront = async (ex) => {
+    const first = list[0];
+    if (!first || first.id === ex.id) return;
+    await onEditExam(ex.id, { ...ex, publishAt: (first.publishAt || BANK_BASE) - DAY_MS });
+  };
+  const unbank = async (ex) => {
+    const d = prompt("며칠 뒤에 올릴까요? 오늘이면 0, 내일이면 1", "1");
+    if (d === null) return;
+    const n = Number(d);
+    if (!Number.isFinite(n) || n < 0) { alert("0 이상의 숫자를 넣어주세요."); return; }
+    const t = new Date();
+    t.setHours(0, 0, 0, 0);
+    await onEditExam(ex.id, { ...ex, publishAt: t.getTime() + n * DAY_MS });
+  };
+  return (
+    <div className="mr-bank">
+      <div className="mr-list-top">
+        <span className="mr-list-title">문제은행 {list.length}개</span>
+        <span className="mr-bank-hint">빈 날에 위에서부터 하나씩 올라가요</span>
+      </div>
+      {list.map((ex, i) => {
+        const canEdit = isSuper || (ex.authorId && myId && ex.authorId === myId) || !ex.authorId;
+        return (
+          <article className="mr-card mr-bank-item" key={ex.id}>
+            <div className="mr-notice-head">
+              <h3><span className="mr-bank-no">{i + 1}</span>{ex.title}</h3>
+              <span className="mr-date">{ex.author}</span>
+            </div>
+            <div className="mr-card-actions">
+              <button className="mr-btn sm" onClick={() => onPreview(ex)}>미리보기</button>
+              {canEdit && i > 0 && <button className="mr-btn sm" onClick={() => toFront(ex)}>맨 앞으로</button>}
+              {canEdit && <button className="mr-btn sm" onClick={() => unbank(ex)}>날짜 지정</button>}
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
 /* ---------- 관리자: 시험 목록 / 출제 / 채점 / (남의 시험) 응시 ---------- */
-function ExamsAdmin({ exams, isSuper, allRates, onAddExam, onEditExam, onDeleteExam, subs, onGradeSub, onAddSub, getAnswers, myId, student, loggedIn, guestSubs, examType, onBackToChooser, users, readIds, onView, initialNo, initialDay, goUrl }) {
+function ExamsAdmin({ exams, banked, isSuper, allRates, onAddExam, onEditExam, onDeleteExam, subs, onGradeSub, onAddSub, getAnswers, myId, student, loggedIn, guestSubs, examType, onBackToChooser, users, readIds, onView, initialNo, initialDay, goUrl }) {
   const [mode, setMode] = useState("list");
   const [activeExam, setActiveExam] = useState(null);
   // /exam/daily/06/01 로 들어오면 그 날짜 문제를 학생 화면 그대로 연다
@@ -3774,6 +3835,9 @@ function ExamsAdmin({ exams, isSuper, allRates, onAddExam, onEditExam, onDeleteE
           + 새 시험 출제
         </button>
       </div>
+      {examType === "today" && (banked || []).length > 0 && (
+        <BankList banked={banked} onEditExam={onEditExam} myId={myId} isSuper={isSuper} onPreview={openPreview} />
+      )}
       {exams.length === 0 ? (
         <Empty text="아직 출제된 시험이 없어요." />
       ) : (
@@ -6863,6 +6927,13 @@ body{--keyboard-zindex:700} /* 수식 키패드가 카드 오버레이(150)·모
 .mr-daily-hero{background:var(--card); border:1px solid var(--line); box-shadow:var(--glass-sh); border-radius:26px; padding:22px; animation:rise .5s var(--ease) both}
 .mr-daily-top{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px}
 .mr-daily-badges{display:flex; align-items:center; gap:8px; margin-bottom:12px; flex-wrap:wrap}
+.mr-bank{margin-bottom:18px}
+.mr-bank .mr-list-top{align-items:baseline}
+.mr-bank-hint{font-size:12px; color:var(--muted)}
+.mr-bank-item{opacity:.92}
+.mr-bank-no{display:inline-flex; align-items:center; justify-content:center;
+  min-width:20px; height:20px; margin-right:7px; padding:0 5px; border-radius:6px;
+  background:var(--chip); color:var(--muted); font-size:12px; font-weight:700}
 .mr-daily-share{margin-left:auto}
 .mr-daily-share .mr-share{padding:5px 10px; font-size:12px; border-radius:10px}
 .mr-daily-rate{font-size:13px; font-weight:800; letter-spacing:-0.2px}
